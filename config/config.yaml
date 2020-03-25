@@ -1,0 +1,15 @@
+# Simulation output directory - will be created if neccessary.
+workdir: '/media/stephen/Data/modelling'
+
+name: 'homopolymer'
+
+# Polymer generation config (rule: generate_polyer)
+n_molecules: 1000
+mode: 0
+
+# LAMMPS config (rule: lammps)
+timestep: 1000
+
+# GIF creation confif (rule: create_gif)
+delay: 10
+loop: 0

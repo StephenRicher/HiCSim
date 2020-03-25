@@ -1,0 +1,4 @@
+channels :
+  - anaconda
+dependencies :
+  - gxx_linux-64
