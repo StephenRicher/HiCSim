@@ -15,13 +15,14 @@ configfile: f'{BASE}/config/config.yaml'
 default_config = {
     'workdir':      workflow.basedir,
     'n_molecules':  1000,
+    'n_types':      4,
+    'n_clusters':   20,
     'xlo':          -50,
     'xhi':          50,
     'ylo':          -50,
     'yhi':          50,
     'zlo':          -50,
     'zhi':          50,
-    'mode' :        'homopolymer',
     'name' :        'homopolymer',
     'timestep':     1000,
     'delay':        10,
@@ -57,7 +58,6 @@ rule generate_polymer2:
         f'fpolymer/poly.n{config["n_molecules"]}.dat'
     params:
         n_molecules = config['n_molecules'],
-        mode = config['mode']
     log:
         f'logs/generate_polymer.log'
     shell:
@@ -68,7 +68,8 @@ rule generate_polymer:
         f'polymer/poly.n{config["n_molecules"]}.dat'
     params:
         n_molecules = config['n_molecules'],
-        mode = config['mode'],
+        n_clusters = config['n_clusters'],
+        n_types = config['n_types'],
         xlo = config['xlo'],
         xhi = config['xhi'],
         ylo = config['ylo'],
@@ -80,7 +81,8 @@ rule generate_polymer:
     shell:
         '{SCRIPTS}/generate_polymer.py '
             '--n_molecules {params.n_molecules} '
-            '--polymer_type {params.mode} '
+            '--n_clusters {params.n_clusters} '
+            '--n_types {params.n_types} '
             '--xlo {params.xlo} --xhi {params.xhi} '
             '--ylo {params.ylo} --yhi {params.yhi} '
             '--zlo {params.zlo} --zhi {params.zhi} '
