@@ -20,9 +20,11 @@ def main():
         '--n_molecules', default=1000, type=int,
         help='Number of molecules in polymer.')
     parser.add_argument(
-        '--polymer_type', default='homopolymer',
-        choices=['homopolymer', 'random_copolymer', 'clustered_copolymer'],
-        help='Type of copolymer to generate.')
+        '--n_types', default=4, type=int,
+        help='Number of atom types in polymer.')
+    parser.add_argument(
+        '--n_clusters', default=10, type=int,
+        help='Number of clusters in poymers.')
     parser.add_argument(
         '--xlo', default=-50, type=float,
         help='Lower x-axis of simuluation box.')
@@ -41,23 +43,19 @@ def main():
     parser.add_argument(
         '--zhi', default=50, type=float,
         help='Upper z-axis of simuluation box.')
-    parser.add_argument(
-        '--atoms', metavar="ATOM=MASS", nargs="+", action=ParseDict,
-        default={'1':'1', '2':'1', '3':'1', '4':'1'},
-        help='Provide atom type and mass as key=value pairs.')
     parser.set_defaults(function=generate_linear_polymer)
 
     return (pct.execute(parser))
 
 def generate_linear_polymer(
-        n_molecules, polymer_type, xlo, xhi, ylo, yhi, zlo, zhi, atoms):
+        n_molecules, n_types, n_clusters, xlo, xhi, ylo, yhi, zlo, zhi):
 
     sys.stdout.write(
         'LAMMPS data file from restart file: timestep = 0, procs = 1\n\n'
         f'{n_molecules} atoms\n'
         f'{n_molecules-1} bonds\n'
         f'{n_molecules-2} angles\n\n'
-        f'{len(atoms)} atom types\n'
+        f'{n_types} atom types\n'
         f'1 bond types\n'
         f'1 angle types\n\n'
         f'{xlo} {xhi} xlo xhi\n'
@@ -65,25 +63,22 @@ def generate_linear_polymer(
         f'{zlo} {zhi} zlo zhi\n\n'
         f'Masses\n\n')
 
-    for atom in atoms:
-        sys.stdout.write(f'{atom} {atoms[atom]}\n')
+    type_list = list(range(1, n_types + 1))
+    for type in type_list:
+        sys.stdout.write(f'{type} 1\n')
 
     sys.stdout.write('\nAtoms\n\n')
     r = 1.1
-    cluster_size = n_molecules / len(atoms)
-    atom_type_idx = 0 # Set initial index for atom type dictionary
+    cluster_size = int(n_molecules / n_clusters)
+    type = random.choice(type_list)
     type_boundary_idx = 0 # Set initial index of type boundary change
     for n in range(1, n_molecules+1):
 
-        if polymer_type == 'homopolymer':
-            type = list(atoms)[0]
-        elif polymer_type == 'random_copolymer':
-            type = random.choice(list(atoms))
-        else:
-            if n > type_boundary_idx + cluster_size:
-                type_boundary_idx = n
-                atom_type_idx += 1
-            type = list(atoms)[atom_type_idx]
+        if n > type_boundary_idx + cluster_size:
+            type_boundary_idx = n
+            # Generate list of types excluding the previous type used
+            type_choices = [n for n in type_list if n != type]
+            type = random.choice(type_choices)
 
         if n == 1:
             x = random.random()
@@ -110,19 +105,6 @@ def generate_linear_polymer(
     n_angles = n_molecules - 2
     for a in range(1, n_angles + 1):
         sys.stdout.write(f'{a} 1 {a} {a+1} {a+2}\n')
-
-class ParseDict(argparse.Action):
-    def __call__(self, parser, namespace, values, option_string=None):
-        d = {}
-
-        if values:
-            for item in values:
-                split_items = item.split("=", 1)
-                key = split_items[0].strip()
-                value = split_items[1]
-                d[key] = value
-
-        setattr(namespace, self.dest, d)
 
 if __name__ == '__main__':
     sys.exit(main())
