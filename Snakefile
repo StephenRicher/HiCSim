@@ -14,12 +14,18 @@ configfile: f'{BASE}/config/config.yaml'
 # Defaults configuration file - use empty string to represent no default value.
 default_config = {
     'workdir':      workflow.basedir,
-    'n_molecules': 1000,
-    'mode' :       0,
-    'name' :       'homopolymer',
-    'timestep':    1000,
-    'delay':       10,
-    'loop':        0
+    'n_molecules':  1000,
+    'xlo':          -50,
+    'xhi':          50,
+    'ylo':          -50,
+    'yhi':          50,
+    'zlo':          -50,
+    'zhi':          50,
+    'mode' :        'homopolymer',
+    'name' :        'homopolymer',
+    'timestep':     1000,
+    'delay':        10,
+    'loop':         0
 }
 config = set_config(config, default_config)
 
@@ -44,11 +50,11 @@ rule compile_generate_polymer:
     shell:
         'g++ -O3 -o {output} {input} &> {log}'
 
-rule generate_polymer:
+rule generate_polymer2:
     input:
         script = rules.compile_generate_polymer.output
     output:
-        f'polymer/poly.n{config["n_molecules"]}.dat'
+        f'fpolymer/poly.n{config["n_molecules"]}.dat'
     params:
         n_molecules = config['n_molecules'],
         mode = config['mode']
@@ -56,6 +62,29 @@ rule generate_polymer:
         f'logs/generate_polymer.log'
     shell:
         '{input.script} {params.n_molecules} {params.mode} > {output} 2> {log}'
+
+rule generate_polymer:
+    output:
+        f'polymer/poly.n{config["n_molecules"]}.dat'
+    params:
+        n_molecules = config['n_molecules'],
+        mode = config['mode'],
+        xlo = config['xlo'],
+        xhi = config['xhi'],
+        ylo = config['ylo'],
+        yhi = config['yhi'],
+        zlo = config['zlo'],
+        zhi = config['zhi'],
+    log:
+        f'logs/generate_polymer.log'
+    shell:
+        '{SCRIPTS}/generate_polymer.py '
+            '--n_molecules {params.n_molecules} '
+            '--polymer_type {params.mode} '
+            '--xlo {params.xlo} --xhi {params.xhi} '
+            '--ylo {params.ylo} --yhi {params.yhi} '
+            '--zlo {params.zlo} --zhi {params.zhi} '
+        '> {output} 2> {log}'
 
 rule lammps:
     input:
