@@ -5,10 +5,9 @@ name: 'clustered_copolymer'
 
 # Polymer generation config (rule: generate_polyer)
 n_molecules: 1000
-mode: 'clustered_copolymer'
 
 # LAMMPS config (rule: lammps)
-timestep: 500
+timestep: 100
 
 # GIF creation confif (rule: create_gif)
 delay: 10
