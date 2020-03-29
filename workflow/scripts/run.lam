@@ -94,7 +94,7 @@ pair_style  lj/cut 1.12246
 pair_modify     shift yes
 pair_coeff * *  1.0 1.0 1.12246 ##REPULSIVE ANY TWO BEADS
 pair_coeff 1 1 10 1.0 1.8  ## OVERWRITE ATTRACTIVE 1-1
-#pair_coeff 2 2 10 1.0 1.8 ## OVERWRITE ATTRACTIVE 2-2
+pair_coeff 2 2 10 1.0 1.8 ## OVERWRITE ATTRACTIVE 2-2
 pair_coeff 3 3 10 1.0 1.8 ## OVERWRITE ATTRACTIVE 3-3
 pair_coeff 4 4 10 1.0 1.8 ## OVERWRITE ATTRACTIVE 4-4
 
