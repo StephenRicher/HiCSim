@@ -19,7 +19,7 @@ lammps:
   time : 60
 
 create_contact_matrix:
-  time : 150
+  time : 120
 
 sum_matrices:
   time : 10
