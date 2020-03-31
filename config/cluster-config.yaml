@@ -12,12 +12,20 @@ __default__:
   partition :    "batch"
   time :         60
 
+generate_polymer:
+  time : 10
+
+lammps:
+  time : 60
+
+create_contact_matrix:
+  time : 30
+
+sum_matrices:
+  time : 10
 
 mean_xyz:
   time : 300
-
-lammps :
-  time : 60
 
 create_gif:
   time : 60
