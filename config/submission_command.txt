@@ -1,0 +1,20 @@
+# Set alias for local conda installation
+alias conda="/home/u/sr467/scratch/software/conda/install/bin/conda"
+
+# Install snakemake from local (up-to-date) conda installation and specify prefix within SCRATCH.
+conda create -c bioconda -c conda-forge --prefix ~/scratch/conda/envs/snakemake snakemake
+
+# Initialise conda and resource
+module load anaconda
+conda activate /home/u/sr467/scratch/conda/envs/snakemake
+
+snakemake --use-conda --create-envs-only \
+          --configfile /home/u/sr467/scratch/projects/MolecularDynamics/config/config.yaml \
+          --conda-prefix /home/u/sr467/scratch/projects/MolecularDynamics/.snakemake/
+
+snakemake --profile slurm --use-conda -kp --notemp \
+          --cluster-config /home/u/sr467/scratch/projects/MolecularDynamics/config/cluster-config.yaml \
+          --configfile /home/u/sr467/scratch/projects/MolecularDynamics/config/config.yaml \
+          --conda-prefix /home/u/sr467/scratch/projects/MolecularDynamics/.snakemake/
+
+
