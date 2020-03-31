@@ -60,7 +60,7 @@ angle_coeff 1 10.0
 # INTEGRATION OF Equations of motion #
 ######################################
 fix 1 all   nve
-fix 2 all  langevin   1.0 1.0   1.0  2142
+fix 2 all  langevin   1.0 1.0 1.0 ${seed} #2142
 
 ######################
 #### CUSTOM INFO #####
