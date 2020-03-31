@@ -10,6 +10,7 @@ import seaborn as sns
 import pyCommonTools as pct
 from typing import IO, List
 import matplotlib.pyplot as plt
+from itertools import combinations
 from collections import defaultdict
 from utilities import Atom, load_XYZ
 
@@ -55,25 +56,27 @@ def get_contact_frequency(
         {k: pd.DataFrame.from_dict(v, 'index') for k, v in contacts.items()},
         axis=0, names=['atom1', 'atom2']).unstack(fill_value=0).to_numpy()
 
+    # Copy upper triangle to lower triangle
+    contacts = contacts+ contacts.T - np.diag(np.diag(contacts))
     np.savetxt(outdata, contacts)
 
 
+# Also run in parallel?
 def update_contact_map(
         atoms: List[Atom], xsize: float, ysize: float, zsize: float, contacts):
 
-    for a, atom1 in enumerate(atoms):
-        for b, atom2 in enumerate(atoms):
-            if a == b:
-                continue
-            xdist = linear_distance(
-                atom1.x, atom2.x, size=xsize, periodic=True)
-            ydist = linear_distance(
-                atom1.y, atom2.y, size=ysize, periodic=True)
-            zdist = linear_distance(
-                atom1.z, atom2.z, size=zsize, periodic=True)
-            distance = distance_between(xdist, ydist, zdist)
-            if distance < 3:
-                contacts[a][b] += 1
+    # Loop through unique atom pairs - don't run same pairs twice!
+    for atom1, atom2 in combinations(atoms, 2):
+
+        xdist = linear_distance(
+            atom1.x, atom2.x, size=xsize, periodic=True)
+        ydist = linear_distance(
+            atom1.y, atom2.y, size=ysize, periodic=True)
+        zdist = linear_distance(
+            atom1.z, atom2.z, size=zsize, periodic=True)
+        distance = distance_between(xdist, ydist, zdist)
+        if distance < 3:
+            contacts[atoms.index(atom1)][atoms.index(atom2)] += 1
 
     return contacts
 
