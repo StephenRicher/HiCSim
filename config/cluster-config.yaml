@@ -1,0 +1,23 @@
+__default__:
+  account:       "free"
+  partition:     "batch"
+  ntasks:        1
+  cpus-per-task: 16
+  job-name:      "{rule}-%j"
+  mail-type:     "ALL"
+  mail-user:     "sr467@bath.ac.uk"
+  output:        "{rule}-%j-%x.out"
+  error:         "{rule}-%j-%x.err"
+  account :      "free"
+  partition :    "batch"
+  time :         60
+
+
+mean_xyz:
+  time : 300
+
+lammps :
+  time : 60
+
+create_gif:
+  time : 60
