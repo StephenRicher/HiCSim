@@ -8,6 +8,7 @@ import random
 import argparse
 import pyCommonTools as pct
 
+
 def main():
 
     __version__ = '1.0.0'
@@ -47,6 +48,7 @@ def main():
 
     return (pct.execute(parser))
 
+
 def generate_linear_polymer(
         n_molecules, n_types, n_clusters, xlo, xhi, ylo, yhi, zlo, zhi):
 
@@ -71,7 +73,7 @@ def generate_linear_polymer(
     r = 1.1
     cluster_size = int(n_molecules / n_clusters)
     type = random.choice(type_list)
-    type_boundary_idx = 0 # Set initial index of type boundary change
+    type_boundary_idx = 0  # Set initial index of type boundary change
     for n in range(1, n_molecules+1):
 
         if n > type_boundary_idx + cluster_size:
@@ -105,6 +107,7 @@ def generate_linear_polymer(
     n_angles = n_molecules - 2
     for a in range(1, n_angles + 1):
         sys.stdout.write(f'{a} 1 {a} {a+1} {a+2}\n')
+
 
 if __name__ == '__main__':
     sys.exit(main())
