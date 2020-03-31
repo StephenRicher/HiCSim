@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 
-""" Script to read LAMMPS output and generate contact frequency heatmap """
+""" Script to read LAMMPS output and generate contact frequency matrix """
 
 import sys
 import math
+import numpy as np
+import pandas as pd
+import seaborn as sns
 import pyCommonTools as pct
 from typing import IO, List
-from collections import defaultdict
-import pandas as pd
-import numpy as np
-import seaborn as sns
 import matplotlib.pyplot as plt
+from collections import defaultdict
+from utilities import Atom, load_XYZ
+
 
 def main():
 
@@ -30,67 +32,30 @@ def main():
     parser.add_argument(
         '-z', '--zsize', required=True, type=float,
         help='Size of box in z dimension.')
+    parser.add_argument(
+        '--outdata', default='contacts.txt',
+        help='Contact matrix output (default: %(default)s)')
 
     return (pct.execute(parser))
 
 
-class Atom:
-
-    def __init__(self, record):
-        self.record = record.strip().split()
-
-    def __repr__(self):
-        return ' '.join(self.record)
-
-    @property
-    def type(self):
-        return self.record[0]
-
-    @property
-    def x(self):
-        return float(self.record[1])
-
-    @property
-    def y(self):
-        return float(self.record[2])
-
-    @property
-    def z(self):
-        return float(self.record[3])
-
-
 def get_contact_frequency(
-        infile: str, xsize: float, ysize: float, zsize: float):
+        infile: str, outdata: str,
+        xsize: float, ysize: float, zsize: float) -> None:
 
+    log = pct.create_logger()
     contacts = defaultdict(lambda: defaultdict(int))
-    with pct.open(infile) as f:
-        n_atoms = int(next(f))
-        for line in f:
-            if 'Timestep' in line:
-                sys.stderr.write(f'Processing: {line}')
-                atoms = load_timestep(f, n_atoms)
-                contacts = update_contact_map(atoms, xsize, ysize, zsize, contacts)
+    xyz = load_XYZ(infile)
+    for entry in xyz:
+        log.info(f'Processing: {entry["comment"]}')
+        contacts = update_contact_map(
+            entry['atoms'], xsize, ysize, zsize, contacts)
 
-    contacts = pd.concat({k: pd.DataFrame.from_dict(v, 'index') for k, v in contacts.items()},
+    contacts = pd.concat(
+        {k: pd.DataFrame.from_dict(v, 'index') for k, v in contacts.items()},
         axis=0, names=['atom1', 'atom2']).unstack(fill_value=0).to_numpy()
-    np.savetxt('/home/stephen/Desktop/contacts.txt', contacts)
-    sns.heatmap(np.log10(contacts + 1))
-    #plt.show()
-    plt.savefig('/home/stephen/Desktop/contacts.png', dpi=300)
 
-
-
-def load_timestep(f: IO, n_atoms: int) -> List[Atom]:
-    """ Return a list of Atoms for a timestep. """
-
-    atoms = []
-    for atom in range(1, n_atoms + 1):
-        try:
-            atoms.append(Atom(next(f)))
-        except StopIteration:
-            # Add warning here
-            break
-    return atoms
+    np.savetxt(outdata, contacts)
 
 
 def update_contact_map(
