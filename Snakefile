@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import random
 from set_config import set_config
 
 BASE = workflow.basedir
@@ -13,17 +14,21 @@ configfile: f'{BASE}/config/config.yaml'
 
 # Defaults configuration file - use empty string to represent no default value.
 default_config = {
+    'name' :        'clustered_copolymer',
     'workdir':      workflow.basedir,
     'n_molecules':  1000,
+    'reps':         5,
+    'seed':         42,
     'n_types':      4,
     'n_clusters':   20,
-    'xlo':          -50,
-    'xhi':          50,
-    'ylo':          -50,
-    'yhi':          50,
-    'zlo':          -50,
-    'zhi':          50,
-    'name' :        'homopolymer',
+    'xlo':          -100,
+    'xhi':          100,
+    'ylo':          -100,
+    'yhi':          100,
+    'zlo':          -100,
+    'zhi':          100,
+    'window_size':  10,
+    'overlap':      2,
     'timestep':     1000,
     'delay':        10,
     'loop':         0
@@ -31,37 +36,19 @@ default_config = {
 config = set_config(config, default_config)
 
 workdir : config['workdir']
-
 # Define global configuration variables
 NAME = config['name']
+# Define list of N reps from 1 to N
+REPS = list(range(1, config['reps'] + 1))
+# Define random seed for each rep
+random.seed(config['seed'])
+SEEDS = [random.randint(1, (2**16) - 1) for i in REPS]
 
 rule all:
     input:
-        f'vmd/{NAME}.gif'
+        [f'vmd/{NAME}.gif', f'qc/{NAME}-summed.png']
+        #[f'qc/{NAME}-summed.png']
 
-rule compile_generate_polymer:
-    input:
-        f'{SCRIPTS}/generate_polymer.c++'
-    output:
-        f'{SCRIPTS}/generate_polymer'
-    log:
-        'logs/compile_generate_polyer.log'
-    conda:
-        f'{ENVS}/gcc.yaml'
-    shell:
-        'g++ -O3 -o {output} {input} &> {log}'
-
-rule generate_polymer2:
-    input:
-        script = rules.compile_generate_polymer.output
-    output:
-        f'fpolymer/poly.n{config["n_molecules"]}.dat'
-    params:
-        n_molecules = config['n_molecules'],
-    log:
-        f'logs/generate_polymer.log'
-    shell:
-        '{input.script} {params.n_molecules} {params.mode} > {output} 2> {log}'
 
 rule generate_polymer:
     output:
@@ -77,7 +64,9 @@ rule generate_polymer:
         zlo = config['zlo'],
         zhi = config['zhi'],
     log:
-        f'logs/generate_polymer.log'
+        'logs/generate_polymer.log'
+    conda:
+        f'{ENVS}/python3.yaml'
     shell:
         '{SCRIPTS}/generate_polymer.py '
             '--n_molecules {params.n_molecules} '
@@ -88,41 +77,134 @@ rule generate_polymer:
             '--zlo {params.zlo} --zhi {params.zhi} '
         '> {output} 2> {log}'
 
+
 rule lammps:
     input:
         rules.generate_polymer.output
     output:
-        f'lammps/XYZ_{NAME}.xyz'
+        f'lammps/XYZ_{NAME}-{{rep}}.xyz'
     params:
+        rep = REPS,
         outdir = directory(f'lammps'),
-        timestep = config['timestep']
+        timestep = config['timestep'],
+        seed = lambda wildcards: SEEDS[REPS.index(int(wildcards.rep))]
     log:
-        f'logs/lammps.log'
+        'logs/lammps-{rep}.log'
     conda:
         f'{ENVS}/lammps.yaml'
     shell:
         'lmp_serial '
             '-var infile {input} '
             '-var outdir {params.outdir} '
-            '-var name {NAME} '
+            '-var name {NAME}-{wildcards.rep} '
             '-var timestep {params.timestep} '
+            '-var seed {params.seed} '
             '-in {SCRIPTS}/run.lam '
             '-log /dev/null '
         '&> {log}'
 
-checkpoint vmd:
+
+rule create_contact_matrix:
     input:
         rules.lammps.output
     output:
+        f'qc/{NAME}-{{rep}}.txt.gz'
+    params:
+        xsize = config['xhi'] - config['xlo'],
+        ysize = config['yhi'] - config['ylo'],
+        zsize = config['zhi'] - config['zlo']
+    log:
+        'logs/contact_frequency-{rep}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/create_contact_matrix.py '
+            '--xsize {params.xsize} '
+            '--ysize {params.ysize} '
+            '--zsize {params.zsize} '
+            '--outdata {output} {input} '
+        '&> {log}'
+
+
+rule sum_matrices:
+    input:
+        expand('qc/{name}-{rep}.txt.gz',
+            name=NAME, rep=REPS)
+    output:
+        f'qc/{NAME}-summed.txt.gz'
+    log:
+        'logs/sum_matrices.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/sum_matrices.py '
+            '--out {output} {input} '
+        '&> {log}'
+
+
+rule plot_heatmap:
+    input:
+        rules.sum_matrices.output
+    output:
+        f'qc/{NAME}-summed.png'
+    log:
+        'logs/plot_heatmap.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/plot_heatmap.py '
+            '--heatmap {output} {input} '
+        '&> {log}'
+
+
+rule mean_xyz:
+    input:
+        expand('lammps/XYZ_{name}-{rep}.xyz',
+            name=NAME, rep=REPS)
+    output:
+        f'lammps/XYZ_{NAME}-mean.xyz'
+    log:
+        'logs/mean_xyz.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/mean_xyz.py --verbose {input} > {output} 2> {log}'
+
+
+rule smooth_xyz:
+    input:
+        rules.mean_xyz.output
+    output:
+        f'lammps/XYZ_{NAME}-smooth.xyz'
+    params:
+        window_size = config['window_size'],
+        overlap = config['overlap']
+    log:
+        'logs/smooth_xyz.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/smooth_xyz.py '
+            '--size {params.window_size} '
+            '--overlap {params.overlap} '
+            '{input} '
+        '> {output} 2> {log}'
+
+
+checkpoint vmd:
+    input:
+        rules.smooth_xyz.output
+    output:
         directory(f'vmd/sequence')
     log:
-        f'logs/vmd.log'
+        'logs/vmd.log'
     conda:
         f'{ENVS}/vmd.yaml'
     shell:
         'vmd -eofexit -nt -displaydev none -args {input} {output} '
             '< {SCRIPTS}/vmd.tcl '
         '&> {log}'
+
 
 def aggregate_vmd(wildcards):
     """ Return all RGB files generated by vmd checkpoint. """
@@ -132,6 +214,7 @@ def aggregate_vmd(wildcards):
            i=glob_wildcards(os.path.join(dir, '{i}.rgb')).i,
            dir=dir)
     return sorted(images)
+
 
 rule create_gif:
     input:
@@ -143,7 +226,7 @@ rule create_gif:
         delay = config['delay'],
         loop = config['loop']
     log:
-        f'logs/create_gif.log'
+        'logs/create_gif.log'
     conda:
         f'{ENVS}/imagemagick.yaml'
     shell:
