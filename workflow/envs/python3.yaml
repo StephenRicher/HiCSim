@@ -1,0 +1,10 @@
+channels :
+  - conda-forge
+dependencies :
+  - python=3
+  - pip:
+    - numpy
+    - pandas
+    - seaborn
+    - matplotlib
+    - pyCommonTools==2.2.0
