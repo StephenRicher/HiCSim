@@ -18,6 +18,7 @@ default_config = {
     'workdir':      workflow.basedir,
     'n_molecules':  1000,
     'reps':         5,
+    'threads':      1,
     'seed':         42,
     'n_types':      4,
     'n_clusters':   20,
@@ -113,12 +114,15 @@ rule create_contact_matrix:
         xsize = config['xhi'] - config['xlo'],
         ysize = config['yhi'] - config['ylo'],
         zsize = config['zhi'] - config['zlo']
+    threads:
+        config['threads']
     log:
         'logs/contact_frequency-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
         '{SCRIPTS}/create_contact_matrix.py '
+            '--threads {threads} '
             '--xsize {params.xsize} '
             '--ysize {params.ysize} '
             '--zsize {params.zsize} '
