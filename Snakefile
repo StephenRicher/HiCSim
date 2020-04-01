@@ -205,7 +205,7 @@ checkpoint vmd:
     conda:
         f'{ENVS}/vmd.yaml'
     shell:
-        'vmd -eofexit -nt -displaydev none -args {input} {output} '
+        'vmd -eofexit -nt -displaydev text -args {input} {output} '
             '< {SCRIPTS}/vmd.tcl '
         '&> {log}'
 
