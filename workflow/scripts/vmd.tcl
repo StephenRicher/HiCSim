@@ -27,10 +27,10 @@ for {set i 0} {$i < $numframes} {incr i} {
   rotate z by ${z_inc}
 }
 
-set angle_inc_end 2
+set angle_inc_end 4
 for {set i 0} {$i < 360} {incr i ${angle_inc_end}} {
-  set filename ${gifdir}/snap.[format "%04d" $frame].rgb
-  render snapshot ${filename}
+  set filename ${gifdir}/snap.[format "%04d" $frame].tga
+  render TachyonInternal ${filename}
   incr frame
   rotate y by ${angle_inc_end}
 }
