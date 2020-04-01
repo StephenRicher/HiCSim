@@ -16,16 +16,16 @@ generate_polymer:
   time : 10
 
 lammps:
-  time : 60
-
-create_contact_matrix:
-  time : 120
-
-sum_matrices:
   time : 10
 
+create_contact_matrix:
+  time : 10
+
+sum_matrices:
+  time : 60
+
 mean_xyz:
-  time : 300
+  time : 360
 
 create_gif:
   time : 60
