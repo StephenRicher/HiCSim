@@ -1,8 +1,9 @@
 # Simulation output directory - will be created if neccessary.
-workdir: '/media/stephen/Data/modelling'
+workdir: '/home/u/sr467/scratch/projects/MolecularDynamics/analysis'
 
 # LAMMPS config (rule: lammps)
 timestep: 100
-reps: 100
+reps: 200
+threads: 16
 #window_size: 30
 #overlap: 2
