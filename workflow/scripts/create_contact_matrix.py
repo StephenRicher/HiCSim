@@ -10,9 +10,9 @@ import seaborn as sns
 import pyCommonTools as pct
 from typing import IO, List
 import matplotlib.pyplot as plt
-from itertools import combinations
-from collections import defaultdict
+from itertools import combinations, repeat
 from utilities import Atom, load_XYZ
+from timeit import default_timer as timer
 
 
 def main():
@@ -25,14 +25,17 @@ def main():
     parser.set_defaults(function=get_contact_frequency)
 
     parser.add_argument(
+        '-d', '--distance', default=3, type=float,
+        help='Max contact distance between particiles (default: %(default)s)')
+    parser.add_argument(
         '-x', '--xsize', required=True, type=float,
-        help='Size of box in x dimension.')
+        help='Size of box in x dimension')
     parser.add_argument(
         '-y', '--ysize', required=True, type=float,
-        help='Size of box in y dimension.')
+        help='Size of box in y dimension')
     parser.add_argument(
         '-z', '--zsize', required=True, type=float,
-        help='Size of box in z dimension.')
+        help='Size of box in z dimension')
     parser.add_argument(
         '--outdata', default='contacts.txt',
         help='Contact matrix output (default: %(default)s)')
@@ -41,48 +44,53 @@ def main():
 
 
 def get_contact_frequency(
-        infile: str, outdata: str,
+        infile: str, outdata: str, distance: float,
         xsize: float, ysize: float, zsize: float) -> None:
 
     log = pct.create_logger()
-    contacts = defaultdict(lambda: defaultdict(int))
+    start = timer()
+
     xyz = load_XYZ(infile)
+    n_atoms = max(i['n_atoms'] for i in xyz)
+    contacts = np.zeros(shape = (n_atoms, n_atoms))
+
+    #max_square_distance = distance**2
+    #args = zip(xyz,repeat(xsize), repeat(xsize), repeat(xsize), repeat(max_square_distance))
+    #print(list(args))
+    #sys.exit(1)
     for entry in xyz:
         log.info(f'Processing: {entry["comment"]}')
         contacts = update_contact_map(
-            entry['atoms'], xsize, ysize, zsize, contacts)
-
-    contacts = pd.concat(
-        {k: pd.DataFrame.from_dict(v, 'index') for k, v in contacts.items()},
-        axis=0, names=['atom1', 'atom2']).unstack(fill_value=0).to_numpy()
+            entry['atoms'], contacts, xsize, ysize, zsize, max_square_distance)
 
     # Copy upper triangle to lower triangle
-    contacts = contacts+ contacts.T - np.diag(np.diag(contacts))
+    contacts = contacts + contacts.T - np.diag(np.diag(contacts))
     np.savetxt(outdata, contacts)
+
+    end = timer()
+    log.info(f'Contact matrix created in {end - start} seconds.')
 
 
 # Also run in parallel?
 def update_contact_map(
-        atoms: List[Atom], xsize: float, ysize: float, zsize: float, contacts):
+        atoms: List[Atom], contacts, xsize: float, ysize: float, zsize: float,
+        max_square_distance: float):
 
     # Loop through unique atom pairs - don't run same pairs twice!
-    for atom1, atom2 in combinations(atoms, 2):
-
+    for A1, A2 in combinations(enumerate(atoms), 2):
+        atom1 = A1[1]
+        atom2 = A2[1]
         xdist = linear_distance(
             atom1.x, atom2.x, size=xsize, periodic=True)
         ydist = linear_distance(
             atom1.y, atom2.y, size=ysize, periodic=True)
         zdist = linear_distance(
             atom1.z, atom2.z, size=zsize, periodic=True)
-        distance = distance_between(xdist, ydist, zdist)
-        if distance < 3:
-            contacts[atoms.index(atom1)][atoms.index(atom2)] += 1
+        square_distance = xdist**2 + ydist**2 + zdist**2
+        if square_distance < max_square_distance:
+            contacts[A1[0]][A2[0]] += 1
 
     return contacts
-
-
-def distance_between(xdist: float, ydist: float, zdist: float) -> float:
-    return math.sqrt(xdist**2 + ydist**2 + zdist**2)
 
 
 def linear_distance(
