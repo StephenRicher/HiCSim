@@ -13,6 +13,8 @@ import matplotlib.pyplot as plt
 from itertools import combinations, repeat
 from utilities import Atom, load_XYZ
 from timeit import default_timer as timer
+import ctypes
+import multiprocessing
 
 
 def main():
@@ -26,7 +28,7 @@ def main():
 
     parser.add_argument(
         '-d', '--distance', default=3, type=float,
-        help='Max contact distance between particiles (default: %(default)s)')
+        help='Max contact distance between particles (default: %(default)s)')
     parser.add_argument(
         '-x', '--xsize', required=True, type=float,
         help='Size of box in x dimension')
@@ -37,6 +39,9 @@ def main():
         '-z', '--zsize', required=True, type=float,
         help='Size of box in z dimension')
     parser.add_argument(
+        '-@', '--threads', default=1, type=int,
+        help='Number of threads for multiprocessing (default: %(default)s)')
+    parser.add_argument(
         '--outdata', default='contacts.txt',
         help='Contact matrix output (default: %(default)s)')
 
@@ -44,7 +49,7 @@ def main():
 
 
 def get_contact_frequency(
-        infile: str, outdata: str, distance: float,
+        infile: str, outdata: str, distance: float, threads: int,
         xsize: float, ysize: float, zsize: float) -> None:
 
     log = pct.create_logger()
@@ -52,16 +57,19 @@ def get_contact_frequency(
 
     xyz = load_XYZ(infile)
     n_atoms = max(i['n_atoms'] for i in xyz)
-    contacts = np.zeros(shape = (n_atoms, n_atoms))
 
-    #max_square_distance = distance**2
-    #args = zip(xyz,repeat(xsize), repeat(xsize), repeat(xsize), repeat(max_square_distance))
-    #print(list(args))
-    #sys.exit(1)
-    for entry in xyz:
-        log.info(f'Processing: {entry["comment"]}')
-        contacts = update_contact_map(
-            entry['atoms'], contacts, xsize, ysize, zsize, max_square_distance)
+    global contacts
+    shared_array_base = multiprocessing.Array(ctypes.c_double, n_atoms*n_atoms)
+    contacts = np.ctypeslib.as_array(shared_array_base.get_obj())
+    contacts = contacts.reshape(n_atoms, n_atoms)
+
+    max_square_distance = distance**2
+
+    # Generate tuple of args for submission to update_contact_map()
+    args = zip(xyz,repeat(xsize), repeat(xsize),
+        repeat(xsize), repeat(max_square_distance))
+    pool = multiprocessing.Pool(processes=threads)
+    pool.starmap(update_contact_map, args)
 
     # Copy upper triangle to lower triangle
     contacts = contacts + contacts.T - np.diag(np.diag(contacts))
@@ -73,11 +81,12 @@ def get_contact_frequency(
 
 # Also run in parallel?
 def update_contact_map(
-        atoms: List[Atom], contacts, xsize: float, ysize: float, zsize: float,
+        atoms: List[Atom], xsize: float, ysize: float, zsize: float,
         max_square_distance: float):
 
     # Loop through unique atom pairs - don't run same pairs twice!
-    for A1, A2 in combinations(enumerate(atoms), 2):
+    for A1, A2 in combinations(enumerate(atoms['atoms']), 2):
+
         atom1 = A1[1]
         atom2 = A2[1]
         xdist = linear_distance(
