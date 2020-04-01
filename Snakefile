@@ -89,6 +89,8 @@ rule lammps:
         outdir = directory(f'lammps'),
         timestep = config['timestep'],
         seed = lambda wildcards: SEEDS[REPS.index(int(wildcards.rep))]
+    threads:
+        config['threads']
     log:
         'logs/lammps-{rep}.log'
     conda:
