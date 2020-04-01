@@ -19,8 +19,8 @@ set z_inc 1
 
 for {set i 0} {$i < $numframes} {incr i} {
   animate goto $i
-  set filename ${gifdir}/snap.[format "%04d" $frame].rgb
-  render snapshot ${filename}
+  set filename ${gifdir}/snap.[format "%04d" $frame].tga
+  render TachyonInternal ${filename}
   incr frame
   rotate x by ${x_inc}
   rotate y by ${y_inc}
