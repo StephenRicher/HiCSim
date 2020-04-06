@@ -17,40 +17,54 @@ def main():
         verbose=True, version=__version__,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument(
-        '--n_molecules', default=1000, type=int,
-        help='Number of molecules in polymer.')
-    parser.add_argument(
-        '--n_types', default=4, type=int,
-        help='Number of atom types in polymer.')
-    parser.add_argument(
-        '--n_clusters', default=10, type=int,
-        help='Number of clusters in poymers.')
-    parser.add_argument(
+    base_args = pct.get_base_args()
+    subparser = pct.make_subparser(parser)
+
+    box_sizes = argparse.ArgumentParser(add_help=False)
+    box_sizes.add_argument(
         '--xlo', default=-50, type=float,
         help='Lower x-axis of simuluation box.')
-    parser.add_argument(
+    box_sizes.add_argument(
         '--xhi', default=50, type=float,
         help='Upper x-axis of simuluation box.')
-    parser.add_argument(
+    box_sizes.add_argument(
         '--ylo', default=-50, type=float,
         help='Lower y-axis of simuluation box.')
-    parser.add_argument(
+    box_sizes.add_argument(
         '--yhi', default=50, type=float,
         help='Upper y-axis of simuluation box.')
-    parser.add_argument(
+    box_sizes.add_argument(
         '--zlo', default=-50, type=float,
         help='Lower z-axis of simuluation box.')
-    parser.add_argument(
+    box_sizes.add_argument(
         '--zhi', default=50, type=float,
         help='Upper z-axis of simuluation box.')
-    parser.set_defaults(function=generate_linear_polymer)
+
+    random_subparser = subparser.add_parser(
+        'random',
+        description=random_linear_polymer.__doc__,
+        help=random_linear_polymer.__doc__,
+        parents=[base_args, box_sizes],
+        epilog=parser.epilog)
+    random_subparser.add_argument(
+        '--n_molecules', default=1000, type=int,
+        help='Number of molecules in polymer.')
+    random_subparser.add_argument(
+        '--n_types', default=4, type=int,
+        help='Number of atom types in polymer.')
+    random_subparser.add_argument(
+        '--n_clusters', default=10, type=int,
+        help='Number of clusters in poymers.')
+    random_subparser.set_defaults(function=random_linear_polymer)
+
 
     return (pct.execute(parser))
 
 
-def generate_linear_polymer(
+def random_linear_polymer(
         n_molecules, n_types, n_clusters, xlo, xhi, ylo, yhi, zlo, zhi):
+
+    """ Generate a random linear polymer as an input file for LAMMPS """
 
     sys.stdout.write(
         'LAMMPS data file from restart file: timestep = 0, procs = 1\n\n'
