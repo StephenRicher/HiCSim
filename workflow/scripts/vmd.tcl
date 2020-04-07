@@ -1,8 +1,7 @@
 set infile [lindex $argv 0]
 set gifdir [lindex $argv 1]
 
-topo readvarxyz ${infile}
-
+mol new ${infile} type {xyz} first 0 last -1 step 1 waitfor 1
 mol modcolor 0 0 Element
 mol modstyle 0 0 VDW 1.000000 12.000000
 mol modmaterial 0 0 Opaque
