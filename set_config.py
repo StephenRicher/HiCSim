@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 
 import sys
+import pandas as pd
+
 
 class ConfigurationError(Exception):
     pass
+
 
 def set_config(config, default_config):
 
@@ -32,3 +35,10 @@ def set_config(config, default_config):
 
     sys.stderr.write('\033[m')
     return config
+
+
+def read_paths(filepath):
+    data = pd.read_table(filepath, names=['path'], squeeze=True)
+    # Set index to start from 1 instead of 0
+    data.index = [str(i+1) for i in range(len(data))]
+    return data
