@@ -416,7 +416,8 @@ rule lammps:
     conda:
         f'{ENVS}/lammps.yaml'
     shell:
-        'mpirun lmp_mpi -var infile {input} '
+        'mpirun -n {threads} -x OMP_NUM_THREADS={threads} '
+        'lmp_mpi -var infile {input} '
         '-var outdir {params.outdir} '
         '-var name {NAME}-{wildcards.rep} '
         '-var timestep {params.timestep} '
