@@ -25,7 +25,7 @@ default_config = {
     'end':          '',
     'min_rep':      1,
     'bases_per_bead': 1000,
-    'method':       'median'
+    'method':       'median',
     'n_molecules':  1000,
     'reps':         5,
     'threads':      1,
