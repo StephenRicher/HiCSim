@@ -25,7 +25,7 @@ default_config = {
     'end':          '',
     'min_rep':      1,
     'bases_per_bead': 1000,
-    'method':       'median',
+    'method':       'sum',
     'n_molecules':  1000,
     'reps':         5,
     'threads':      1,
@@ -120,6 +120,8 @@ rule concatenate_bed:
         expand('tracks/MCF-7_CTCF_{rep}.bed', rep = CTCF_DATA.index)
     output:
         'tracks/MCF7_CTCF.bed'
+    group:
+        'bedtools'
     log:
         'logs/merge_bed.log'
     shell:
@@ -131,6 +133,8 @@ rule bedtools_sort:
         rules.concatenate_bed.output
     output:
         'tracks/MCF7_CTCF.sort.bed'
+    group:
+        'bedtools'
     log:
         'logs/bedtools_sort.log'
     conda:
@@ -144,6 +148,8 @@ rule bedtools_merge:
         rules.bedtools_sort.output
     output:
         'tracks/MCF7_CTCF.merged.bed'
+    group:
+        'bedtools'
     log:
         'logs/bedtools_merge.log'
     conda:
@@ -151,36 +157,6 @@ rule bedtools_merge:
     shell:
         'bedtools merge -s -c 4,5,6 -o count,median,distinct -i {input} '
         '> {output} 2> {log}'
-
-
-rule subset_genome:
-    input:
-        genome = rules.bgzip_genome.output,
-        indexes = rules.index_genome.output
-    output:
-        f'genome/{BUILD}-{CHR}.fa'
-    params:
-        chr = config['chr'],
-    log:
-        'logs/subset_genome.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    shell:
-        'samtools faidx {input.genome} {params.chr} '
-        '| sed "1s/://" > {output} 2> {log}'
-
-
-rule index_subset_genome:
-    input:
-        rules.subset_genome.output
-    output:
-        f'{rules.subset_genome.output}.fai'
-    log:
-        'logs/index_subset_genome.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    shell:
-        'samtools faidx {input}'
 
 
 rule filter_and_split_orientation:
@@ -191,6 +167,8 @@ rule filter_and_split_orientation:
         reverse = 'tracks/MCF7_CTCF-reverse.bed'
     params:
         min_rep = config['min_rep']
+    group:
+        'bedtools'
     log:
         'logs/split_bed.log'
     conda:
@@ -205,6 +183,8 @@ rule merge_filtered:
         rules.filter_and_split_orientation.output
     output:
         'tracks/MCF7_CTCF-filtered.bed'
+    group:
+        'bedtools'
     log:
         'logs/merge_filtered.log'
     shell:
@@ -216,12 +196,48 @@ rule sort_filtered:
         rules.merge_filtered.output
     output:
         'tracks/MCF7_CTCF-filtered.sort.bed'
+    group:
+        'bedtools'
     log:
         'logs/sort_filtered.log'
     conda:
         f'{ENVS}/bedtools.yaml'
     shell:
         'bedtools sort -i {input} > {output} 2> {log}'
+
+
+rule subset_genome:
+    input:
+        genome = rules.bgzip_genome.output,
+        indexes = rules.index_genome.output
+    output:
+        f'genome/{BUILD}-{CHR}.fa'
+    params:
+        chr = config['chr'],
+    group:
+        'subset_genome'
+    log:
+        'logs/subset_genome.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        'samtools faidx {input.genome} {params.chr} '
+        '| sed "1s/://" > {output} 2> {log}'
+
+
+rule index_subset_genome:
+    input:
+        rules.subset_genome.output
+    output:
+        f'{rules.subset_genome.output}.fai'
+    group:
+        'subset_genome'
+    log:
+        'logs/index_subset_genome.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        'samtools faidx {input}'
 
 
 rule get_chrom_sizes:
@@ -231,6 +247,8 @@ rule get_chrom_sizes:
         f'genome/chrom_sizes/{BUILD}-{CHR}.size'
     params:
         chr = config['chr']
+    group:
+        'subset_genome'
     log:
         f'logs/get_chrom_sizes/{BUILD}-{CHR}.log'
     shell:
@@ -277,6 +295,8 @@ rule mask_reverse_ctcf:
         f'genome/masked/{BUILD}-{CHR}-masked_RF.fasta'
     params:
         mc = 'R'
+    group:
+        'mask'
     log:
         'logs/mask_reverse_ctcf.log'
     conda:
@@ -294,6 +314,8 @@ rule masked_other:
         f'genome/masked/{BUILD}-{CHR}-masked_all.fasta'
     params:
         mc = 'N'
+    group:
+        'mask'
     log:
         'logs/mask_other.log'
     conda:
@@ -307,6 +329,8 @@ rule index_masked:
         rules.masked_other.output
     output:
         f'{rules.masked_other.output}.fai'
+    group:
+        'mask'
     log:
         'logs/index_masked.log'
     conda:
@@ -321,6 +345,8 @@ rule subset_masked:
         index = rules.index_masked.output
     output:
         f'genome/masked/{BUILD}-{REGION}-masked_all.fasta'
+    group:
+        'mask'
     params:
         region = f'{CHR}:{START}-{END}'
     log:
