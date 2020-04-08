@@ -24,7 +24,7 @@ default_config = {
     'start':        '',
     'end':          '',
     'min_rep':      1,
-    'bases_per_bead': 10000,
+    'bases_per_bead': 1000,
     'n_molecules':  1000,
     'reps':         5,
     'threads':      1,
@@ -415,7 +415,7 @@ rule lammps:
     conda:
         f'{ENVS}/lammps.yaml'
     shell:
-        'lmp_serial -var infile {input} '
+        'mpirun lmp_mpi -var infile {input} '
         '-var outdir {params.outdir} '
         '-var name {NAME}-{wildcards.rep} '
         '-var timestep {params.timestep} '
