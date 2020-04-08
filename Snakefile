@@ -25,6 +25,7 @@ default_config = {
     'end':          '',
     'min_rep':      1,
     'bases_per_bead': 1000,
+    'method':       'median'
     'n_molecules':  1000,
     'reps':         5,
     'threads':      1,
@@ -449,25 +450,26 @@ rule create_contact_matrix:
         '&> {log}'
 
 
-rule sum_matrices:
+rule average_matrices:
     input:
         expand('qc/{name}-{rep}.txt.gz',
             name=NAME, rep=REPS)
     output:
         f'qc/{NAME}-summed.txt.gz'
+    params:
+        method = config['method']
     log:
         'logs/sum_matrices.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/sum_matrices.py '
-            '--out {output} {input} '
-        '&> {log}'
+        '{SCRIPTS}/average_matrices.py --out {output} '
+        '--method {params.method} {input} &> {log}'
 
 
 rule plot_heatmap:
     input:
-        rules.sum_matrices.output
+        rules.average_matrices.output
     output:
         f'qc/{NAME}-summed.png'
     log:
