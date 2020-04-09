@@ -39,6 +39,7 @@ def compute_sum(matrices: List):
     summed_matrix = 0
     for matrix in matrices:
         summed_matrix += np.loadtxt(matrix)
+    return summed_matrix
 
 
 def compute_mean(matrices: List):
