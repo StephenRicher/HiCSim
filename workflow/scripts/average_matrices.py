@@ -31,7 +31,6 @@ def main():
 def compute_median(matrices: List):
     # Stack matrices along a third dimension and compute median
     matrices = np.dstack([np.loadtxt(matrix) for matrix in matrices])
-
     return np.median(matrices, axis = 2)
 
 
