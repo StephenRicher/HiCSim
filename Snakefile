@@ -10,39 +10,41 @@ ENVS = f'{BASE}/workflow/envs'
 # Defne path to custom scripts directory
 SCRIPTS = f'{BASE}/workflow/scripts'
 
-configfile: f'{BASE}/config/config.yaml'
+if not config:
+    configfile: f'{BASE}/config/config.yaml'
 
 # Defaults configuration file - use empty string to represent no default value.
 default_config = {
-    'name' :        'clustered_copolymer',
-    'workdir':      workflow.basedir,
-    'genome':       '',
-    'build':        'genome',
-    'ctcf':         '',
-    'region':       '',
-    'chr':          '',
-    'start':        '',
-    'end':          '',
-    'min_rep':      1,
+    'name' :          'clustered_copolymer',
+    'workdir':        workflow.basedir,
+    'genome':         '',
+    'build':          'genome',
+    'ctcf':           '',
+    'region':         '',
+    'chr':            '',
+    'start':          '',
+    'end':            '',
+    'min_rep':        1,
     'bases_per_bead': 1000,
-    'method':       'sum',
-    'n_molecules':  1000,
-    'reps':         5,
-    'threads':      1,
-    'seed':         42,
-    'n_types':      4,
-    'n_clusters':   20,
-    'xlo':          -100,
-    'xhi':          100,
-    'ylo':          -100,
-    'yhi':          100,
-    'zlo':          -100,
-    'zhi':          100,
-    'window_size':  10,
-    'overlap':      2,
-    'timestep':     1000,
-    'delay':        10,
-    'loop':         0
+    'method':         'sum',
+    'dpi':            600,
+    'n_molecules':    1000,
+    'reps':           5,
+    'threads':        1,
+    'seed':           42,
+    'n_types':        4,
+    'n_clusters':     20,
+    'xlo':            -100,
+    'xhi':            100,
+    'ylo':            -100,
+    'yhi':            100,
+    'zlo':            -100,
+    'zhi':            100,
+    'window_size':    10,
+    'overlap':        2,
+    'timestep':       1000,
+    'delay':          10,
+    'loop':           0
 }
 config = set_config(config, default_config)
 
@@ -499,14 +501,15 @@ rule plot_heatmap:
         rules.average_matrices.output
     output:
         f'qc/{NAME}-summed.png'
+    params:
+        dpi = config['dpi']
     log:
         'logs/plot_heatmap.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/plot_heatmap.py '
-            '--heatmap {output} {input} '
-        '&> {log}'
+        '{SCRIPTS}/plot_heatmap.py --heatmap {output} '
+        '--dpi {params.dpi} {input} &> {log}'
 
 
 rule mean_xyz:
