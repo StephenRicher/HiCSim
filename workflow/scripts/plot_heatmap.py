@@ -22,16 +22,19 @@ def main():
         '--heatmap', default='heatmap.png',
         help='Output heatmap (default: %(default)s)')
     parser.add_argument(
+        '--cmap', default='YlGn',
+        help='Matplotlib colormap (default: %(default)s)')
+    parser.add_argument(
         '--dpi', default=600, type=int,
         help='Heatmap resolution (default: %(default)s)')
 
     return (pct.execute(parser))
 
 
-def plot_heatmap(matrix: str, heatmap: str, dpi: int) -> None:
+def plot_heatmap(matrix: str, heatmap: str, dpi: int, cmap: str) -> None:
 
     matrix = np.loadtxt(matrix)
-    sns.heatmap(np.log10(matrix + 1))
+    sns.heatmap(np.log10(matrix + 1), cmap)
     plt.savefig(heatmap, dpi=dpi)
 
 
