@@ -26,8 +26,9 @@ default_config = {
     'end':            '',
     'min_rep':        1,
     'bases_per_bead': 1000,
-    'method':         'sum',
+    'method':         'mean',
     'dpi':            600,
+    'cmap':           'YlGn',
     'n_molecules':    1000,
     'reps':           5,
     'threads':        1,
@@ -59,7 +60,6 @@ SEEDS = [random.randint(1, (2**16) - 1) for i in REPS]
 
 GENOME = config['genome']
 BUILD = config['build']
-
 REGION = config['region']
 CHR = config['chr']
 START = config['start']
@@ -73,26 +73,26 @@ rule all:
         #[f'qc/{NAME}-summed.png']
 
 
-rule bgzip_genome:
+rule bgzipGenome:
     input:
         GENOME
     output:
         f'genome/{BUILD}.fa.gz'
     log:
-        f'logs/bgzip_genome/{BUILD}.log'
+        f'logs/bgzipGenome/{BUILD}.log'
     conda:
         f'{ENVS}/tabix.yaml'
     shell:
         '(zcat -f {input} | bgzip > {output}) 2> {log}'
 
 
-rule index_genome:
+rule indexGenome:
     input:
-        rules.bgzip_genome.output
+        rules.bgzipGenome.output
     output:
-        multiext(f'{rules.bgzip_genome.output}','.fai', '.gzi')
+        multiext(f'{rules.bgzipGenome.output}', '.fai', '.gzi')
     log:
-        'logs/index_genome.log'
+        'logs/indexGenome.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -101,8 +101,8 @@ rule index_genome:
 
 rule get_ctcf_orientation:
     input:
-        genome = rules.bgzip_genome.output,
-        index = rules.index_genome.output,
+        genome = rules.bgzipGenome.output,
+        index = rules.indexGenome.output,
         ctcf = lambda wc: CTCF_DATA[wc.rep]
     output:
         'tracks/MCF-7_CTCF_{rep}.bed'
@@ -117,7 +117,7 @@ rule get_ctcf_orientation:
         '{params.chr} > {output} 2> {log}'
 
 
-rule concatenate_bed:
+rule catReplicates:
     input:
         expand('tracks/MCF-7_CTCF_{rep}.bed', rep = CTCF_DATA.index)
     output:
@@ -130,30 +130,30 @@ rule concatenate_bed:
         'cat {input} > {output} 2> {log}'
 
 
-rule bedtools_sort:
+rule sortBed:
     input:
-        rules.concatenate_bed.output
+        rules.catReplicates.output
     output:
         'tracks/MCF7_CTCF.sort.bed'
     group:
         'bedtools'
     log:
-        'logs/bedtools_sort.log'
+        'logs/sortBed.log'
     conda:
         f'{ENVS}/bedtools.yaml'
     shell:
         'bedtools sort -i {input} > {output} 2> {log}'
 
 
-rule bedtools_merge:
+rule mergeBed:
     input:
-        rules.bedtools_sort.output
+        rules.sortBed.output
     output:
         'tracks/MCF7_CTCF.merged.bed'
     group:
         'bedtools'
     log:
-        'logs/bedtools_merge.log'
+        'logs/mergeBed.log'
     conda:
         f'{ENVS}/bedtools.yaml'
     shell:
@@ -161,9 +161,9 @@ rule bedtools_merge:
         '> {output} 2> {log}'
 
 
-rule filter_and_split_orientation:
+rule splitOrientationFilterBed:
     input:
-        rules.bedtools_merge.output
+        rules.mergeBed.output
     output:
         forward = 'tracks/MCF7_CTCF-forward.bed',
         reverse = 'tracks/MCF7_CTCF-reverse.bed'
@@ -180,46 +180,46 @@ rule filter_and_split_orientation:
         '--forward {output.forward} --reverse {output.reverse} {input} &> {log}'
 
 
-rule merge_filtered:
+rule catBed:
     input:
-        rules.filter_and_split_orientation.output
+        rules.splitOrientationFilterBed.output
     output:
         'tracks/MCF7_CTCF-filtered.bed'
     group:
         'bedtools'
     log:
-        'logs/merge_filtered.log'
+        'logs/catBed.log'
     shell:
         'cat {input} > {output}'
 
 
-rule sort_filtered:
+rule sortFilteredBed:
     input:
-        rules.merge_filtered.output
+        rules.catBed.output
     output:
         'tracks/MCF7_CTCF-filtered.sort.bed'
     group:
         'bedtools'
     log:
-        'logs/sort_filtered.log'
+        'logs/sortFilteredBed.log'
     conda:
         f'{ENVS}/bedtools.yaml'
     shell:
         'bedtools sort -i {input} > {output} 2> {log}'
 
 
-rule subset_genome:
+rule extractChrom:
     input:
-        genome = rules.bgzip_genome.output,
-        indexes = rules.index_genome.output
+        genome = rules.bgzipGenome.output,
+        indexes = rules.indexGenome.output
     output:
         f'genome/{BUILD}-{CHR}.fa'
     params:
         chr = config['chr'],
     group:
-        'subset_genome'
+        'extractChrom'
     log:
-        'logs/subset_genome.log'
+        'logs/extractChrom.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -227,44 +227,44 @@ rule subset_genome:
         '| sed "1s/://" > {output} 2> {log}'
 
 
-rule index_subset_genome:
+rule indexChrom:
     input:
-        rules.subset_genome.output
+        rules.extractChrom.output
     output:
-        f'{rules.subset_genome.output}.fai'
+        f'{rules.extractChrom.output}.fai'
     group:
-        'subset_genome'
+        'extractChrom'
     log:
-        'logs/index_subset_genome.log'
+        'logs/indexChrom.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
         'samtools faidx {input}'
 
 
-rule get_chrom_sizes:
+rule getChromSize:
     input:
-        rules.index_subset_genome.output
+        rules.indexChrom.output
     output:
         f'genome/chrom_sizes/{BUILD}-{CHR}.size'
     params:
         chr = config['chr']
     group:
-        'subset_genome'
+        'extractChrom'
     log:
-        f'logs/get_chrom_sizes/{BUILD}-{CHR}.log'
+        f'logs/getChromSize/{BUILD}-{CHR}.log'
     shell:
         'cut -f 1,2 {input} > {output} 2> {log}'
 
 
-rule bedtools_complement:
+rule complementBed:
     input:
-        sizes = rules.get_chrom_sizes.output,
-        bed = rules.sort_filtered.output
+        sizes = rules.getChromSize.output,
+        bed = rules.sortFilteredBed.output
     output:
         f'genome/{BUILD}-{CHR}-complement.bed'
     log:
-        f'logs/bedtools_complement/{BUILD}-{CHR}.log'
+        f'logs/complementBed/{BUILD}-{CHR}.log'
     conda:
         f'{ENVS}/bedtools.yaml'
     shell:
@@ -272,16 +272,16 @@ rule bedtools_complement:
         '> {output} 2> {log}'
 
 
-rule mask_forward_ctcf:
+rule maskForwardCTCF:
     input:
-        bed = rules.filter_and_split_orientation.output.forward,
-        genome = rules.subset_genome.output
+        bed = rules.splitOrientationFilterBed.output.forward,
+        genome = rules.extractChrom.output
     output:
         f'genome/masked/{BUILD}-{CHR}-masked_F.fasta'
     params:
         mc = 'F'
     log:
-        'logs/mask_forward_ctcf.log'
+        'logs/maskForwardCTCF.log'
     conda:
         f'{ENVS}/bedtools.yaml'
     shell:
@@ -289,10 +289,10 @@ rule mask_forward_ctcf:
         '-fi {input.genome} -fo {output} &> {log}'
 
 
-rule mask_reverse_ctcf:
+rule maskReverseCTCF:
     input:
-        bed = rules.filter_and_split_orientation.output.reverse,
-        masked = rules.mask_forward_ctcf.output
+        bed = rules.splitOrientationFilterBed.output.reverse,
+        masked = rules.maskForwardCTCF.output
     output:
         f'genome/masked/{BUILD}-{CHR}-masked_RF.fasta'
     params:
@@ -300,7 +300,7 @@ rule mask_reverse_ctcf:
     group:
         'mask'
     log:
-        'logs/mask_reverse_ctcf.log'
+        'logs/maskReverseCTCF.log'
     conda:
         f'{ENVS}/bedtools.yaml'
     shell:
@@ -308,10 +308,10 @@ rule mask_reverse_ctcf:
         '-fi {input.masked} -fo {output} &> {log}'
 
 
-rule masked_other:
+rule maskOther:
     input:
-        bed = rules.bedtools_complement.output,
-        masked = rules.mask_reverse_ctcf.output
+        bed = rules.complementBed.output,
+        masked = rules.maskReverseCTCF.output
     output:
         f'genome/masked/{BUILD}-{CHR}-masked_all.fasta'
     params:
@@ -326,25 +326,25 @@ rule masked_other:
         'bedtools maskfasta -bed {input.bed} -mc {params.mc} '
         '-fi {input.masked} -fo {output} &> {log}'
 
-rule index_masked:
+rule indexMasked:
     input:
-        rules.masked_other.output
+        rules.maskOther.output
     output:
-        f'{rules.masked_other.output}.fai'
+        f'{rules.maskOther.output}.fai'
     group:
         'mask'
     log:
-        'logs/index_masked.log'
+        'logs/indexMasked.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
         'samtools faidx {input}'
 
 
-rule subset_masked:
+rule extractRegion:
     input:
-        fasta = rules.masked_other.output,
-        index = rules.index_masked.output
+        fasta = rules.maskOther.output,
+        index = rules.indexMasked.output
     output:
         f'genome/masked/{BUILD}-{REGION}-masked_all.fasta'
     group:
@@ -352,32 +352,32 @@ rule subset_masked:
     params:
         region = f'{CHR}:{START}-{END}'
     log:
-        f'logs/{BUILD}-{REGION}-subset_masked.log'
+        f'logs/{BUILD}-{REGION}-extractRegion.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
         'samtools faidx {input.fasta} {params.region} > {output} 2> {log}'
 
 
-rule compress_sequence:
+rule sequenceToBeads:
     input:
-        rules.subset_masked.output
+        rules.extractRegion.output
     output:
         f'sequence/{BUILD}-{REGION}-bead_sequence.txt'
     params:
         bases_per_bead = config['bases_per_bead']
     log:
-        'logs/compress_sequence.log'
+        'logs/sequenceToBeads.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/compress_sequence.py --nbases {params.bases_per_bead} '
+        '{SCRIPTS}/sequenceToBeads.py --nbases {params.bases_per_bead} '
         '{input} > {output} 2> {log}'
 
 
 rule sequence_to_lammps:
     input:
-        rules.compress_sequence.output
+        rules.sequenceToBeads.output
     output:
         f'sequence/{BUILD}-{REGION}.dat'
     params:
@@ -502,14 +502,15 @@ rule plot_heatmap:
     output:
         f'qc/{NAME}-summed.png'
     params:
-        dpi = config['dpi']
+        dpi = config['dpi'],
+        cmap = config['cmap']
     log:
         'logs/plot_heatmap.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
         '{SCRIPTS}/plot_heatmap.py --heatmap {output} '
-        '--dpi {params.dpi} {input} &> {log}'
+        '--dpi {params.dpi} --cmap {params.cmap} {input} &> {log}'
 
 
 rule mean_xyz:
