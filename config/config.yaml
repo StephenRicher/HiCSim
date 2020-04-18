@@ -3,7 +3,7 @@ workdir: /home/u/sr467/scratch/projects/MolecularDynamics/analysis
 #workdir: /media/stephen/Data/modelling-ctcf
 # LAMMPS config (rule: lammps)
 timestep: 500
-reps: 200
+reps: 100
 threads: 16
 bases_per_bead: 100
 #genome: /media/stephen/Data/genomes/GRCh38/Homo_sapiens.GRCh38.dna.primary_assembly.fa
