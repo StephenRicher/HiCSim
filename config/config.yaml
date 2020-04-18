@@ -2,7 +2,7 @@
 workdir: /home/u/sr467/scratch/projects/MolecularDynamics/analysis
 #workdir: /media/stephen/Data/modelling-ctcf
 # LAMMPS config (rule: lammps)
-timestep: 1000
+timestep: 500
 reps: 200
 threads: 16
 bases_per_bead: 100
