@@ -464,7 +464,7 @@ rule create_contact_matrix:
         ysize = config['yhi'] - config['ylo'],
         zsize = config['zhi'] - config['zlo']
     threads:
-        config['threads']
+        4 # config['threads']
     log:
         'logs/contact_frequency-{rep}.log'
     conda:
