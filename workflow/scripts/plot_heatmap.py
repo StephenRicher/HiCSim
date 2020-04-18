@@ -34,7 +34,7 @@ def main():
 def plot_heatmap(matrix: str, heatmap: str, dpi: int, cmap: str) -> None:
 
     matrix = np.loadtxt(matrix)
-    sns.heatmap(np.log10(matrix + 1), cmap)
+    sns.heatmap(np.log10(matrix + 1), cmap=cmap)
     plt.savefig(heatmap, dpi=dpi)
 
 
