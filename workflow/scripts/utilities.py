@@ -70,6 +70,23 @@ def load_XYZ(XYZ_path: str):
 
     return xyz
 
+def read_XYZ(XYZ_fobj):
+    """ Read a timepoint of XYZ coordinates each time called. """
+
+    line = XYZ_fobj.readline()
+    if not line:
+        raise EOFError
+    n_atoms = int(line.strip())
+    comment = next(XYZ_fobj).strip()
+    xyz = {'n_atoms' : n_atoms,
+           'comment' : comment,
+           'atoms'   : []}
+    for n in range(n_atoms):
+        atom = Atom(next(XYZ_fobj))
+        xyz['atoms'].append([atom.x, atom.y, atom.z])
+
+    return xyz
+
 
 def print_XYZ(xyz) -> None:
     """ Write XYZ object to stdout. """
