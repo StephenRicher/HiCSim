@@ -29,6 +29,9 @@ default_config = {
     'method':         'mean',
     'dpi':            600,
     'cmap':           'YlGn',
+    'method':         'obsexp',
+    'vmin':           0,
+    'vmax':           2,
     'n_molecules':    1000,
     'reps':           5,
     'threads':        1,
@@ -495,14 +498,18 @@ rule plot_heatmap:
         f'qc/{NAME}-summed.png'
     params:
         dpi = config['dpi'],
-        cmap = config['cmap']
+        cmap = config['cmap'],
+        method = config['method'],
+        vmin = config['vmin'],
+        vmax = config['vmax']
     log:
         'logs/plot_heatmap.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/plot_heatmap.py --heatmap {output} '
-        '--dpi {params.dpi} --cmap {params.cmap} {input} &> {log}'
+        '{SCRIPTS}/plot_heatmap.py --heatmap {output} --dpi {params.dpi} '
+        '--vmin {params.vmin} --vmax {params.vmax} '
+        '--method {params.method} --cmap {params.cmap} {input} &> {log}'
 
 
 rule mean_xyz:
