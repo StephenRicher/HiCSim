@@ -437,6 +437,8 @@ rule lammps:
         outdir = directory(f'lammps'),
         timestep = config['timestep'],
         seed = lambda wildcards: SEEDS[REPS.index(int(wildcards.rep))]
+    group:
+        'lammps'
     threads:
         config['threads']
     log:
@@ -459,24 +461,14 @@ rule create_contact_matrix:
         rules.lammps.output.proper_run
     output:
         f'qc/{NAME}-{{rep}}.txt.gz'
-    params:
-        xsize = config['xhi'] - config['xlo'],
-        ysize = config['yhi'] - config['ylo'],
-        zsize = config['zhi'] - config['zlo']
-    threads:
-        4 # config['threads']
+    group:
+        'lammps'
     log:
         'logs/contact_frequency-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/create_contact_matrix.py '
-            '--threads {threads} '
-            '--xsize {params.xsize} '
-            '--ysize {params.ysize} '
-            '--zsize {params.zsize} '
-            '--outdata {output} {input} '
-        '&> {log}'
+        '{SCRIPTS}/create_contact_matrix.py --outdata {output} {input} &> {log}'
 
 
 rule average_matrices:
