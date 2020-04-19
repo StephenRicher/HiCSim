@@ -29,7 +29,7 @@ default_config = {
     'method':         'mean',
     'dpi':            600,
     'cmap':           'YlGn',
-    'method':         'obsexp',
+    'transform':      'obsexp',
     'vmin':           0,
     'vmax':           2,
     'n_molecules':    1000,
@@ -499,7 +499,7 @@ rule plot_heatmap:
     params:
         dpi = config['dpi'],
         cmap = config['cmap'],
-        method = config['method'],
+        transform = config['transform'],
         vmin = config['vmin'],
         vmax = config['vmax']
     log:
@@ -509,7 +509,7 @@ rule plot_heatmap:
     shell:
         '{SCRIPTS}/plot_heatmap.py --heatmap {output} --dpi {params.dpi} '
         '--vmin {params.vmin} --vmax {params.vmax} '
-        '--method {params.method} --cmap {params.cmap} {input} &> {log}'
+        '--transform {params.transform} --cmap {params.cmap} {input} &> {log}'
 
 
 rule mean_xyz:
