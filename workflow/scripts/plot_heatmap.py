@@ -19,7 +19,7 @@ def main():
     parser.add_argument(
         'matrix', help='Input contact matrices')
     parser.add_argument(
-        '--method', default='none', choices=['none', 'log10', 'obsexp'],
+        '--transform', default='none', choices=['none', 'log10', 'obsexp'],
         help='Transformation to apply to counts (default: %(default)s)')
     parser.add_argument(
         '--heatmap', default='heatmap.png',
@@ -41,13 +41,13 @@ def main():
 
 
 def plot_heatmap(
-    matrix: str, method: str, heatmap: str, dpi: int,
+    matrix: str, transform: str, heatmap: str, dpi: int,
     cmap: str, vmin: float, vmax: float) -> None:
 
     matrix = np.loadtxt(matrix)
-    if method == 'log10':
+    if transform == 'log10':
         matrix = np.log10(matrix + 1)
-    elif method == 'obsexp':
+    elif transform == 'obsexp':
         matrix = obsexp(matrix)
 
     sns.heatmap(matrix, cmap=cmap, vmax=2)
