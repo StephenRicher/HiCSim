@@ -5,8 +5,9 @@
 import sys
 import numpy as np
 from typing import List
+from utilities import npz
 import pyCommonTools as pct
-
+from scipy.sparse import save_npz, load_npz, csc_matrix
 
 def main():
 
@@ -19,7 +20,7 @@ def main():
         'matrices', nargs='+',
         help='Input contact matrices')
     parser.add_argument(
-        '-o', '--out', default='contacts-summed.txt',
+        '-o', '--out', default='averaged-contacts.npz', type=npz,
         help='Summed contact matrix (default: %(default)s)')
     parser.add_argument(
         '--method', default='sum', choices=['mean', 'median', 'sum'],
@@ -30,14 +31,14 @@ def main():
 
 def compute_median(matrices: List):
     # Stack matrices along a third dimension and compute median
-    matrices = np.dstack([np.loadtxt(matrix) for matrix in matrices])
-    return np.median(matrices, axis = 2)
+    matrices = np.dstack([load_npz(matrix).toarray() for matrix in matrices])
+    return csc_matrix(np.median(matrices, axis = 2))
 
 
 def compute_sum(matrices: List):
     summed_matrix = 0
     for matrix in matrices:
-        summed_matrix += np.loadtxt(matrix)
+        summed_matrix += load_npz(matrix)
     return summed_matrix
 
 
@@ -55,8 +56,7 @@ def average_heatmap(matrices: List, out: str, method: str) -> None:
     else:
         average_matrix = compute_mean(matrices)
 
-
-    np.savetxt(out, average_matrix)
+    save_npz(out, average_matrix)
 
 
 if __name__ == '__main__':
