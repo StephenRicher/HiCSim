@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+
+import argparse
 import pyCommonTools as pct
 from timeit import default_timer as timer
 
@@ -70,6 +72,7 @@ def load_XYZ(XYZ_path: str):
 
     return xyz
 
+
 def read_XYZ(XYZ_fobj):
     """ Read a timepoint of XYZ coordinates each time called. """
 
@@ -102,3 +105,14 @@ def equal_n_atoms(xyz):
     """ Return TRUE if same number of atoms across all entries (timesteps) """
 
     return all([entry['n_atoms'] for entry in xyz])
+
+
+def npz(value):
+
+    ''' Ensure output file ends with '.npz'. '''
+
+    if not value.endswith('.npz'):
+        raise argparse.ArgumentTypeError(
+            f'Out file {value} must end with: \'.npz\'.')
+    else:
+        return value
