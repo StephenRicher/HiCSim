@@ -463,7 +463,7 @@ rule create_contact_matrix:
     input:
         rules.lammps.output.proper_run
     output:
-        f'qc/{NAME}-{{rep}}.txt.gz'
+        f'qc/{NAME}-{{rep}}.npz'
     group:
         'lammps'
     log:
@@ -476,10 +476,10 @@ rule create_contact_matrix:
 
 rule average_matrices:
     input:
-        expand('qc/{name}-{rep}.txt.gz',
+        expand('qc/{name}-{rep}.npz',
             name=NAME, rep=REPS)
     output:
-        f'qc/{NAME}-summed.txt.gz'
+        f'qc/{NAME}-summed.npz
     params:
         method = config['method']
     log:
