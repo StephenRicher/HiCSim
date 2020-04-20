@@ -7,6 +7,7 @@ import numpy as np
 import seaborn as sns
 import pyCommonTools as pct
 import matplotlib.pyplot as plt
+from scipy.sparse import load_npz
 
 
 def main():
@@ -44,7 +45,8 @@ def plot_heatmap(
     matrix: str, transform: str, heatmap: str, dpi: int,
     cmap: str, vmin: float, vmax: float) -> None:
 
-    matrix = np.loadtxt(matrix)
+    matrix = load_npz(matrix).todense()
+
     if transform == 'log10':
         matrix = np.log10(matrix + 1)
     elif transform == 'obsexp':
