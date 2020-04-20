@@ -479,7 +479,7 @@ rule average_matrices:
         expand('qc/{name}-{rep}.npz',
             name=NAME, rep=REPS)
     output:
-        f'qc/{NAME}-summed.npz
+        f'qc/{NAME}-summed.npz'
     params:
         method = config['method']
     log:
