@@ -52,7 +52,7 @@ def plot_heatmap(
     elif transform == 'obsexp':
         matrix = obsexp(matrix)
 
-    sns.heatmap(matrix, cmap=cmap, vmax=2)
+    sns.heatmap(matrix, cmap=cmap, vmin=vmin, vmax=vmax)
     plt.savefig(heatmap, dpi=dpi)
 
 
