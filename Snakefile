@@ -382,7 +382,8 @@ rule sequence_to_lammps:
     input:
         rules.sequenceToBeads.output
     output:
-        f'sequence/{BUILD}-{REGION}.dat'
+        dat = f'sequence/{BUILD}-{REGION}.dat',
+        coeffs = f'sequence/{BUILD}-{REGION}-ctcf_coeffs.txt',
     params:
         xlo = config['xlo'],
         xhi = config['xhi'],
@@ -399,7 +400,23 @@ rule sequence_to_lammps:
         '--xlo {params.xlo} --xhi {params.xhi} '
         '--ylo {params.ylo} --yhi {params.yhi} '
         '--zlo {params.zlo} --zhi {params.zhi} '
-        '{input} > {output} 2> {log}'
+        '--ctcf --ctcf_out {output.coeffs} '
+        '--ctcf_coeff 1.5,1.0,1.8 '
+        '{input} > {output.dat} 2> {log}'
+
+
+rule addCTCF:
+    input:
+        script = f'{SCRIPTS}/run-ctcf.lam',
+        coeffs = rules.sequence_to_lammps.output.coeffs
+    output:
+        f'lammps/run-ctcf.lam'
+    log:
+        f'logs/addCTCF.log'
+    shell:
+        "sed '/^pair_coeff/ r {input.coeffs}' {input.script} "
+        "> {output} 2> {log}"
+
 
 rule generate_random_polymer:
     output:
@@ -431,7 +448,8 @@ rule generate_random_polymer:
 
 rule lammps:
     input:
-        rules.sequence_to_lammps.output
+        data = rules.sequence_to_lammps.output,
+        script = rules.addCTCF.output
     output:
         warm_up = f'lammps/XYZ_{NAME}-{{rep}}-warm_up.xyz',
         proper_run = f'lammps/XYZ_{NAME}-{{rep}}-proper_run.xyz'
@@ -450,12 +468,12 @@ rule lammps:
         f'{ENVS}/lammps.yaml'
     shell:
         'mpirun -n {threads} -x OMP_NUM_THREADS={threads} '
-        'lmp_mpi -var infile {input} '
+        'lmp_mpi -var infile {input.data} '
         '-var outdir {params.outdir} '
         '-var name {NAME}-{wildcards.rep} '
         '-var timestep {params.timestep} '
         '-var seed {params.seed} '
-        '-in {SCRIPTS}/run-ctcf.lam '
+        '-in {input.script} '
         '-log /dev/null &> {log}'
 
 
