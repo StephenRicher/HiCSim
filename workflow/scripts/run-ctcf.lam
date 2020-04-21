@@ -69,12 +69,12 @@ reset_timestep 0
 ####    DUMP POSITIONS OF ATOMS ####
 ####################################
 ##DAT (best for postprocessing)
-#dump 1 all custom 100 ${outdir}/${name}.* id type x y z ix iy iz
-#dump_modify   1   format '%d %d %.5f %.5f %.5f %d %d %d'
+# dump 1 all custom 100 ${outdir}/${name}.* id type x y z ix iy iz
+# dump_modify   1   format '%d %d %.5f %.5f %.5f %d %d %d'
 ##XYZ (best for visualisation)
 #visualise this with VMD (Extension -> Tk console -> topo readvarxyz XYZ_..)
 dump 2 all xyz ${timestep} ${outdir}/XYZ_${name}-warm_up.xyz
-dump_modify 2 element N R F
+# dump_modify 2 element N R F
 
 ####################################
 ####    RUN -- EQUIL         #######
@@ -84,14 +84,13 @@ run 10000
 unfix pushapart  ##STOP DISPLACING WITH SOFT
 undump 2 # Close warm_up dump
 dump 3 all xyz ${timestep} ${outdir}/XYZ_${name}-proper_run.xyz
-dump_modify 3 element N R F
+# dump_modify 3 element N R F
 ######################################
 ####    LENNARD JONES INTERACTIONS ###
 ######################################
 pair_style  lj/cut 1.12246
 pair_modify     shift yes
 pair_coeff * *  1.0 1.0 1.12246 ##REPULSIVE ANY TWO BEADS
-pair_coeff 2 3  1.5 1.0 1.8  ## OVERWRITE ATTRACTIVE 1-1
 
 ####################################
 ####    FENE BONDS           #######
