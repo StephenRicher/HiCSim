@@ -414,7 +414,7 @@ rule addCTCF:
     log:
         f'logs/addCTCF.log'
     shell:
-        "sed '/^pair_coeff/ r {input.coeffs}' {input.script} "
+        "sed '/^#CTCF_COEFF/ r {input.coeffs}' {input.script} "
         "> {output} 2> {log}"
 
 
