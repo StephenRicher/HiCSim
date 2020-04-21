@@ -518,6 +518,7 @@ rule plot_heatmap:
         dpi = config['dpi'],
         cmap = config['cmap'],
         transform = config['transform'],
+        region = f'{START}-{END}'
         vmin = config['vmin'],
         vmax = config['vmax']
     log:
@@ -526,7 +527,7 @@ rule plot_heatmap:
         f'{ENVS}/python3.yaml'
     shell:
         '{SCRIPTS}/plot_heatmap.py --heatmap {output} --dpi {params.dpi} '
-        '--vmin {params.vmin} --vmax {params.vmax} '
+        '--vmin {params.vmin} --vmax {params.vmax} --region {params.region} '
         '--transform {params.transform} --cmap {params.cmap} {input} &> {log}'
 
 
