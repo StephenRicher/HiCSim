@@ -33,10 +33,9 @@ def get_contact_frequency(infile: str, outdata: str, distance: float) -> None:
 
     log = pct.create_logger()
     start = timer()
-
     sqdistance = distance**2
     contacts = 0
-    with open(infile) as f:
+    with pct.open(infile) as f:
         while True:
             try:
                 start_step = timer()
