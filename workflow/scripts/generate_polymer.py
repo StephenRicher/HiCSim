@@ -70,42 +70,69 @@ def main():
         parents=[base_args, box_sizes, seed_arg],
         epilog=parser.epilog)
     track_subparser.add_argument(
-        'sequence',
-    )
+        'sequence',)
     track_subparser.add_argument(
         '--bead_pair', nargs='+',
         metavar="KEY=VALUE", action=ParseDict,
-        help='Set bead pair interactions. e.g. For 2 beads of type \'A\''
-        'and \'O\' we set the interaction using A-O=3' )
+        help='Set bead pair interactions. e.g. For 2 beads of type \'I\''
+        'and \'J\' we may set the interaction using I-J=1.0,1.0,2.5' )
+    track_subparser.add_argument(
+        '--ctcf', default=False, action='store_true',
+        help='Process beads labelled F and R as CTCF sites. Each bead is given '
+        'a unique ID and convergent orientation pair coeffs are output.')
+    track_subparser.add_argument(
+        '--ctcf_coeff', default='1.5,1.0,1.8',
+        help='Define pairing coefficient between convergent CTCF sites.')
+    track_subparser.add_argument(
+        '--ctcf_out',
+        help='Outfile to write convergent ctcf pair_coeffs (default: stderr)')
     track_subparser.set_defaults(function=create_polymer)
 
 
     return (pct.execute(parser))
 
 
-def create_polymer(sequence, seed, bead_pair, xlo, xhi, ylo, yhi, zlo, zhi):
+def create_polymer(sequence, seed, bead_pair, ctcf, ctcf_coeff, ctcf_out, xlo, xhi, ylo, yhi, zlo, zhi):
 
     random.seed(seed)
 
-    bead_stats = sequence_info(sequence)
+    bead_stats, unique_ids = sequence_info(sequence, ctcf)
     n_molecules = sum(bead_stats.values())
     type_list = list(bead_stats.keys())
-    print(type_list.index('N'), file=sys.stderr)
     n_types = len(type_list)
     write_header(n_molecules, n_types, xlo, xhi, ylo, yhi, zlo, zhi)
     write_masses(type_list)
-    write_atoms(sequence, type_list)
+    write_atoms(sequence, unique_ids, type_list)
     write_bonds(n_molecules)
     write_angles(n_molecules)
+    write_ctcf_interactions(type_list, ctcf_coeff, ctcf_out)
 
 
-def sequence_info(path):
+def write_ctcf_interactions(type_list, ctcf_coeff, ctcf_out):
+    ctcf_coeff = ctcf_coeff.replace(',',' ')
+    with pct.open(ctcf_out, mode='w', stderr=False) as f:
+        for idx1, id1 in enumerate(type_list):
+            if not id1.startswith('F'):
+                continue
+            for id2 in type_list[idx1 + 1:]:
+                if not id2.startswith('R'):
+                    continue
+                idx2 = type_list.index(id2)
+                f.write(f'pair_coeff {idx1+1} {idx2+1} {ctcf_coeff}\n')
+
+
+def sequence_info(path, ctcf):
     bead_stats = defaultdict(int)
+    unique_ids = []
     with pct.open(path) as f:
         for line in f:
             bead = line.strip()
+            if ctcf and bead in ['F', 'R']:
+                id = len(unique_ids) + 1
+                bead = f'{bead}-{id}'
+                unique_ids.append(bead)
             bead_stats[bead] += 1
-    return bead_stats
+    return bead_stats, unique_ids
 
 
 def write_header(n_molecules, n_types, xlo, xhi, ylo, yhi, zlo, zhi):
@@ -129,11 +156,14 @@ def write_masses(type_list):
     sys.stdout.write('\n')
 
 
-def write_atoms(sequence, type_list, r=1.1):
+def write_atoms(sequence, unique_ids, type_list, r=1.1):
     sys.stdout.write('Atoms\n\n')
     with pct.open(sequence) as f:
         for i, line in enumerate(f):
             type = line.strip()
+            if unique_ids and type in ['F', 'R']:
+                type = unique_ids[0] # Get next first unique_id
+                unique_ids = unique_ids[1:] # Remove from list
             if i == 0:
                 x = random.random()
                 y = random.random()
@@ -165,6 +195,7 @@ def write_angles(n_molecules):
     n_angles = n_molecules - 2
     for a in range(1, n_angles + 1):
         sys.stdout.write(f'{a} 1 {a} {a+1} {a+2}\n')
+    sys.stdout.write('\n')
 
 
 def random_linear_polymer(
