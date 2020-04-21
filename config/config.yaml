@@ -5,7 +5,7 @@ workdir: /home/u/sr467/scratch/projects/MolecularDynamics/analysis
 timestep: 500
 reps: 100
 threads: 16
-bases_per_bead: 100
+bases_per_bead: 500
 #genome: /media/stephen/Data/genomes/GRCh38/Homo_sapiens.GRCh38.dna.primary_assembly.fa
 genome: /home/u/sr467/scratch/projects/genomes/GRCh38/wgs/Homo_sapiens.GRCh38.dna.primary_assembly.fa
 
