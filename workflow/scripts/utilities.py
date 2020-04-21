@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-
+import re
 import argparse
 import pyCommonTools as pct
 from timeit import default_timer as timer
@@ -108,7 +108,6 @@ def equal_n_atoms(xyz):
 
 
 def npz(value):
-
     ''' Ensure output file ends with '.npz'. '''
 
     if not value.endswith('.npz'):
@@ -116,3 +115,22 @@ def npz(value):
             f'Out file {value} must end with: \'.npz\'.')
     else:
         return value
+
+
+def region(value):
+    ''' Validate input for region argument of create_contact_matrix '''
+
+    pattern = re.compile('^[0-9]+-[0-9]+$')
+    if not pattern.match(value):
+        raise argparse.ArgumentTypeError(
+            f'Expected format is START-END e.g 1-100000000')
+    regions = {}
+    regions['start'] = int(value.split('-')[0])
+    regions['end'] = int(value.split('-')[1])
+
+    if not regions['start'] < regions['end']:
+        raise argparse.ArgumentTypeError(
+            f'Start coordinate {regions["start"]} not less '
+            f'than end coordinate {regions["end"]}.')
+    else:
+        return regions
