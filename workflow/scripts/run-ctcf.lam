@@ -91,6 +91,7 @@ dump 3 all xyz ${timestep} ${outdir}/XYZ_${name}-proper_run.xyz
 pair_style  lj/cut 1.12246
 pair_modify     shift yes
 pair_coeff * *  1.0 1.0 1.12246 ##REPULSIVE ANY TWO BEADS
+#CTCF_COEFF
 
 ####################################
 ####    FENE BONDS           #######
