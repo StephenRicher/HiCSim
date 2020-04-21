@@ -448,7 +448,7 @@ rule generate_random_polymer:
 
 rule lammps:
     input:
-        data = rules.sequence_to_lammps.output,
+        data = rules.sequence_to_lammps.output.dat,
         script = rules.addCTCF.output
     output:
         warm_up = f'lammps/XYZ_{NAME}-{{rep}}-warm_up.xyz',
