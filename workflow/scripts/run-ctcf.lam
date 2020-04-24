@@ -79,7 +79,7 @@ dump 2 all xyz ${timestep} ${outdir}/XYZ_${name}-warm_up.xyz
 ####################################
 ####    RUN -- EQUIL         #######
 ####################################
-run 10000
+run ${warm_up}
 
 unfix pushapart  ##STOP DISPLACING WITH SOFT
 undump 2 # Close warm_up dump
@@ -103,4 +103,4 @@ bond_coeff 1 30.0 1.5 1.0 1.0
 ####    RUN -- EQUIL         #######
 ####################################
 reset_timestep 0
-run 2000000
+run ${sim_time}
