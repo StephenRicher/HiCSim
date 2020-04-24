@@ -16,6 +16,7 @@ if not config:
 # Defaults configuration file - use empty string to represent no default value.
 default_config = {
     'name' :          'clustered_copolymer',
+    'cluster':        False,
     'workdir':        workflow.basedir,
     'genome':         '',
     'build':          'genome',
@@ -28,10 +29,10 @@ default_config = {
     'bases_per_bead': 1000,
     'method':         'mean',
     'dpi':            600,
-    'cmap':           'YlGn',
-    'transform':      'obsexp',
+    'cmap':           'Reds',
+    'transform':      'log10',
     'vmin':           0,
-    'vmax':           2,
+    'vmax':           None,
     'n_molecules':    1000,
     'reps':           5,
     'threads':        1,
@@ -47,6 +48,8 @@ default_config = {
     'window_size':    10,
     'overlap':        2,
     'timestep':       1000,
+    'warm_up':        20000,
+    'sim_time':       2000000,
     'delay':          10,
     'loop':           0
 }
@@ -446,6 +449,20 @@ rule generate_random_polymer:
         '> {output} 2> {log}'
 
 
+lmp_cmd = ('-var infile {input.data} '
+           '-var outdir {params.outdir} '
+           '-var name {NAME}-{wildcards.rep} '
+           '-var warm_up {params.warm_up} '
+           '-var sim_time {params.sim_time} '
+           '-var timestep {params.timestep} '
+           '-var seed {params.seed} '
+           '-in {input.script} '
+           '-log /dev/null &> {log}')
+if config['cluster']:
+    lmp_cmd = 'mpirun -n {threads} -x OMP_NUM_THREADS=1 lmp_mpi ' + lmp_cmd
+else:
+    lmp_cmd = 'lmp_serial ' + lmp_cmd
+
 rule lammps:
     input:
         data = rules.sequence_to_lammps.output.dat,
@@ -457,24 +474,19 @@ rule lammps:
         rep = REPS,
         outdir = directory(f'lammps'),
         timestep = config['timestep'],
+        warm_up = config['warm_up'],
+        sim_time = config['sim_time'],
         seed = lambda wildcards: SEEDS[REPS.index(int(wildcards.rep))]
     group:
         'lammps'
     threads:
-        config['threads']
+        config['threads'] if config['cluster'] else 1
     log:
         'logs/lammps-{rep}.log'
     conda:
         f'{ENVS}/lammps.yaml'
     shell:
-        'mpirun -n {threads} -x OMP_NUM_THREADS=1 '
-        'lmp_mpi -var infile {input.data} '
-        '-var outdir {params.outdir} '
-        '-var name {NAME}-{wildcards.rep} '
-        '-var timestep {params.timestep} '
-        '-var seed {params.seed} '
-        '-in {input.script} '
-        '-log /dev/null &> {log}'
+        lmp_cmd
 
 
 rule create_contact_matrix:
@@ -518,7 +530,7 @@ rule plot_heatmap:
         dpi = config['dpi'],
         cmap = config['cmap'],
         transform = config['transform'],
-        region = f'{START}-{END}'
+        region = f'{START}-{END}',
         vmin = config['vmin'],
         vmax = config['vmax']
     log:
