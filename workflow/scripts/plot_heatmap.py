@@ -8,7 +8,7 @@ import seaborn as sns
 from typing import Dict
 from bisect import bisect
 import pyCommonTools as pct
-from utilities import region
+from utilities import region, scale
 import matplotlib.pyplot as plt
 from scipy.sparse import load_npz
 
@@ -32,10 +32,10 @@ def main():
         '--cmap', default='YlGn',
         help='Matplotlib colormap (default: %(default)s)')
     parser.add_argument(
-        '--vmin', default=None, type=float,
+        '--vmin', default=None, type=scale,
         help='Min value to anchor colourmap (default: %(default)s)')
     parser.add_argument(
-        '--vmax', default=None, type=float,
+        '--vmax', default=None, type=scale,
         help='Max value to anchor colourmap (default: %(default)s)')
     parser.add_argument(
         '--dpi', default=600, type=int,
@@ -55,7 +55,6 @@ def main():
 
 
 def get_region_coordinates(region, size):
-    bin = int((region['end']-region['start'])/size)
     coordinates = np.linspace(region['start'], region['end'], size)
     return coordinates.astype(int)
 
@@ -121,8 +120,6 @@ def plot_heatmap(
         matrix = np.log10(matrix + 1)
     elif transform == 'obsexp':
         matrix = obsexp(matrix)
-
-
 
     ax = sns.heatmap(matrix, cmap=cmap, vmin=vmin, vmax=vmax,
         xticklabels=region_bins, yticklabels=region_bins)
