@@ -7,6 +7,7 @@ import math
 import random
 import argparse
 import pyCommonTools as pct
+from collections import namedtuple
 from collections import defaultdict
 
 #https://stackoverflow.com/questions/5154716/using-argparse-to-parse-arguments-of-form-arg-val
@@ -108,17 +109,35 @@ def create_polymer(sequence, seed, bead_pair, ctcf, ctcf_coeff, ctcf_out, xlo, x
     write_ctcf_interactions(type_list, ctcf_coeff, ctcf_out)
 
 
+def detect_pairs(beads):
+    """ Detect valid CTCF convergent sites. For each interval, find the nearest
+        F bead to the left and the nearest R bead to the right. This models the
+        loop extrusion hypothesis.
+    """
+
+    pairs = set()
+    for bead_idx in range(0, len(beads) - 1):
+        for forward_bead in reversed(beads[:bead_idx + 1]):
+            if forward_bead.startswith('F'):
+                forward_number = beads.index(forward_bead) + 1
+                break
+        else:
+            continue
+        for reverse_bead in beads[bead_idx + 1:]:
+            if reverse_bead.startswith('R'):
+                reverse_number = beads.index(reverse_bead) + 1
+                break
+        else:
+            continue
+        pairs.add((forward_number, reverse_number))
+    return pairs
+
+
 def write_ctcf_interactions(type_list, ctcf_coeff, ctcf_out):
     ctcf_coeff = ctcf_coeff.replace(',',' ')
     with pct.open(ctcf_out, mode='w', stderr=False) as f:
-        for idx1, id1 in enumerate(type_list):
-            if not id1.startswith('F'):
-                continue
-            for id2 in type_list[idx1 + 1:]:
-                if not id2.startswith('R'):
-                    continue
-                idx2 = type_list.index(id2)
-                f.write(f'pair_coeff {idx1+1} {idx2+1} {ctcf_coeff}\n')
+        for forward, reverse in detect_pairs(type_list):
+            f.write(f'pair_coeff {forward} {reverse} {ctcf_coeff}\n')
 
 
 def sequence_info(path, ctcf):
