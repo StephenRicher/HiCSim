@@ -1,24 +1,25 @@
 # Simulation output directory - will be created if neccessary.
 workdir: /home/u/sr467/scratch/projects/MolecularDynamics/analysis
-#workdir: /media/stephen/Data/modelling-ctcf
+cluster: True
 # LAMMPS config (rule: lammps)
 timestep: 500
 reps: 100
 threads: 16
 bases_per_bead: 500
-#genome: /media/stephen/Data/genomes/GRCh38/Homo_sapiens.GRCh38.dna.primary_assembly.fa
 genome: /home/u/sr467/scratch/projects/genomes/GRCh38/wgs/Homo_sapiens.GRCh38.dna.primary_assembly.fa
 
-#ctcf: /home/stephen/phd/modelling/pipeline/config/ctcf_samples-local.csv
 ctcf: /home/u/sr467/scratch/projects/MolecularDynamics/config/ctcf_samples.csv
 
 region: GNG12_AS1
 chr: 1
 start: 65834316
 end: 70234314
-min_rep: 2
+min_rep: 3
 dpi: 1200
 
+transform: 'log10'
+vmin: 0
+vmax: None
 
 xlo: -500
 xhi: 500
