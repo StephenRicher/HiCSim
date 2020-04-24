@@ -117,6 +117,17 @@ def npz(value):
         return value
 
 
+def scale(value):
+    ''' Ensure input is numeric or 'None'. '''
+
+    if value == 'None':
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f'must be float value or None')
+
+
 def region(value):
     ''' Validate input for region argument of create_contact_matrix '''
 
