@@ -9,39 +9,9 @@ import pyCommonTools as pct
 genome = sys.argv[1]
 file = sys.argv[2]
 chr_ref = sys.argv[3]
-#start_ref = int(sys.argv[4])
-#end_ref = int(sys.argv[5])
-start_ref = None
-end_ref = None
-
+# https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5291250/
 ctcf_seqs = {'+' : '>ctcf\nCCACNAGGTGGCAG',
-            '-' : '>ctcf\nCTGCCACCTNGTGG'}
-
-
-def within_region(chr, start, end, chr_ref=None, start_ref=None, end_ref=None):
-
-    log = pct.create_logger()
-    if chr_ref == None:
-        rc = True
-    elif chr_ref == chr:
-        if start_ref == end_ref == None:
-            rc = True
-        elif start_ref != end_ref and (start_ref == None or end_ref == None):
-            log.error('Only 1 of start and end coordinates are set.')
-            sys.exit(1)
-        elif start_ref > end_ref:
-            log.error(
-                f'Start position {start} is larger than end position {end}.')
-            sys.exit(1)
-        elif start >= start_ref and end <= end_ref:
-            rc = True
-        else:
-            rc = False
-    else:
-        rc = False
-
-    return rc
-
+             '-' : '>ctcf\nCTGCCACCTNGTGG'}
 
 with open(file) as f:
     for record in f:
@@ -52,10 +22,6 @@ with open(file) as f:
         chr = record[1].strip('chr')
         start = int(record[2])
         end = int(record[3])
-
-        if not within_region(chr, start, end, chr_ref, start_ref, end_ref):
-            continue
-
         coordinates = f'{chr}:{start}-{end}'
 
         faidx_command = ['samtools', 'faidx', genome, coordinates]
@@ -83,24 +49,16 @@ with open(file) as f:
                 elif line.startswith('ctcf'):
                     ctcf_alignment_line += line.split()[2]
 
-
-            ctcf_min = ctcf_max = None
-            for index, char in enumerate(ctcf_alignment_line):
-                if char != '-':
-                    if ctcf_min is None:
-                        ctcf_min = index
-                    if ctcf_max is None or ctcf_max < index:
-                        ctcf_max = index
-
-            alignments[orientation]['positions'] = [ctcf_min, ctcf_max]
+            # Record index positions of start and end of CTCF alignment
+            matches = list(re.finditer(r'[^-]', ctcf_alignment_line))
+            ctcf_start = matches[0].start()
+            ctcf_end = matches[-1].start()
+            alignments[orientation]['positions'] = [ctcf_start, ctcf_end]
 
         score_difference = alignments['+']['score'] - alignments['-']['score']
 
         if abs(score_difference) >= 5:
-            if score_difference > 0:
-                best = '+'
-            else:
-                best = '-'
+            best = '+' if score_difference > 0 else '-'
             abs_ctcf_start = alignments[best]['positions'][0] + start
             abs_ctcf_end = alignments[best]['positions'][1] + start
 
