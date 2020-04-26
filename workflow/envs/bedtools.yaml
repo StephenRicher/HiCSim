@@ -1,4 +1,11 @@
 channels :
+  - conda-forge
   - bioconda
+  - defaults
+channel_priority:
+  - true
 dependencies :
   - bedtools=2.29.2
+  - python=3
+  - pip:
+    - pyCommonTools==2.2.0
