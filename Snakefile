@@ -214,129 +214,31 @@ rule sortFilteredBed:
         'bedtools sort -i {input} > {output} 2> {log}'
 
 
-rule extractChrom:
+rule maskFasta:
     input:
         genome = rules.bgzipGenome.output,
-        indexes = rules.indexGenome.output
+        ctcf_forward = rules.splitOrientationFilterBed.output.forward,
+        ctcf_reverse = rules.splitOrientationFilterBed.output.reverse
     output:
-        f'genome/{BUILD}-{CHR}.fa'
-    params:
-        chr = config['chr'],
+        f'genome/masked/{BUILD}-masked.fasta'
     group:
-        'extractChrom'
+        'mask'
     log:
-        'logs/extractChrom.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    shell:
-        'samtools faidx {input.genome} {params.chr} '
-        '| sed "1s/://" > {output} 2> {log}'
-
-
-rule indexChrom:
-    input:
-        rules.extractChrom.output
-    output:
-        f'{rules.extractChrom.output}.fai'
-    group:
-        'extractChrom'
-    log:
-        'logs/indexChrom.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    shell:
-        'samtools faidx {input}'
-
-
-rule getChromSize:
-    input:
-        rules.indexChrom.output
-    output:
-        f'genome/chrom_sizes/{BUILD}-{CHR}.size'
-    params:
-        chr = config['chr']
-    group:
-        'extractChrom'
-    log:
-        f'logs/getChromSize/{BUILD}-{CHR}.log'
-    shell:
-        'cut -f 1,2 {input} > {output} 2> {log}'
-
-
-rule complementBed:
-    input:
-        sizes = rules.getChromSize.output,
-        bed = rules.sortFilteredBed.output
-    output:
-        f'genome/{BUILD}-{CHR}-complement.bed'
-    log:
-        f'logs/complementBed/{BUILD}-{CHR}.log'
+        'logs/maskFasta.log'
     conda:
         f'{ENVS}/bedtools.yaml'
     shell:
-        'bedtools complement -i {input.bed} -g {input.sizes} '
+        '{SCRIPTS}/maskFasta.py --genome <(zcat {input.genome}) '
+        '--bed {input.ctcf_forward},F '
+        '--bed {input.ctcf_reverse},R '
         '> {output} 2> {log}'
 
 
-rule maskForwardCTCF:
-    input:
-        bed = rules.splitOrientationFilterBed.output.forward,
-        genome = rules.extractChrom.output
-    output:
-        f'genome/masked/{BUILD}-{CHR}-masked_F.fasta'
-    params:
-        mc = 'F'
-    log:
-        'logs/maskForwardCTCF.log'
-    conda:
-        f'{ENVS}/bedtools.yaml'
-    shell:
-        'bedtools maskfasta -bed {input.bed} -mc {params.mc} '
-        '-fi {input.genome} -fo {output} &> {log}'
-
-
-rule maskReverseCTCF:
-    input:
-        bed = rules.splitOrientationFilterBed.output.reverse,
-        masked = rules.maskForwardCTCF.output
-    output:
-        f'genome/masked/{BUILD}-{CHR}-masked_RF.fasta'
-    params:
-        mc = 'R'
-    group:
-        'mask'
-    log:
-        'logs/maskReverseCTCF.log'
-    conda:
-        f'{ENVS}/bedtools.yaml'
-    shell:
-        'bedtools maskfasta -bed {input.bed} -mc {params.mc} '
-        '-fi {input.masked} -fo {output} &> {log}'
-
-
-rule maskOther:
-    input:
-        bed = rules.complementBed.output,
-        masked = rules.maskReverseCTCF.output
-    output:
-        f'genome/masked/{BUILD}-{CHR}-masked_all.fasta'
-    params:
-        mc = 'N'
-    group:
-        'mask'
-    log:
-        'logs/mask_other.log'
-    conda:
-        f'{ENVS}/bedtools.yaml'
-    shell:
-        'bedtools maskfasta -bed {input.bed} -mc {params.mc} '
-        '-fi {input.masked} -fo {output} &> {log}'
-
 rule indexMasked:
     input:
-        rules.maskOther.output
+        rules.maskFasta.output
     output:
-        f'{rules.maskOther.output}.fai'
+        f'{rules.maskFasta.output}.fai'
     group:
         'mask'
     log:
@@ -349,7 +251,7 @@ rule indexMasked:
 
 rule extractRegion:
     input:
-        fasta = rules.maskOther.output,
+        fasta = rules.maskFasta.output,
         index = rules.indexMasked.output
     output:
         f'genome/masked/{BUILD}-{REGION}-masked_all.fasta'
