@@ -6,6 +6,7 @@ import os
 import sys
 import argparse
 import pyCommonTools as pct
+from utilities import commaPair
 from contextlib import ExitStack
 from subprocess import PIPE, Popen
 from tempfile import NamedTemporaryFile
@@ -83,17 +84,7 @@ def maskAllBases(genome):
     return masked.name
 
 
-def commaPair(value):
-    ''' Split command seperated pair and return as dictionary '''
 
-    value = value.split(',')
-    bed = value[0].strip()
-    char = value[1].strip()
-    if len(char) != 1:
-        raise argparse.ArgumentTypeError(
-            f'Masking character {char} shoud be single character.')
-    else:
-        return (bed, char)
 
 
 
