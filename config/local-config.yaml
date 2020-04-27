@@ -7,13 +7,21 @@ threads: 6
 bases_per_bead: 500
 genome: /media/stephen/Data/genomes/GRCh38/Homo_sapiens.GRCh38.dna.primary_assembly.fa
 
-ctcf: /home/stephen/phd/modelling/pipeline/config/ctcf_samples-local.csv
+ctcf :
+    - /media/stephen/Data/genomes/GRCh38/tracks/GM12878-CTCF-R1-hg38.bed
+    - /media/stephen/Data/genomes/GRCh38/tracks/GM12878-CTCF-R2-hg38.bed
+min_rep: 2
+masking:
+    - character: 1
+      file: /media/stephen/Data/genomes/GRCh38/tracks/GM12878-H3K4m1-hg38.bed
+    - character: 3
+      file: /media/stephen/Data/genomes/GRCh38/tracks/GM12878-H3K4m3-hg38.bed
 
 region: GNG12_AS1
 chr: 1
 start: 65834316
 end: 70234314
-min_rep: 3
+
 dpi: 1200
 
 xlo: -500
