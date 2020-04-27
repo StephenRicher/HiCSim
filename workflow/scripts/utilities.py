@@ -145,3 +145,16 @@ def region(value):
             f'than end coordinate {regions["end"]}.')
     else:
         return regions
+
+
+def commaPair(value):
+    ''' Split command seperated pair and return as dictionary '''
+
+    value = value.split(',')
+    v1 = value[0].strip()
+    v2 = value[1].strip()
+    if len(v2) != 1:
+        raise argparse.ArgumentTypeError(
+            f'Masking character {v2} shoud be single character.')
+    else:
+        return (v1, v2)
