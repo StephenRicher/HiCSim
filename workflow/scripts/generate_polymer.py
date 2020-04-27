@@ -7,6 +7,7 @@ import math
 import random
 import argparse
 import pyCommonTools as pct
+from utilities import commaPair
 from collections import namedtuple
 from collections import defaultdict
 
@@ -47,6 +48,13 @@ def main():
         '--seed', default=42, type=int,
         help='Seed for random number generator.')
 
+    beads = argparse.ArgumentParser(add_help=False)
+    beads.add_argument(
+        '--single_beads', metavar='NBEADS,TYPE', type=commaPair,
+        action='append', default=[],
+        help='Add NBEADS number of isolated beads of TYPE.'
+        'Call multiple times to add multiple beads.')
+
     random_subparser = subparser.add_parser(
         'random',
         description=random_linear_polymer.__doc__,
@@ -68,7 +76,7 @@ def main():
         'model',
         description=create_polymer.__doc__,
         help=create_polymer.__doc__,
-        parents=[base_args, box_sizes, seed_arg],
+        parents=[base_args, box_sizes, seed_arg, beads],
         epilog=parser.epilog)
     track_subparser.add_argument(
         'sequence',)
@@ -89,25 +97,165 @@ def main():
         help='Outfile to write convergent ctcf pair_coeffs (default: stderr)')
     track_subparser.set_defaults(function=create_polymer)
 
-
+    # Assert correct version - required for preserving dictionary insert order
+    assert sys.version_info >= (3, 7)
     return (pct.execute(parser))
 
 
-def create_polymer(sequence, seed, bead_pair, ctcf, ctcf_coeff, ctcf_out, xlo, xhi, ylo, yhi, zlo, zhi):
+
+class polymer:
+
+    def __init__(self, sequence, single_beads, ctcf,
+            xlo, xhi, ylo, yhi, zlo, zhi):
+        log = pct.create_logger()
+        Dim = namedtuple('Dim', 'lo hi')
+        Box = namedtuple('Box', ['x', 'y', 'z'])
+        self.box = Box(Dim(xlo, xhi), Dim(ylo, yhi), Dim(zlo, zhi))
+        self.ctcf = []
+        self.boundAtoms = defaultdict(int)
+        self.sequence = []
+        with open(sequence) as f:
+            for line in f:
+                bead = line.strip()
+                self.sequence.append(bead)
+                if ctcf and bead in ['F', 'R']:
+                    id = len(self.ctcf) + 1
+                    bead = f'{bead}-{id}'
+                    self.ctcf.append(bead)
+                self.boundAtoms[bead] += 1
+
+        self.unboundAtoms = defaultdict(int)
+        for single_bead in single_beads:
+            nbeads = int(single_bead[0])
+            bead = single_bead[1]
+            if bead in self.boundAtoms:
+                log.error(
+                    f'Single bead type {bead} is alread used in {sequence}')
+                sys.exit(1)
+            elif bead in ['F', 'R']:
+                log.error(
+                    'Single bead type cannot be F or R.')
+                sys.exit(1)
+            else:
+                self.unboundAtoms[bead] = int(nbeads)
+
+    @property
+    def nTotalAtoms(self):
+        return self.nBoundAtoms + self.nUnboundAtoms
+
+    @property
+    def nBoundAtoms(self):
+        return sum(self.boundAtoms.values())
+
+    @property
+    def nUnboundAtoms(self):
+        return sum(self.unboundAtoms.values())
+
+    @property
+    def nAngles(self):
+        return self.nBoundAtoms - 2
+
+    @property
+    def nBonds(self):
+        return self.nBoundAtoms - 1
+
+    @property
+    def nTypes(self):
+        return len(self.boundAtoms) + len(self.unboundAtoms)
+
+    @property
+    def typeList(self):
+        return list(self.boundAtoms) + list(self.unboundAtoms)
+
+    def typeNumber(self, type):
+        return self.typeList.index(type) + 1
+
+    def writeHeader(self):
+        sys.stdout.write(
+            'LAMMPS data file from restart file: timestep = 0, procs = 1\n\n'
+            f'{self.nTotalAtoms} atoms\n'
+            f'{self.nBonds} bonds\n'
+            f'{self.nAngles} angles\n\n'
+            f'{self.nTypes} atom types\n'
+            f'1 bond types\n'
+            f'1 angle types\n\n'
+            f'{self.box.x.lo} {self.box.x.hi} xlo xhi\n'
+            f'{self.box.y.lo} {self.box.y.hi} ylo yhi\n'
+            f'{self.box.z.lo} {self.box.z.hi} zlo zhi\n\n')
+
+    def writeMasses(self):
+        sys.stdout.write('Masses\n\n')
+        for n, type in enumerate(self.typeList):
+            sys.stdout.write(f'{n+1} 1 # {type}\n')
+        sys.stdout.write('\n')
+
+    def writeAtoms(self):
+        sys.stdout.write('Atoms\n\n')
+        self.writeBoundAtoms()
+        self.writeUnboundAtoms()
+        sys.stdout.write('\n')
+
+    def writeBoundAtoms(self, r=1.1):
+        ctcf_beads = self.ctcf
+        for i, type in enumerate(self.sequence):
+            if self.ctcf and type in ['F', 'R']:
+                type = ctcf_beads[0]
+                ctcf_beads = ctcf_beads[1:]
+            if i == 0:
+                x = random.random()
+                y = random.random()
+                z = random.random()
+            else:
+                phi = random.random() * 2 * math.pi
+                theta = random.random() * math.pi
+                x = prev_x + (r * math.sin(theta) * math.cos(phi))
+                y = prev_y + (r * math.sin(theta) * math.sin(phi))
+                z = prev_z + (r * math.cos(theta))
+            type_number = self.typeNumber(type)
+            sys.stdout.write(f'{i+1} 1 {type_number} {x} {y} {z} 0 0 0\n')
+            prev_x = x
+            prev_y = y
+            prev_z = z
+
+    def writeUnboundAtoms(self):
+        atom_id = self.nBoundAtoms + 1
+        for type, nbeads in self.unboundAtoms.items():
+            type_number = self.typeNumber(type)
+            for n in range(nbeads):
+                x = random.random()
+                y = random.random()
+                z = random.random()
+                sys.stdout.write(
+                    f'{atom_id} 1 {type_number} {x} {y} {z} 0 0 0\n')
+                atom_id += 1
+
+    def writeBonds(self):
+        sys.stdout.write('Bonds\n\n')
+        for b in range(1, self.nBonds + 1):
+            sys.stdout.write(f'{b} 1 {b} {(b%self.nBoundAtoms)+1}\n')
+        sys.stdout.write('\n')
+
+
+    def writeAngles(self):
+        sys.stdout.write('Angles\n\n')
+        for a in range(1, self.nAngles + 1):
+            sys.stdout.write(f'{a} 1 {a} {a+1} {a+2}\n')
+        sys.stdout.write('\n')
+
+
+
+def create_polymer(sequence, seed, bead_pair, single_beads, ctcf,
+        ctcf_coeff, ctcf_out, xlo, xhi, ylo, yhi, zlo, zhi):
 
     random.seed(seed)
-
-    bead_stats, unique_ids = sequence_info(sequence, ctcf)
-    n_molecules = sum(bead_stats.values())
-    type_list = list(bead_stats.keys())
-    n_types = len(type_list)
-    write_header(n_molecules, n_types, xlo, xhi, ylo, yhi, zlo, zhi)
-    write_masses(type_list)
-    write_atoms(sequence, unique_ids, type_list)
-    write_bonds(n_molecules)
-    write_angles(n_molecules)
+    a = polymer(sequence, single_beads, ctcf, xlo, xhi, ylo, yhi, zlo, zhi)
+    a.writeHeader()
+    a.writeMasses()
+    a.writeAtoms()
+    a.writeBonds()
+    a.writeAngles()
+    exit(1)
     write_ctcf_interactions(type_list, ctcf_coeff, ctcf_out)
-
 
 def detect_pairs(beads):
     """ Detect valid CTCF convergent sites. For each interval, find the nearest
@@ -138,83 +286,6 @@ def write_ctcf_interactions(type_list, ctcf_coeff, ctcf_out):
     with pct.open(ctcf_out, mode='w', stderr=False) as f:
         for forward, reverse in detect_pairs(type_list):
             f.write(f'pair_coeff {forward} {reverse} {ctcf_coeff}\n')
-
-
-def sequence_info(path, ctcf):
-    bead_stats = defaultdict(int)
-    unique_ids = []
-    with pct.open(path) as f:
-        for line in f:
-            bead = line.strip()
-            if ctcf and bead in ['F', 'R']:
-                id = len(unique_ids) + 1
-                bead = f'{bead}-{id}'
-                unique_ids.append(bead)
-            bead_stats[bead] += 1
-    return bead_stats, unique_ids
-
-
-def write_header(n_molecules, n_types, xlo, xhi, ylo, yhi, zlo, zhi):
-    sys.stdout.write(
-        'LAMMPS data file from restart file: timestep = 0, procs = 1\n\n'
-        f'{n_molecules} atoms\n'
-        f'{n_molecules-1} bonds\n'
-        f'{n_molecules-2} angles\n\n'
-        f'{n_types} atom types\n'
-        f'1 bond types\n'
-        f'1 angle types\n\n'
-        f'{xlo} {xhi} xlo xhi\n'
-        f'{ylo} {yhi} ylo yhi\n'
-        f'{zlo} {zhi} zlo zhi\n\n')
-
-
-def write_masses(type_list):
-    sys.stdout.write('Masses\n\n')
-    for n, type in enumerate(type_list):
-        sys.stdout.write(f'{n+1} 1 # {type}\n')
-    sys.stdout.write('\n')
-
-
-def write_atoms(sequence, unique_ids, type_list, r=1.1):
-    sys.stdout.write('Atoms\n\n')
-    with pct.open(sequence) as f:
-        for i, line in enumerate(f):
-            type = line.strip()
-            if unique_ids and type in ['F', 'R']:
-                type = unique_ids[0] # Get next first unique_id
-                unique_ids = unique_ids[1:] # Remove from list
-            if i == 0:
-                x = random.random()
-                y = random.random()
-                z = random.random()
-            else:
-                phi = random.random() * 2 * math.pi
-                theta = random.random() * math.pi
-                x = prev_x + (r * math.sin(theta) * math.cos(phi))
-                y = prev_y + (r * math.sin(theta) * math.sin(phi))
-                z = prev_z + (r * math.cos(theta))
-            atom_number = type_list.index(type) + 1
-            sys.stdout.write(f'{i+1} 1 {atom_number} {x} {y} {z} 0 0 0\n')
-            prev_x = x
-            prev_y = y
-            prev_z = z
-    sys.stdout.write('\n')
-
-
-def write_bonds(n_molecules):
-    sys.stdout.write('Bonds\n\n')
-    n_bonds = n_molecules - 1
-    for b in range(1, n_bonds + 1):
-        sys.stdout.write(f'{b} 1 {b} {(b%n_molecules)+1}\n')
-    sys.stdout.write('\n')
-
-
-def write_angles(n_molecules):
-    sys.stdout.write('Angles\n\n')
-    n_angles = n_molecules - 2
-    for a in range(1, n_angles + 1):
-        sys.stdout.write(f'{a} 1 {a} {a+1} {a+2}\n')
-    sys.stdout.write('\n')
 
 
 def random_linear_polymer(
