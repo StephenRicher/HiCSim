@@ -48,13 +48,6 @@ def main():
         '--seed', default=42, type=int,
         help='Seed for random number generator.')
 
-    beads = argparse.ArgumentParser(add_help=False)
-    beads.add_argument(
-        '--single_beads', metavar='NBEADS,TYPE', type=commaPair,
-        action='append', default=[],
-        help='Add NBEADS number of isolated beads of TYPE.'
-        'Call multiple times to add multiple beads.')
-
     random_subparser = subparser.add_parser(
         'random',
         description=random_linear_polymer.__doc__,
@@ -76,7 +69,7 @@ def main():
         'model',
         description=create_polymer.__doc__,
         help=create_polymer.__doc__,
-        parents=[base_args, box_sizes, seed_arg, beads],
+        parents=[base_args, box_sizes, seed_arg],
         epilog=parser.epilog)
     track_subparser.add_argument(
         'sequence',)
@@ -86,14 +79,19 @@ def main():
         help='Set bead pair interactions. e.g. For 2 beads of type \'I\''
         'and \'J\' we may set the interaction using I-J=1.0,1.0,2.5' )
     track_subparser.add_argument(
+        '--monomers', metavar='NBEADS,TYPE', type=commaPair,
+        action='append', default=[],
+        help='Add NBEADS number of monomers of TYPE.'
+        'Call multiple times to add multiple monomer types.')
+    track_subparser.add_argument(
         '--ctcf', default=False, action='store_true',
         help='Process beads labelled F and R as CTCF sites. Each bead is given '
         'a unique ID and convergent orientation pair coeffs are output.')
     track_subparser.add_argument(
-        '--ctcf_coeff', default='1.5,1.0,1.8',
+        '--ctcfCoeff', default='1.5,1.0,1.8',
         help='Define pairing coefficient between convergent CTCF sites.')
     track_subparser.add_argument(
-        '--ctcf_out',
+        '--ctcfOut', default=None,
         help='Outfile to write convergent ctcf pair_coeffs (default: stderr)')
     track_subparser.set_defaults(function=create_polymer)
 
@@ -102,78 +100,108 @@ def main():
     return (pct.execute(parser))
 
 
+class Sequence:
 
-class polymer:
+    def __init__(self, sequence, ctcf=False, beadID=1):
+        self._beadID = beadID
+        # Should beads set as 'F' or 'R' be processed as CTCF?
+        self._ctcf = ctcf
+        self.load(sequence)
 
-    def __init__(self, sequence, single_beads, ctcf,
-            xlo, xhi, ylo, yhi, zlo, zhi):
-        log = pct.create_logger()
-        Dim = namedtuple('Dim', 'lo hi')
-        Box = namedtuple('Box', ['x', 'y', 'z'])
-        self.box = Box(Dim(xlo, xhi), Dim(ylo, yhi), Dim(zlo, zhi))
-        self.ctcf = []
-        self.boundAtoms = defaultdict(int)
-        self.sequence = []
+    def load(self, sequence):
+        self.sequence = {}
+        self.types = []
         with open(sequence) as f:
             for line in f:
-                bead = line.strip()
-                self.sequence.append(bead)
-                if ctcf and bead in ['F', 'R']:
-                    id = len(self.ctcf) + 1
-                    bead = f'{bead}-{id}'
-                    self.ctcf.append(bead)
-                self.boundAtoms[bead] += 1
-
-        self.unboundAtoms = defaultdict(int)
-        for single_bead in single_beads:
-            nbeads = int(single_bead[0])
-            bead = single_bead[1]
-            if bead in self.boundAtoms:
-                log.error(
-                    f'Single bead type {bead} is alread used in {sequence}')
-                sys.exit(1)
-            elif bead in ['F', 'R']:
-                log.error(
-                    'Single bead type cannot be F or R.')
-                sys.exit(1)
-            else:
-                self.unboundAtoms[bead] = int(nbeads)
+                type = line.strip()
+                if self._ctcf and type in ['F', 'R']:
+                    type = f'{type}-{self._beadID}'
+                if type not in self.types:
+                    self.types.append(type)
+                self.sequence[self._beadID] = type
+                self._beadID += 1
 
     @property
-    def nTotalAtoms(self):
-        return self.nBoundAtoms + self.nUnboundAtoms
-
-    @property
-    def nBoundAtoms(self):
-        return sum(self.boundAtoms.values())
-
-    @property
-    def nUnboundAtoms(self):
-        return sum(self.unboundAtoms.values())
+    def nBeads(self):
+        return len(self.sequence)
 
     @property
     def nAngles(self):
-        return self.nBoundAtoms - 2
+        return self.nBeads - 2
 
     @property
     def nBonds(self):
-        return self.nBoundAtoms - 1
+        return self.nBeads - 1
 
     @property
     def nTypes(self):
-        return len(self.boundAtoms) + len(self.unboundAtoms)
+        return len(self.types)
+
+
+class lammps:
+
+    def __init__(self):
+        self._log = pct.create_logger()
+        self.sequences = []
+        self.monomers = []
+        self._beadID = 1
+        self._typeID = 1
+        self.typeIDs = {}
+
+    def loadSequence(self, sequence_file, ctcf):
+        sequence = Sequence(sequence_file, ctcf, self._beadID)
+        self.sequences.append(sequence)
+        self._beadID += sequence.nBeads
+        for type in sequence.types:
+            self.addType(type)
+
+    def loadMonomer(self, type, nbeads):
+        monomer = {}
+        self.addType(type)
+        for bead in range(nbeads):
+            monomer[self._beadID] = type
+            self._beadID += 1
+        self.monomers.append(monomer)
+
+    def loadBox(self, xlo, xhi, ylo, yhi, zlo, zhi):
+        Dim = namedtuple('Dim', 'lo hi')
+        Box = namedtuple('Box', ['x', 'y', 'z'])
+        self.box = Box(Dim(xlo, xhi), Dim(ylo, yhi), Dim(zlo, zhi))
+
+    def addType(self, type):
+        if type not in self.typeIDs:
+            self.typeIDs[type] = self._typeID
+            self._typeID += 1
 
     @property
-    def typeList(self):
-        return list(self.boundAtoms) + list(self.unboundAtoms)
+    def nBeads(self):
+        n = sum([sequence.nBeads for sequence in self.sequences])
+        n += sum([len(monomer) for monomer in self.monomers])
+        return n
 
-    def typeNumber(self, type):
-        return self.typeList.index(type) + 1
+    @property
+    def nAngles(self):
+        return sum([sequence.nAngles for sequence in self.sequences])
+
+    @property
+    def nBonds(self):
+        return sum([sequence.nBonds for sequence in self.sequences])
+
+    @property
+    def nTypes(self):
+        return len(self.typeIDs)
+
+    def writeLammps(self):
+        self.writeHeader()
+        self.writeMasses()
+        self.writeBeads()
+        self.writeBonds()
+        self.writeAngles()
 
     def writeHeader(self):
         sys.stdout.write(
             'LAMMPS data file from restart file: timestep = 0, procs = 1\n\n'
-            f'{self.nTotalAtoms} atoms\n'
+            f'{self.nBeads} atoms\n'
             f'{self.nBonds} bonds\n'
             f'{self.nAngles} angles\n\n'
             f'{self.nTypes} atom types\n'
@@ -185,108 +213,117 @@ class polymer:
 
     def writeMasses(self):
         sys.stdout.write('Masses\n\n')
-        for n, type in enumerate(self.typeList):
-            sys.stdout.write(f'{n+1} 1 # {type}\n')
+        for type, typeID in self.typeIDs.items():
+            sys.stdout.write(f'{typeID} 1 # {type}\n')
         sys.stdout.write('\n')
 
-    def writeAtoms(self):
+
+    def writeBeads(self):
         sys.stdout.write('Atoms\n\n')
-        self.writeBoundAtoms()
-        self.writeUnboundAtoms()
+        self.writePolymers()
+        self.writeMonomers()
         sys.stdout.write('\n')
 
-    def writeBoundAtoms(self, r=1.1):
-        ctcf_beads = self.ctcf
-        for i, type in enumerate(self.sequence):
-            if self.ctcf and type in ['F', 'R']:
-                type = ctcf_beads[0]
-                ctcf_beads = ctcf_beads[1:]
-            if i == 0:
-                x = random.random()
-                y = random.random()
-                z = random.random()
-            else:
-                phi = random.random() * 2 * math.pi
-                theta = random.random() * math.pi
-                x = prev_x + (r * math.sin(theta) * math.cos(phi))
-                y = prev_y + (r * math.sin(theta) * math.sin(phi))
-                z = prev_z + (r * math.cos(theta))
-            type_number = self.typeNumber(type)
-            sys.stdout.write(f'{i+1} 1 {type_number} {x} {y} {z} 0 0 0\n')
-            prev_x = x
-            prev_y = y
-            prev_z = z
+    def writePolymers(self, r=1.1):
+        for sequence in self.sequences:
+            for i, (beadID, type) in enumerate(sequence.sequence.items()):
+                if i == 0:
+                    x = random.random()
+                    y = random.random()
+                    z = random.random()
+                else:
+                    phi = random.random() * 2 * math.pi
+                    theta = random.random() * math.pi
+                    x = prev_x + (r * math.sin(theta) * math.cos(phi))
+                    y = prev_y + (r * math.sin(theta) * math.sin(phi))
+                    z = prev_z + (r * math.cos(theta))
+                typeID = self.typeIDs[type]
+                sys.stdout.write(f'{beadID} 1 {typeID} {x} {y} {z} 0 0 0\n')
+                prev_x = x
+                prev_y = y
+                prev_z = z
 
-    def writeUnboundAtoms(self):
-        atom_id = self.nBoundAtoms + 1
-        for type, nbeads in self.unboundAtoms.items():
-            type_number = self.typeNumber(type)
-            for n in range(nbeads):
+
+    def writeMonomers(self):
+        for monomer in self.monomers:
+            for beadID, type in monomer.items():
                 x = random.random()
                 y = random.random()
                 z = random.random()
-                sys.stdout.write(
-                    f'{atom_id} 1 {type_number} {x} {y} {z} 0 0 0\n')
-                atom_id += 1
+                typeID = self.typeIDs[type]
+                sys.stdout.write(f'{beadID} 1 {typeID} {x} {y} {z} 0 0 0\n')
+
 
     def writeBonds(self):
         sys.stdout.write('Bonds\n\n')
-        for b in range(1, self.nBonds + 1):
-            sys.stdout.write(f'{b} 1 {b} {(b%self.nBoundAtoms)+1}\n')
+        for sequence in self.sequences:
+            nBonds = sequence.nBonds
+            for i, beadID in enumerate(sequence.sequence):
+                if i == sequence.nBonds:
+                    break
+                sys.stdout.write(f'{beadID} 1 {beadID} {beadID+1}\n')
         sys.stdout.write('\n')
 
 
     def writeAngles(self):
         sys.stdout.write('Angles\n\n')
-        for a in range(1, self.nAngles + 1):
-            sys.stdout.write(f'{a} 1 {a} {a+1} {a+2}\n')
+        for sequence in self.sequences:
+            nAngles = sequence.nAngles
+            for i, beadID in enumerate(sequence.sequence):
+                if i == sequence.nAngles:
+                    break
+                sys.stdout.write(f'{beadID} 1 {beadID} {beadID+1} {beadID+2}\n')
         sys.stdout.write('\n')
 
 
+    def detectConvertCTCF(self, sequence):
+        """ Detect valid CTCF convergent sites. For each interval, find the nearest
+            F bead to the left and the nearest R bead to the right. This models the
+            loop extrusion hypothesis.
+        """
+        pairs = set()
+        typeList = sequence.types
+        for beadIdx in range(len(typeList) - 1):
+            # Reverse down the list until reach forward CTCF
+            for forwardBead in reversed(typeList[:beadIdx + 1]):
+                if forwardBead.startswith('F'):
+                    forwardTypeID = self.typeIDs[forwardBead]
+                    break
+            else:
+                continue
+            # Move up the list until reach reverse CTCF
+            for reverseBead in typeList[beadIdx + 1:]:
+                if reverseBead.startswith('R'):
+                    reverseTypeID = self.typeIDs[reverseBead]
+                    break
+            else:
+                continue
+            pairs.add((forwardTypeID, reverseTypeID))
+        return pairs
 
-def create_polymer(sequence, seed, bead_pair, single_beads, ctcf,
-        ctcf_coeff, ctcf_out, xlo, xhi, ylo, yhi, zlo, zhi):
+
+    def writeConvergentCTCFs(self, coeff, f=sys.stderr):
+        for sequence in self.sequences:
+            for forward, rev in self.detectConvertCTCF(sequence):
+                f.write(f'pair_coeff {forward} {rev} {coeff}\n')
+
+
+
+def create_polymer(sequence, seed, bead_pair, monomers, ctcf,
+        ctcfCoeff, ctcfOut, xlo, xhi, ylo, yhi, zlo, zhi):
 
     random.seed(seed)
-    a = polymer(sequence, single_beads, ctcf, xlo, xhi, ylo, yhi, zlo, zhi)
-    a.writeHeader()
-    a.writeMasses()
-    a.writeAtoms()
-    a.writeBonds()
-    a.writeAngles()
-    exit(1)
-    write_ctcf_interactions(type_list, ctcf_coeff, ctcf_out)
-
-def detect_pairs(beads):
-    """ Detect valid CTCF convergent sites. For each interval, find the nearest
-        F bead to the left and the nearest R bead to the right. This models the
-        loop extrusion hypothesis.
-    """
-
-    pairs = set()
-    for bead_idx in range(0, len(beads) - 1):
-        for forward_bead in reversed(beads[:bead_idx + 1]):
-            if forward_bead.startswith('F'):
-                forward_number = beads.index(forward_bead) + 1
-                break
-        else:
-            continue
-        for reverse_bead in beads[bead_idx + 1:]:
-            if reverse_bead.startswith('R'):
-                reverse_number = beads.index(reverse_bead) + 1
-                break
-        else:
-            continue
-        pairs.add((forward_number, reverse_number))
-    return pairs
-
-
-def write_ctcf_interactions(type_list, ctcf_coeff, ctcf_out):
-    ctcf_coeff = ctcf_coeff.replace(',',' ')
-    with pct.open(ctcf_out, mode='w', stderr=False) as f:
-        for forward, reverse in detect_pairs(type_list):
-            f.write(f'pair_coeff {forward} {reverse} {ctcf_coeff}\n')
-
+    dat = lammps()
+    dat.loadBox(xlo, xhi, ylo, yhi, zlo, zhi)
+    dat.loadSequence(sequence, ctcf)
+    for monomer in monomers:
+        nbeads = int(monomer[0])
+        type = monomer[1]
+        dat.loadMonomer(type, nbeads)
+    dat.writeLammps()
+    ctcfCoeff = ctcfCoeff.replace(',',' ')
+    with pct.open(ctcfOut, mode='w', stderr=True) as f:
+        dat.writeConvergentCTCFs(ctcfCoeff, f)
 
 def random_linear_polymer(
         n_molecules, n_types, n_clusters, seed, xlo, xhi, ylo, yhi, zlo, zhi):
