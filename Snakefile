@@ -126,50 +126,44 @@ if config['ctcf'] is not None:
             '{SCRIPTS}/extract_direction.py {input.genome} {input.ctcf} '
             '> {output} 2> {log}'
 
-    if len(config['ctcf']) > 1:
 
-        rule sortBed:
-            input:
-                expand('tracks/CTCF-{rep}.bed',
-                    rep = range(1, len(config['ctcf']) + 1))
-            output:
-                'tracks/CTCF.sort.bed'
-            group:
-                'bedtools'
-            log:
-                'logs/sortBed.log'
-            conda:
-                f'{ENVS}/bedtools.yaml'
-            shell:
-                'bedtools sort -i <(cat {input}) > {output} 2> {log}'
-
-
-        rule mergeBed:
-            input:
-                rules.sortBed.output
-            output:
-                'tracks/CTCF.merged.bed'
-            group:
-                'bedtools'
-            log:
-                'logs/mergeBed.log'
-            conda:
-                f'{ENVS}/bedtools.yaml'
-            shell:
-                'bedtools merge -s -c 4,5,6 -o count,median,distinct '
-                '-i {input} > {output} 2> {log}'
+    rule sortBed:
+        input:
+            expand('tracks/CTCF-{rep}.bed',
+                rep = range(1, len(config['ctcf']) + 1))
+        output:
+            'tracks/CTCF.sort.bed'
+        group:
+            'bedtools'
+        log:
+            'logs/sortBed.log'
+        conda:
+            f'{ENVS}/bedtools.yaml'
+        shell:
+            'bedtools sort -i <(cat {input}) > {output} 2> {log}'
 
 
-    def splitOrientationInput(wildcards):
-        if len(config['ctcf']) > 1:
-            return rules.mergeBed.output
-        else:
-            return 'tracks/CTCF-1.bed'
+    rule mergeBed:
+        input:
+            rules.sortBed.output
+        output:
+            'tracks/CTCF.merged.bed'
+        group:
+            'bedtools'
+        log:
+            'logs/mergeBed.log'
+        conda:
+            f'{ENVS}/bedtools.yaml'
+        shell:
+            'bedtools merge -s -c 4,5,6 -o count,median,distinct '
+            '-i {input} > {output} 2> {log}'
 
+
+    
 
     rule splitOrientation:
         input:
-            splitOrientationInput
+            rules.mergeBed.output
         output:
             forward = 'tracks/CTCF-forward.bed',
             reverse = 'tracks/CTCF-reverse.bed'
@@ -295,8 +289,8 @@ rule BeadsToLammps:
         '--xlo {params.xlo} --xhi {params.xhi} '
         '--ylo {params.ylo} --yhi {params.yhi} '
         '--zlo {params.zlo} --zhi {params.zhi} '
-        '--ctcf --ctcf_out {output.coeffs} '
-        '--ctcf_coeff 1.5,1.0,1.8 '
+        '--ctcf --ctcfOut {output.coeffs} '
+        '--ctcfCoeff 1.9,1.0,1.8 '
         '{input} > {output.dat} 2> {log}'
 
 
