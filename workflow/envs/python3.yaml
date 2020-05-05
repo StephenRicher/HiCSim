@@ -8,4 +8,4 @@ dependencies :
     - pandas
     - seaborn
     - matplotlib
-    - pyCommonTools==2.2.0
+    - pyCommonTools==2.3.0
