@@ -4,11 +4,13 @@
 
 import os
 import sys
+import tempfile
 import argparse
 import pyCommonTools as pct
 from utilities import commaPair
 from contextlib import ExitStack
 from subprocess import PIPE, Popen
+
 from tempfile import NamedTemporaryFile
 
 def main():
@@ -25,12 +27,17 @@ def main():
         action='append', required=True,
         help='BED file of regions to mask, paired with masking character.'
         'Call multiple times to add more files.')
+    parser.add_argument(
+        '--tmp', default=tempfile.gettempdir(),
+        help='Set temp directory (default: %(default)s)')
 
     return (pct.execute(parser))
 
 
-def mask(genome, bed):
+def mask(genome, bed, tmp):
     log = pct.create_logger()
+
+    tempfile.tempdir = tmp
     if duplicateMask(bed): sys.exit(1)
 
     allMasked = maskAllBases(genome)
@@ -48,6 +55,7 @@ def mask(genome, bed):
             process.wait()
         else:
             process.stdout.close()
+
     os.remove(allMasked)
 
 
@@ -75,7 +83,7 @@ def maskAllBases(genome):
     with ExitStack() as stack:
         genome = stack.enter_context(open(genome))
         masked = stack.enter_context(
-            NamedTemporaryFile(mode='wt', delete=False))
+            tempfile.NamedTemporaryFile(mode='wt', delete=False))
         for line in genome:
             if line.startswith('>'):
                 masked.write(line)
