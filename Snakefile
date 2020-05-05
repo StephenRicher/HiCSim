@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import random
+import tempfile
 from set_config import set_config, read_paths
 
 BASE = workflow.basedir
@@ -24,7 +25,7 @@ default_config = {
     'ctcf':           None,
     'masking':
         [{'file':     ''         ,
-         'character': ''         ,}],
+          'character': ''         ,}],
     'region':         '',
     'chr':            '',
     'start':          '',
@@ -55,7 +56,8 @@ default_config = {
     'warm_up':        20000,
     'sim_time':       2000000,
     'delay':          10,
-    'loop':           0
+    'loop':           0,
+    'tmpdir':         tempfile.gettempdir(),
 }
 config = set_config(config, default_config)
 
@@ -81,7 +83,8 @@ rule all:
     input:
         [f'vmd/{NAME}.gif', f'qc/{NAME}-summed.png',
          f'sequence/{BUILD}-{REGION}.dat',
-         f'genome/masked/{BUILD}-{REGION}-masked_all.fasta']
+         f'genome/masked/{BUILD}-{REGION}-masked_all.fasta',
+         expand('matrices/{name}-{rep}.h5', name = NAME, rep = REPS)]
 
 
 rule bgzipGenome:
@@ -110,6 +113,7 @@ rule indexGenome:
         'samtools faidx {input}'
 
 if config['ctcf'] is not None:
+
 
     rule getOrientationCTCF:
         input:
@@ -159,20 +163,50 @@ if config['ctcf'] is not None:
             '-i {input} > {output} 2> {log}'
 
 
-    
-
-    rule splitOrientation:
+    rule scaleBed:
         input:
             rules.mergeBed.output
         output:
-            forward = 'tracks/CTCF-forward.bed',
-            reverse = 'tracks/CTCF-reverse.bed'
+            'tracks/CTCF.scaled.bed'
+        group:
+            'bedtools'
+        log:
+            'logs/scaleBed.log'
+        conda:
+            f'{ENVS}/python3.yaml'
+        shell:
+            '{SCRIPTS}/scaleBedScore.py --log {input} > {output} 2> {log}'
+
+
+    rule filterBedScore:
+        input:
+            rules.scaleBed.output
+        output:
+            'tracks/CTCF-sampled-{rep}.bed'
+        params:
+            rep = REPS,
+            seed = lambda wildcards: SEEDS[REPS.index(int(wildcards.rep))]
+        log:
+            'logs/sampleBed/{rep}.log'
+        conda:
+            f'{ENVS}/python3.yaml'
+        shell:
+            '{SCRIPTS}/filterBedScore.py --seed {params.seed} '
+            '{input} > {output} 2> {log}'
+
+
+    rule splitOrientation:
+        input:
+            rules.filterBedScore.output
+        output:
+            forward = 'tracks/split/CTCF-forward-{rep}.bed',
+            reverse = 'tracks/split/CTCF-reverse-{rep}.bed'
         params:
             min_rep = config['min_rep']
         group:
             'mask'
         log:
-            'logs/splitOrientation/.log'
+            'logs/splitOrientation/{rep}.log'
         conda:
             f'{ENVS}/python3.yaml'
         shell:
@@ -183,38 +217,39 @@ if config['ctcf'] is not None:
 
 def maskFastaInput(wildcards):
     if config['ctcf']:
-        return [f'genome/{BUILD}.fa.gz',
-                 'tracks/CTCF-forward.bed',
-                 'tracks/CTCF-reverse.bed']
+        return [f'genome/{BUILD}.fa.gz'] + rules.splitOrientation.output
     else:
         return [f'genome/{BUILD}.fa.gz']
 
 
-def getMaskCommand(config):
+def getMasking(wc):
     """ Build masking command for maskFasta for track data """
     command = ''
     for entry in config['masking']:
         command += f'--bed {entry["file"]},{entry["character"]} '
     if config['ctcf']:
-        command += ('--bed tracks/CTCF-forward.bed,F '
-                    '--bed tracks/CTCF-reverse.bed,R ')
+        command += (f'--bed tracks/filtered/split/CTCF-forward-{wc.rep}.bed,F '
+                    f'--bed tracks/filtered/split/CTCF-reverse-{wc.rep}.bed,R ')
     return command
-MASKING = getMaskCommand(config)
 
 
 rule maskFasta:
     input:
         maskFastaInput
     output:
-        f'genome/masked/{BUILD}-masked.fasta'
+        temp(f'genome/masked/{BUILD}-{{rep}}-masked.fasta')
+    params:
+        tmpdir = config['tmpdir'],
+        masking = getMasking
     group:
         'mask'
     log:
-        'logs/maskFasta.log'
+        'logs/maskFasta/{rep}.log'
     conda:
         f'{ENVS}/bedtools.yaml'
     shell:
-        '{SCRIPTS}/maskFasta.py --genome <(zcat {input[0]}) {MASKING}'
+        '{SCRIPTS}/maskFasta.py --tmp {params.tmpdir} '
+        '--genome <(zcat {input[0]}) {params.masking} '
         '> {output} 2> {log}'
 
 
@@ -226,7 +261,7 @@ rule indexMasked:
     group:
         'mask'
     log:
-        'logs/indexMasked.log'
+        'logs/indexMasked/{rep}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -238,13 +273,13 @@ rule extractRegion:
         fasta = rules.maskFasta.output,
         index = rules.indexMasked.output
     output:
-        f'genome/masked/{BUILD}-{REGION}-masked.fasta'
+        f'genome/masked/{BUILD}-{REGION}-{{rep}}-masked.fasta'
     group:
         'mask'
     params:
         region = f'{CHR}:{START}-{END}'
     log:
-        f'logs/extractRegion-{BUILD}-{REGION}.log'
+        f'logs/extractRegion/{BUILD}-{REGION}-{{rep}}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -255,11 +290,11 @@ rule FastaToBeads:
     input:
         rules.extractRegion.output
     output:
-        f'sequence/{BUILD}-{REGION}-bead_sequence.txt'
+        f'sequence/{BUILD}-{REGION}-{{rep}}-bead_sequence.txt'
     params:
         bases_per_bead = config['bases_per_bead']
     log:
-        'logs/sequenceToBeads.log'
+        'logs/sequenceToBeads/{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -271,8 +306,8 @@ rule BeadsToLammps:
     input:
         rules.FastaToBeads.output
     output:
-        dat = f'sequence/{BUILD}-{REGION}.dat',
-        coeffs = f'sequence/{BUILD}-{REGION}-ctcf_coeffs.txt',
+        dat = f'sequence/{BUILD}-{REGION}-{{rep}}.dat',
+        coeffs = f'sequence/{BUILD}-{REGION}-{{rep}}-ctcf_coeffs.txt',
     params:
         xlo = config['xlo'],
         xhi = config['xhi'],
@@ -281,7 +316,7 @@ rule BeadsToLammps:
         zlo = config['zlo'],
         zhi = config['zhi']
     log:
-        f'logs/{BUILD}-{REGION}-sequence_to_lammps.log'
+        f'logs/{BUILD}-{REGION}-{{rep}}-sequence_to_lammps.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -299,9 +334,9 @@ rule addCTCF:
         script = f'{SCRIPTS}/run-ctcf.lam',
         coeffs = rules.BeadsToLammps.output.coeffs
     output:
-        f'lammps/run-ctcf.lam'
+        'lammps/script/run-ctcf-{rep}.lam'
     log:
-        f'logs/addCTCF.log'
+        'logs/addCTCF/{rep}.log'
     shell:
         "sed '/^#CTCF_COEFF/ r {input.coeffs}' {input.script} "
         "> {output} 2> {log}"
@@ -358,7 +393,6 @@ rule lammps:
         warm_up = f'lammps/XYZ_{NAME}-{{rep}}-warm_up.xyz',
         proper_run = f'lammps/XYZ_{NAME}-{{rep}}-proper_run.xyz'
     params:
-        rep = REPS,
         outdir = directory(f'lammps'),
         timestep = config['timestep'],
         warm_up = config['warm_up'],
@@ -367,7 +401,7 @@ rule lammps:
     group:
         'lammps'
     threads:
-        config['threads'] if config['cluster'] else 1
+        config['threads'] if config['cluster'] else 12
     log:
         'logs/lammps-{rep}.log'
     conda:
@@ -380,7 +414,7 @@ rule create_contact_matrix:
     input:
         rules.lammps.output.proper_run
     output:
-        f'qc/{NAME}-{{rep}}.npz'
+        f'matrices/{NAME}-{{rep}}.npz'
     group:
         'lammps'
     log:
@@ -391,9 +425,44 @@ rule create_contact_matrix:
         '{SCRIPTS}/create_contact_matrix.py --outdata {output} {input} &> {log}'
 
 
+rule matrix2homer:
+    input:
+        rules.create_contact_matrix.output
+    output:
+        f'matrices/{NAME}-{{rep}}.homer'
+    params:
+        chr = CHR,
+        start = START,
+        binsize = config['bases_per_bead']
+    log:
+        'logs/matrix2homer-{rep}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/npz2homer.py --chromosome {params.chr} '
+        '--start {params.start} --binsize {params.binsize} '
+        '{input} > {output} 2> {log}'
+
+
+rule homerToH5:
+    input:
+        rules.matrix2homer.output
+    output:
+        f'matrices/{NAME}-{{rep}}.h5'
+    log:
+        'logs/homerToH5/{rep}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    threads:
+        12
+    shell:
+        'hicConvertFormat --matrices {input} --outFileName {output} '
+        '--inputFormat homer --outputFormat h5 &> {log}'
+
+
 rule average_matrices:
     input:
-        expand('qc/{name}-{rep}.npz',
+        expand('matrices/{name}-{rep}.npz',
             name=NAME, rep=REPS)
     output:
         f'qc/{NAME}-summed.npz'

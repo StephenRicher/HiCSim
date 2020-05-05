@@ -1,10 +1,11 @@
 # Simulation output directory - will be created if neccessary.
 workdir: /media/stephen/Data/modelling-ctcf
+tmpdir: /media/stephen/Data/modelling-ctcf
 cluster: False
 
-reps: 1
+reps: 5
 threads: 6
-bases_per_bead: 500
+bases_per_bead: 1000
 genome: /media/stephen/Data/genomes/GRCh38/Homo_sapiens.GRCh38.dna.primary_assembly.fa
 
 ctcf :
@@ -33,5 +34,5 @@ zhi: 500
 
 # LAMMPS config (rule: lammps)
 timestep: 500
-warm_up: 20000
-sim_time: 500000
+warm_up: 10000
+sim_time: 50000
