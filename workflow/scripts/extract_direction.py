@@ -85,13 +85,12 @@ with open(file) as f:
             alignments[orientation]['positions'] = [ctcf_start, ctcf_end]
 
         score_difference = alignments['+']['score'] - alignments['-']['score']
-
         if abs(score_difference) >= 5:
             best = '+' if score_difference > 0 else '-'
             abs_ctcf_start = alignments[best]['positions'][0] + start
             abs_ctcf_end = alignments[best]['positions'][1] + start
 
-            print(chr, abs_ctcf_start, abs_ctcf_end, '.', record[5], best,
+            print(chr, abs_ctcf_start, abs_ctcf_end, '.', record[4], best,
                 sep = '\t')
 
     for CTCF_fasta in CTCF.values():
