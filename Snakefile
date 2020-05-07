@@ -133,7 +133,7 @@ if config['ctcf'] is not None:
         input:
             genome = rules.bgzipGenome.output,
             index = rules.indexGenome.output,
-            ctcf = config['ctcf']
+            ctcf = lambda wc: config['ctcf'][int(wc.rep)]
         output:
             'tracks/CTCF-{rep}.bed'
         log:
@@ -148,7 +148,7 @@ if config['ctcf'] is not None:
     rule sortBed:
         input:
             expand('tracks/CTCF-{rep}.bed',
-                rep = range(1, len(config['ctcf']) + 1))
+                rep = range(0, len(config['ctcf'])))
         output:
             'tracks/CTCF.sort.bed'
         group:
