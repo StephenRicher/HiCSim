@@ -48,20 +48,25 @@ def compress(infile, nbases):
                         if base != 'N':
                             bases.update(base)
                         if i == nbases:
-                            get_bead(bases)
+                            sys.stdout.write(f'{get_bead(bases)}\n')
                             bases = Counter()
                             i = 0
 
         if i > 0:
-            get_bead(bases)
+            sys.stdout.write(f'{get_bead(bases)}\n')
 
 
 def get_bead(bases):
+    # If both CTCF orientations exist create a new bead 'B' to represent both
+    if 'F' in bases and 'R' in bases:
+        bases['B'] = bases['F'] + bases['R']
+        bases['F'] = 0
+        bases['R'] = 0
     if sum(bases.values()) != 0:
         bead = bases.most_common(1)[0][0]
     else:
         bead = 'N'
-    sys.stdout.write(f'{bead}\n')
+    return bead
 
 
 if __name__ == '__main__':
