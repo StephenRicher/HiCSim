@@ -85,8 +85,8 @@ rule all:
          f'sequence/{BUILD}-{REGION}.dat',
          f'genome/masked/{BUILD}-{REGION}-masked_all.fasta',
          f'matrices/plots/{NAME}.png',
-         expand('matrices/{name}-{rep}.h5', name=NAME, rep=REPS),
-         expand('matrices/{name}-{rep}.hic', name=NAME, rep=REPS)]
+         expand('matrices/{name}-{all}.{ext}',
+            name=NAME, all=REPS+['merged'], ext=['h5', 'hic'])]
 
 
 rule bgzipGenome:
@@ -491,7 +491,7 @@ rule juicerPre:
         'logs/juicerPre/{all}.log'
     params:
         chr = CHR,
-        resolutions = config['bases_per_bead']
+        resolutions = '500,1000,1500'
     resources:
          mem_mb = 16000
     threads:
