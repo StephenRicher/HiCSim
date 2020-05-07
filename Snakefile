@@ -84,7 +84,9 @@ rule all:
         [f'vmd/{NAME}.gif', f'qc/{NAME}-summed.png',
          f'sequence/{BUILD}-{REGION}.dat',
          f'genome/masked/{BUILD}-{REGION}-masked_all.fasta',
-         expand('matrices/{name}-{rep}.h5', name = NAME, rep = REPS)]
+         f'matrices/plots/{NAME}.png',
+         expand('matrices/{name}-{rep}.h5', name=NAME, rep=REPS),
+         expand('matrices/{name}-{rep}.hic', name=NAME, rep=REPS)]
 
 
 rule bgzipGenome:
@@ -111,6 +113,18 @@ rule indexGenome:
         f'{ENVS}/samtools.yaml'
     shell:
         'samtools faidx {input}'
+
+
+rule getChromSizes:
+    input:
+        rules.indexGenome.output
+    output:
+        f'genome/chrom_sizes/{BUILD}.chrom.sizes'
+    log:
+        f'logs/getChromSizes/{BUILD}.log'
+    shell:
+        'cut -f 1,2 {input} > {output} 2> {log}'
+
 
 if config['ctcf'] is not None:
 
@@ -342,34 +356,6 @@ rule addCTCF:
         "> {output} 2> {log}"
 
 
-rule generate_random_polymer:
-    output:
-        f'polymer/poly.n{config["n_molecules"]}.dat'
-    params:
-        n_molecules = config['n_molecules'],
-        n_clusters = config['n_clusters'],
-        n_types = config['n_types'],
-        xlo = config['xlo'],
-        xhi = config['xhi'],
-        ylo = config['ylo'],
-        yhi = config['yhi'],
-        zlo = config['zlo'],
-        zhi = config['zhi'],
-    log:
-        'logs/generate_polymer.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/generate_polymer.py '
-        '--n_molecules {params.n_molecules} '
-        '--n_clusters {params.n_clusters} '
-        '--n_types {params.n_types} '
-        '--xlo {params.xlo} --xhi {params.xhi} '
-        '--ylo {params.ylo} --yhi {params.yhi} '
-        '--zlo {params.zlo} --zhi {params.zhi} '
-        '> {output} 2> {log}'
-
-
 lmp_cmd = ('-var infile {input.data} '
            '-var outdir {params.outdir} '
            '-var name {NAME}-{wildcards.rep} '
@@ -425,17 +411,33 @@ rule create_contact_matrix:
         '{SCRIPTS}/create_contact_matrix.py --outdata {output} {input} &> {log}'
 
 
+rule mergeReplicates:
+    input:
+        expand('matrices/{name}-{rep}.npz', name=NAME, rep=REPS)
+    output:
+        f'matrices/{NAME}-merged.npz'
+    params:
+        method = config['method']
+    log:
+        'logs/mergeReplicates.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/average_matrices.py --out {output} '
+        '--method {params.method} {input} &> {log}'
+
+
 rule matrix2homer:
     input:
-        rules.create_contact_matrix.output
+        'matrices/{all}.npz'
     output:
-        f'matrices/{NAME}-{{rep}}.homer'
+        'matrices/{all}.homer'
     params:
         chr = CHR,
         start = START,
         binsize = config['bases_per_bead']
     log:
-        'logs/matrix2homer-{rep}.log'
+        'logs/matrix2homer/{all}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -448,9 +450,9 @@ rule homerToH5:
     input:
         rules.matrix2homer.output
     output:
-        f'matrices/{NAME}-{{rep}}.h5'
+        'matrices/{all}.h5'
     log:
-        'logs/homerToH5/{rep}.log'
+        'logs/homerToH5/{all}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     threads:
@@ -460,43 +462,88 @@ rule homerToH5:
         '--inputFormat homer --outputFormat h5 &> {log}'
 
 
-rule average_matrices:
+rule matrix2pre:
     input:
-        expand('matrices/{name}-{rep}.npz',
-            name=NAME, rep=REPS)
+        'matrices/{all}.npz'
     output:
-        f'qc/{NAME}-summed.npz'
+        'matrices/{all}.pre.tsv'
     params:
-        method = config['method']
+        chr = CHR,
+        start = START,
+        binsize = config['bases_per_bead']
     log:
-        'logs/sum_matrices.log'
+        'logs/matrix2pre/{all}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/average_matrices.py --out {output} '
-        '--method {params.method} {input} &> {log}'
+        '{SCRIPTS}/npz2pre.py --chromosome {params.chr} '
+        '--start {params.start} --binsize {params.binsize} '
+        '{input} > {output} 2> {log}'
 
 
-rule plot_heatmap:
+rule juicerPre:
     input:
-        rules.average_matrices.output
+        tsv = rules.matrix2pre.output,
+        chrom_sizes = rules.getChromSizes.output
     output:
-        f'qc/{NAME}-summed.png'
-    params:
-        dpi = config['dpi'],
-        cmap = config['cmap'],
-        transform = config['transform'],
-        region = f'{START}-{END}',
-        vmin = config['vmin'],
-        vmax = config['vmax']
+        'matrices/{all}.hic'
     log:
-        'logs/plot_heatmap.log'
+        'logs/juicerPre/{all}.log'
+    params:
+        chr = CHR,
+        resolutions = config['bases_per_bead']
+    resources:
+         mem_mb = 16000
+    threads:
+        12
+    conda:
+        f'{ENVS}/openjdk.yaml'
+    shell:
+        'java -Xmx{resources.mem_mb}m '
+        '-jar {SCRIPTS}/juicer_tools_1.14.08.jar pre '
+        '-c {params.chr} -r {params.resolutions} '
+        '{input.tsv} {output} {input.chrom_sizes} &> {log}'
+
+
+rule createConfig:
+    input:
+        matrix = f'matrices/{NAME}-merged.h5',
+        ctcf_orientation = rules.scaleBed.output,
+        genes = config['genes']
+    output:
+        'matrices/configs.ini'
     conda:
         f'{ENVS}/python3.yaml'
+    params:
+        depth = int((END - START) / 2)
+    log:
+        'logs/createConfig.log'
     shell:
-        '{SCRIPTS}/plot_heatmap.py --heatmap {output} --dpi {params.dpi} '
-        '--vmin {params.vmin} --vmax {params.vmax} --region {params.region} '
-        '--transform {params.transform} --cmap {params.cmap} {input} &> {log}'
+        '{SCRIPTS}/generate_config.py --matrix {input.matrix} '
+        '--ctcf_orientation {input.ctcf_orientation} '
+        '--genes {input.genes} '
+        '--depth {params.depth} > {output} 2> {log}'
+
+
+rule plotHiC:
+    input:
+        rules.createConfig.output
+    output:
+        f'matrices/plots/{NAME}.png'
+    params:
+        region = f'{CHR}:{START}-{END}',
+        title = f'"{REGION} : {CHR}:{START}-{END}"',
+        dpi = 600
+    log:
+        'logs/plotHiC.log'
+    conda:
+        f'{ENVS}/pygenometracks.yaml'
+    shell:
+        'pyGenomeTracks --tracks {input} '
+        '--region {params.region} '
+        '--outFileName {output} '
+        '--title {params.title} '
+        '--dpi {params.dpi} &> {log}'
 
 
 rule mean_xyz:
@@ -571,3 +618,32 @@ rule create_gif:
     shell:
         'convert -delay {params.delay} -loop {params.loop} '
         '{input.images} {output} &> {log}'
+
+
+
+rule generate_random_polymer:
+    output:
+        f'polymer/poly.n{config["n_molecules"]}.dat'
+    params:
+        n_molecules = config['n_molecules'],
+        n_clusters = config['n_clusters'],
+        n_types = config['n_types'],
+        xlo = config['xlo'],
+        xhi = config['xhi'],
+        ylo = config['ylo'],
+        yhi = config['yhi'],
+        zlo = config['zlo'],
+        zhi = config['zhi'],
+    log:
+        'logs/generate_polymer.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/generate_polymer.py '
+        '--n_molecules {params.n_molecules} '
+        '--n_clusters {params.n_clusters} '
+        '--n_types {params.n_types} '
+        '--xlo {params.xlo} --xhi {params.xhi} '
+        '--ylo {params.ylo} --yhi {params.yhi} '
+        '--zlo {params.zlo} --zhi {params.zhi} '
+        '> {output} 2> {log}'
