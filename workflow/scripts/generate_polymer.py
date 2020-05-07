@@ -286,7 +286,7 @@ class lammps:
         for beadIdx in range(len(typeList) - 1):
             # Reverse down the list until reach forward CTCF
             for forwardBead in reversed(typeList[:beadIdx + 1]):
-                if forwardBead.startswith(('F', 'B')) or :
+                if forwardBead.startswith(('F', 'B')):
                     forwardTypeID = self.typeIDs[forwardBead]
                     break
             else:
