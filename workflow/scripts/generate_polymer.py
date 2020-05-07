@@ -114,7 +114,7 @@ class Sequence:
         with open(sequence) as f:
             for line in f:
                 type = line.strip()
-                if self._ctcf and type in ['F', 'R']:
+                if self._ctcf and type in ['F', 'R', 'B']:
                     type = f'{type}-{self._beadID}'
                 if type not in self.types:
                     self.types.append(type)
@@ -286,14 +286,14 @@ class lammps:
         for beadIdx in range(len(typeList) - 1):
             # Reverse down the list until reach forward CTCF
             for forwardBead in reversed(typeList[:beadIdx + 1]):
-                if forwardBead.startswith('F'):
+                if forwardBead.startswith(('F', 'B')) or :
                     forwardTypeID = self.typeIDs[forwardBead]
                     break
             else:
                 continue
             # Move up the list until reach reverse CTCF
             for reverseBead in typeList[beadIdx + 1:]:
-                if reverseBead.startswith('R'):
+                if reverseBead.startswith(('R', 'B')):
                     reverseTypeID = self.typeIDs[reverseBead]
                     break
             else:
