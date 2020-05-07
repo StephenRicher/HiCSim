@@ -339,7 +339,7 @@ rule BeadsToLammps:
         '--ylo {params.ylo} --yhi {params.yhi} '
         '--zlo {params.zlo} --zhi {params.zhi} '
         '--ctcf --ctcfOut {output.coeffs} '
-        '--ctcfCoeff 1.9,1.0,1.8 '
+        '--ctcfCoeff 4,1.0,1.8 '
         '{input} > {output.dat} 2> {log}'
 
 
