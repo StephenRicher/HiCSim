@@ -88,11 +88,11 @@ def main():
         help='Process beads labelled F and R as CTCF sites. Each bead is given '
         'a unique ID and convergent orientation pair coeffs are output.')
     track_subparser.add_argument(
-        '--ctcfCoeff', default='1.5,1.0,1.8',
-        help='Define pairing coefficient between convergent CTCF sites.')
+        '--pairCoeffs',
+        help='File of atom type coefficient pairings.')
     track_subparser.add_argument(
-        '--ctcfOut', default=None,
-        help='Outfile to write convergent ctcf pair_coeffs (default: stderr)')
+        '--coeffOut', default=None,
+        help='Outfile to write atom pair coefficients (default: stderr)')
     track_subparser.set_defaults(function=create_polymer)
 
     # Assert correct version - required for preserving dictionary insert order
@@ -217,7 +217,6 @@ class lammps:
             sys.stdout.write(f'{typeID} 1 # {type}\n')
         sys.stdout.write('\n')
 
-
     def writeBeads(self):
         sys.stdout.write('Atoms\n\n')
         self.writePolymers()
@@ -247,9 +246,9 @@ class lammps:
     def writeMonomers(self):
         for monomer in self.monomers:
             for beadID, type in monomer.items():
-                x = random.random()
-                y = random.random()
-                z = random.random()
+                x = random.uniform(self.box.x.lo, self.box.x.hi)
+                y = random.uniform(self.box.y.lo, self.box.y.hi)
+                z = random.uniform(self.box.z.lo, self.box.z.hi)
                 typeID = self.typeIDs[type]
                 sys.stdout.write(f'{beadID} 1 {typeID} {x} {y} {z} 0 0 0\n')
 
@@ -302,15 +301,28 @@ class lammps:
         return pairs
 
 
-    def writeConvergentCTCFs(self, coeff, f=sys.stderr):
+    def writeConvergentCTCFs(self, coeff, fh=sys.stderr):
         for sequence in self.sequences:
             for forward, rev in self.detectConvertCTCF(sequence):
-                f.write(f'pair_coeff {forward} {rev} {coeff}\n')
+                fh.write(f'pair_coeff {forward} {rev} {coeff}\n')
 
+
+    def writeCoeffs(self, type1, type2, coeff, fh=sys.stderr):
+        try:
+            type1ID = self.typeIDs[type1]
+            type2ID = self.typeIDs[type2]
+            # Ensure the smaller type_ID is written first
+            if type1ID > type2ID:
+                temp = type1ID
+                type1ID = type2ID
+                type2ID = temp
+            fh.write(f'pair_coeff {type1ID} {type2ID} {coeff}\n')
+        except KeyError:
+            pass
 
 
 def create_polymer(sequence, seed, bead_pair, monomers, ctcf,
-        ctcfCoeff, ctcfOut, xlo, xhi, ylo, yhi, zlo, zhi):
+        pairCoeffs, coeffOut, xlo, xhi, ylo, yhi, zlo, zhi):
 
     random.seed(seed)
     dat = lammps()
@@ -321,9 +333,19 @@ def create_polymer(sequence, seed, bead_pair, monomers, ctcf,
         type = monomer[1]
         dat.loadMonomer(type, nbeads)
     dat.writeLammps()
-    ctcfCoeff = ctcfCoeff.replace(',',' ')
-    with pct.open(ctcfOut, mode='w', stderr=True) as f:
-        dat.writeConvergentCTCFs(ctcfCoeff, f)
+    with pct.open(pairCoeffs) as f:
+        with pct.open(coeffOut, 'w') as out:
+            for line in f:
+                line = line.strip().split()
+                coeff = ' '.join(line[2:])
+                atom1 = line[0]
+                atom2 = line[1]
+                # IF F-R or R-C (CTCF interaction)
+                if sorted([atom1, atom2]) == ['F', 'R']:
+                    dat.writeConvergentCTCFs(coeff, fh=out)
+                else:
+                    dat.writeCoeffs(atom1, atom2, coeff, fh=out)
+
 
 def random_linear_polymer(
         n_molecules, n_types, n_clusters, seed, xlo, xhi, ylo, yhi, zlo, zhi):
