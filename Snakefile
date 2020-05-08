@@ -79,11 +79,17 @@ CHR = config['chr']
 START = config['start']
 END = config['end']
 
+
+
+# ADD TO CONFIG
+NMONOMERS = 200
+# Also see pairCoeffs in Beads2Lammps
+
+
 rule all:
     input:
         [f'vmd/{NAME}.gif', f'qc/{NAME}-summed.png',
          f'sequence/{BUILD}-{REGION}.dat',
-         f'genome/masked/{BUILD}-{REGION}-masked_all.fasta',
          f'matrices/plots/{NAME}.png',
          expand('matrices/{name}-{all}.{ext}',
             name=NAME, all=REPS+['merged'], ext=['h5', 'hic'])]
@@ -126,13 +132,42 @@ rule getChromSizes:
         'cut -f 1,2 {input} > {output} 2> {log}'
 
 
+rule extractChrom:
+    input:
+        fasta = rules.bgzipGenome.output,
+        index = rules.indexGenome.output
+    output:
+        f'genome/{BUILD}-{CHR}.fa'
+    params:
+        chrom = CHR
+    log:
+        'logs/extractChrom.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        'samtools faidx {input.fasta} {params.chrom} > {output} 2> {log}'
+
+
+rule indexChrom:
+    input:
+        rules.extractChrom.output
+    output:
+        multiext(f'{rules.extractChrom.output}', '.fai')
+    log:
+        'logs/indexChrom.log'
+    conda:
+        f'{ENVS}/samtools.yaml'
+    shell:
+        'samtools faidx {input}'
+
+
 if config['ctcf'] is not None:
 
 
     rule getOrientationCTCF:
         input:
-            genome = rules.bgzipGenome.output,
-            index = rules.indexGenome.output,
+            genome = rules.extractChrom.output,
+            index = rules.indexChrom.output,
             ctcf = lambda wc: config['ctcf'][int(wc.rep)]
         output:
             'tracks/CTCF-{rep}.bed'
@@ -230,10 +265,10 @@ if config['ctcf'] is not None:
 
 
 def maskFastaInput(wildcards):
+    input = rules.extractChrom.output
     if config['ctcf']:
-        return [f'genome/{BUILD}.fa.gz'] + rules.splitOrientation.output
-    else:
-        return [f'genome/{BUILD}.fa.gz']
+        input += rules.splitOrientation.output
+    return input
 
 
 def getMasking(wc):
@@ -251,7 +286,7 @@ rule maskFasta:
     input:
         maskFastaInput
     output:
-        temp(f'genome/masked/{BUILD}-{{rep}}-masked.fasta')
+        pipe(f'genome/masked/{BUILD}-{{rep}}-masked.fa')
     params:
         tmpdir = config['tmpdir'],
         masking = getMasking
@@ -263,15 +298,28 @@ rule maskFasta:
         f'{ENVS}/bedtools.yaml'
     shell:
         '{SCRIPTS}/maskFasta.py --tmp {params.tmpdir} '
-        '--genome <(zcat {input[0]}) {params.masking} '
+        '--genome {input[0]} {params.masking} '
         '> {output} 2> {log}'
 
-
-rule indexMasked:
+rule bgzipMasked:
     input:
         rules.maskFasta.output
     output:
-        f'{rules.maskFasta.output}.fai'
+        f'{rules.maskFasta.output}.gz'
+    group:
+        'mask'
+    log:
+        f'logs/bgzipMasked/{BUILD}-{{rep}}.log'
+    conda:
+        f'{ENVS}/tabix.yaml'
+    shell:
+        'bgzip -c {input} > {output} 2> {log}'
+
+rule indexMasked:
+    input:
+        rules.bgzipMasked.output
+    output:
+        multiext(f'{rules.bgzipMasked.output}', '.fai', '.gzi')
     group:
         'mask'
     log:
@@ -284,12 +332,12 @@ rule indexMasked:
 
 rule extractRegion:
     input:
-        fasta = rules.maskFasta.output,
+        fasta = rules.bgzipMasked.output,
         index = rules.indexMasked.output
     output:
-        f'genome/masked/{BUILD}-{REGION}-{{rep}}-masked.fasta'
+        pipe(f'genome/masked/{BUILD}-{REGION}-{{rep}}-masked.fa')
     group:
-        'mask'
+        'convert2Beads'
     params:
         region = f'{CHR}:{START}-{END}'
     log:
@@ -305,6 +353,8 @@ rule FastaToBeads:
         rules.extractRegion.output
     output:
         f'sequence/{BUILD}-{REGION}-{{rep}}-bead_sequence.txt'
+    group:
+        'convert2Beads'
     params:
         bases_per_bead = config['bases_per_bead']
     log:
@@ -321,8 +371,9 @@ rule BeadsToLammps:
         rules.FastaToBeads.output
     output:
         dat = f'sequence/{BUILD}-{REGION}-{{rep}}.dat',
-        coeffs = f'sequence/{BUILD}-{REGION}-{{rep}}-ctcf_coeffs.txt',
+        coeffs = f'sequence/{BUILD}-{REGION}-{{rep}}-coeffs.txt',
     params:
+        nmonomers = NMONOMERS,
         xlo = config['xlo'],
         xhi = config['xhi'],
         ylo = config['ylo'],
@@ -338,8 +389,9 @@ rule BeadsToLammps:
         '--xlo {params.xlo} --xhi {params.xhi} '
         '--ylo {params.ylo} --yhi {params.yhi} '
         '--zlo {params.zlo} --zhi {params.zhi} '
-        '--ctcf --ctcfOut {output.coeffs} '
-        '--ctcfCoeff 4,1.0,1.8 '
+        '--ctcf --coeffOut {output.coeffs} '
+        '--monomer {params.nmonomers},T '
+        '--pairCoeffs /home/stephen/phd/modelling/pipeline/config/pair_coeffs.txt '
         '{input} > {output.dat} 2> {log}'
 
 
@@ -396,9 +448,27 @@ rule lammps:
         lmp_cmd
 
 
-rule create_contact_matrix:
+rule filterMonomers:
     input:
         rules.lammps.output.proper_run
+    output:
+        f'matrices/XYZ/XYZ_{NAME}-{{rep}}-proper_run.xyz'
+    params:
+        nmonomers = NMONOMERS
+    group:
+        'lammps'
+    log:
+        'logs/filterMonomers-{rep}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/filterMonomersXYZ.py {input} {params.nmonomers} '
+        '> {output} 2> {log}'
+
+
+rule create_contact_matrix:
+    input:
+        rules.filterMonomers.output
     output:
         f'matrices/{NAME}-{{rep}}.npz'
     group:
