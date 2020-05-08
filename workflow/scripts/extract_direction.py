@@ -44,7 +44,7 @@ with open(file) as f:
             continue
 
         record = record.strip().split()
-        chr = record[0].strip('chr')
+        chr = record[0]
         start = int(record[1])
         end = int(record[2])
         coordinates = f'{chr}:{start}-{end}'
