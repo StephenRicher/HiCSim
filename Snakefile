@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import random
 import tempfile
 from set_config import set_config, read_paths
@@ -79,6 +80,13 @@ CHR = config['chr']
 START = config['start']
 END = config['end']
 
+## Replace file name to generate dictionary of modified BEDS
+squeezed_entries = []
+for index, entry in enumerate(config['masking']):
+    file = entry['file']
+    squeezed_file = f'genome/tracks/{index}-squeezed.bed'
+    squeezed_entries.append({'file' : squeezed_file,
+        'character' : entry['character']})
 
 
 # ADD TO CONFIG
@@ -212,9 +220,25 @@ if config['ctcf'] is not None:
             '-i {input} > {output} 2> {log}'
 
 
-    rule scaleBed:
+    rule squeezeCTCF:
         input:
             rules.mergeBed.output
+        output:
+            'tracks/CTCF-squeezed.bed'
+        params:
+            length = 20
+        log:
+            'logs/squeezeCTCF.log'
+        conda:
+            f'{ENVS}/python3.yaml'
+        shell:
+            '{SCRIPTS}/squeezeBed.py {params.length} {input} '
+            '> {output} 2> {log}'
+
+
+    rule scaleBed:
+        input:
+            rules.squeezeCTCF.output
         output:
             'tracks/CTCF.scaled.bed'
         group:
@@ -264,17 +288,26 @@ if config['ctcf'] is not None:
             '{input} &> {log}'
 
 
-def maskFastaInput(wildcards):
-    input = rules.extractChrom.output
-    if config['ctcf']:
-        input += rules.splitOrientation.output
-    return input
+rule squeezeBed:
+    input:
+        lambda wc: config['masking'][int(wc.rep)]['file']
+    output:
+        'genome/tracks/{rep}-squeezed.bed'
+    params:
+        length = 20
+    log:
+        'logs/squeezeBed/{rep}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/squeezeBed.py {params.length} {input} '
+        '> {output} 2> {log}'
 
 
 def getMasking(wc):
     """ Build masking command for maskFasta for track data """
     command = ''
-    for entry in config['masking']:
+    for entry in squeezed_entries:
         command += f'--bed {entry["file"]},{entry["character"]} '
     if config['ctcf']:
         command += (f'--bed tracks/filtered/split/CTCF-forward-{wc.rep}.bed,F '
@@ -284,7 +317,10 @@ def getMasking(wc):
 
 rule maskFasta:
     input:
-        maskFastaInput
+        expand('genome/tracks/{rep}-squeezed.bed',
+            rep = range(len(config['masking']))),
+        rules.splitOrientation.output,
+        genome = rules.extractChrom.output
     output:
         pipe(f'genome/masked/{BUILD}-{{rep}}-masked.fa')
     params:
@@ -298,7 +334,7 @@ rule maskFasta:
         f'{ENVS}/bedtools.yaml'
     shell:
         '{SCRIPTS}/maskFasta.py --tmp {params.tmpdir} '
-        '--genome {input[0]} {params.masking} '
+        '--genome {input.genome} {params.masking} '
         '> {output} 2> {log}'
 
 rule bgzipMasked:
