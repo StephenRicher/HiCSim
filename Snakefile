@@ -99,8 +99,8 @@ rule all:
         [f'vmd/{NAME}.gif', f'qc/{NAME}-summed.png',
          f'sequence/{BUILD}-{REGION}.dat',
          f'matrices/plots/{NAME}.png',
-         expand('matrices/{name}-{all}.{ext}',
-            name=NAME, all=REPS+['merged'], ext=['h5', 'hic'])]
+         #expand('matrices/{name}-{all}.{ext}', name=NAME, all=REPS+['merged'], ext=['h5', 'hic']),
+         expand('matrices/{name}-{all}.{ext}', name=NAME, all=REPS+['merged'], ext=['h5'])]
 
 
 rule bgzipGenome:
@@ -310,8 +310,8 @@ def getMasking(wc):
     for entry in squeezed_entries:
         command += f'--bed {entry["file"]},{entry["character"]} '
     if config['ctcf']:
-        command += (f'--bed tracks/filtered/split/CTCF-forward-{wc.rep}.bed,F '
-                    f'--bed tracks/filtered/split/CTCF-reverse-{wc.rep}.bed,R ')
+        command += (f'--bed tracks/split/CTCF-forward-{wc.rep}.bed,F '
+                    f'--bed tracks/split/CTCF-reverse-{wc.rep}.bed,R ')
     return command
 
 
@@ -319,7 +319,8 @@ rule maskFasta:
     input:
         expand('genome/tracks/{rep}-squeezed.bed',
             rep = range(len(config['masking']))),
-        rules.splitOrientation.output,
+        'tracks/split/CTCF-forward-{rep}.bed',
+        'tracks/split/CTCF-reverse-{rep}.bed',
         genome = rules.extractChrom.output
     output:
         pipe(f'genome/masked/{BUILD}-{{rep}}-masked.fa')
@@ -363,7 +364,7 @@ rule indexMasked:
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
-        'samtools faidx {input}'
+        'samtools faidx {input} &> {log}'
 
 
 rule extractRegion:
