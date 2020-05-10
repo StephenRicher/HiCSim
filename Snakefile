@@ -24,9 +24,7 @@ default_config = {
     'genome':         '',
     'build':          'genome',
     'ctcf':           None,
-    'masking':
-        [{'file':     ''         ,
-          'character': ''         ,}],
+    'masking':        {},
     'region':         '',
     'chr':            '',
     'start':          '',
@@ -81,14 +79,12 @@ START = config['start']
 END = config['end']
 
 ## Replace file name to generate dictionary of modified BEDS
-squeezed_entries = []
-for index, entry in enumerate(config['masking']):
-    file = entry['file']
-    squeezed_file = f'genome/tracks/{index}-squeezed.bed'
-    squeezed_entries.append({'file' : squeezed_file,
-        'character' : entry['character']})
-
-
+squeezed_bed = {}
+for file, character in config['masking'].items():
+    if file in squeezed_bed:
+        sys.exit(f'Duplicate file {file} in config["masking"].')
+    squeezed_file = f'tracks/squeezed/{os.path.basename(file)}'
+    squeezed_bed[squeezed_file] = {'source' : file, 'character' : character}
 # ADD TO CONFIG
 NMONOMERS = 200
 # Also see pairCoeffs in Beads2Lammps
@@ -96,9 +92,7 @@ NMONOMERS = 200
 
 rule all:
     input:
-        [f'vmd/{NAME}.gif', f'qc/{NAME}-summed.png',
-         f'sequence/{BUILD}-{REGION}.dat',
-         f'matrices/plots/{NAME}.png',
+        [f'vmd/{NAME}.gif', f'matrices/plots/{NAME}.png',
          #expand('matrices/{name}-{all}.{ext}', name=NAME, all=REPS+['merged'], ext=['h5', 'hic']),
          expand('matrices/{name}-{all}.{ext}', name=NAME, all=REPS+['merged'], ext=['h5'])]
 
@@ -290,13 +284,13 @@ if config['ctcf'] is not None:
 
 rule squeezeBed:
     input:
-        lambda wc: config['masking'][int(wc.rep)]['file']
+        lambda wc: squeezed_bed[wc.squeezed_bed]['source']
     output:
-        'genome/tracks/{rep}-squeezed.bed'
+        'tracks/squeezed/{squeezed_bed}'
     params:
         length = 20
     log:
-        'logs/squeezeBed/{rep}.log'
+        'logs/squeezeBed/{squeezed_bed}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -307,8 +301,9 @@ rule squeezeBed:
 def getMasking(wc):
     """ Build masking command for maskFasta for track data """
     command = ''
-    for entry in squeezed_entries:
-        command += f'--bed {entry["file"]},{entry["character"]} '
+    for bed in squeezed_bed:
+        character = squeezed_bed[bed]['character']
+        command += f'--bed {bed},{character} '
     if config['ctcf']:
         command += (f'--bed tracks/split/CTCF-forward-{wc.rep}.bed,F '
                     f'--bed tracks/split/CTCF-reverse-{wc.rep}.bed,R ')
@@ -317,10 +312,9 @@ def getMasking(wc):
 
 rule maskFasta:
     input:
-        expand('genome/tracks/{rep}-squeezed.bed',
-            rep = range(len(config['masking']))),
-        'tracks/split/CTCF-forward-{rep}.bed',
-        'tracks/split/CTCF-reverse-{rep}.bed',
+        expand('tracks/squeezed/{squeezed_bed}',
+            squeezed_bed = squeezed_bed.keys()),
+        rules.splitOrientation.output,
         genome = rules.extractChrom.output
     output:
         pipe(f'genome/masked/{BUILD}-{{rep}}-masked.fa')
