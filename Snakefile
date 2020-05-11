@@ -43,6 +43,8 @@ default_config = {
     'seed':           42,
     'n_types':        4,
     'n_clusters':     20,
+    'HiC':            {'matrix' : None,
+                       'log' :    True},
     'xlo':            -100,
     'xhi':            100,
     'ylo':            -100,
@@ -83,8 +85,9 @@ squeezed_bed = {}
 for file, character in config['masking'].items():
     if file in squeezed_bed:
         sys.exit(f'Duplicate file {file} in config["masking"].')
-    squeezed_file = f'tracks/squeezed/{os.path.basename(file)}'
+    squeezed_file = f'{os.path.basename(file)}'
     squeezed_bed[squeezed_file] = {'source' : file, 'character' : character}
+
 # ADD TO CONFIG
 NMONOMERS = 200
 # Also see pairCoeffs in Beads2Lammps
@@ -303,7 +306,7 @@ def getMasking(wc):
     command = ''
     for bed in squeezed_bed:
         character = squeezed_bed[bed]['character']
-        command += f'--bed {bed},{character} '
+        command += f'--bed tracks/squeezed/{bed},{character} '
     if config['ctcf']:
         command += (f'--bed tracks/split/CTCF-forward-{wc.rep}.bed,F '
                     f'--bed tracks/split/CTCF-reverse-{wc.rep}.bed,R ')
@@ -606,6 +609,16 @@ rule juicerPre:
         '{input.tsv} {output} {input.chrom_sizes} &> {log}'
 
 
+def getHiCconfig(wc):
+    """ Build config command for real HiC data """
+    command = ''
+    if config['HiC']['matrix']:
+        command += f'--flip --matrix2 {config["HiC"]["matrix"]} '
+    if config['HiC']['log']:
+        command += '--log_matrix2'
+    return command
+
+
 rule createConfig:
     input:
         matrix = f'matrices/{NAME}-merged.h5',
@@ -616,13 +629,14 @@ rule createConfig:
     conda:
         f'{ENVS}/python3.yaml'
     params:
-        depth = int((END - START) / 2)
+        depth = int((END - START) / 2),
+        hicConfig = getHiCconfig
     log:
         'logs/createConfig.log'
     shell:
         '{SCRIPTS}/generate_config.py --matrix {input.matrix} '
-        '--ctcf_orientation {input.ctcf_orientation} '
-        '--genes {input.genes} '
+        '--ctcf_orientation {input.ctcf_orientation} --log '
+        '--genes {input.genes} {params.hicConfig} '
         '--depth {params.depth} > {output} 2> {log}'
 
 
