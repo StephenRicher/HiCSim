@@ -3,34 +3,34 @@ workdir: /media/stephen/Data/modelling-ctcf
 tmpdir: /media/stephen/Data/modelling-ctcf
 cluster: False
 
-reps: 5
+reps: 25
 threads: 6
 bases_per_bead: 1000
-genome: /media/stephen/Data/genomes/GRCh38/Homo_sapiens.GRCh38.dna.primary_assembly.fa
+genome: /media/stephen/Data/genomes/hg19/Homo_sapiens.GRCh37.dna.primary_assembly.fa.gz
 
 ctcf :
-    - /media/stephen/Data/genomes/GRCh38/tracks/GM12878-CTCF-R1-hg38.bed
-    - /media/stephen/Data/genomes/GRCh38/tracks/GM12878-CTCF-R2-hg38.bed
-min_rep: 2
+    - /media/stephen/Data/genomes/hg19/tracks/GM12878-CTCF-hg19.bed
+genes : /media/stephen/Data/genomes/hg19/tracks/UCSC-genes-hg19.bed
 masking:
-    - character: 1
-      file: /media/stephen/Data/genomes/GRCh38/tracks/GM12878-H3K4m1-hg38.bed
-    - character: 3
-      file: /media/stephen/Data/genomes/GRCh38/tracks/GM12878-H3K4m3-hg38.bed
+    /media/stephen/Data/genomes/hg19/tracks/GM12878-H3K4m1-hg19.bed : 1
+    /media/stephen/Data/genomes/hg19/tracks/GM12878-H3K4m3-hg19.bed : 3
 
 region: GNG12_AS1
 chr: 1
 start: 65834316
 end: 70234314
 
-dpi: 1200
+HiC :
+    matrix : /media/stephen/Data/genomes/hg19/tracks/GSE63525_GM12878_insitu_primary+replicate_combined_10000-chr1.cool
+    log : True
 
-xlo: -500
-xhi: 500
-ylo: -500
-yhi: 500
-zlo: -500
-zhi: 500
+dpi: 1200
+xlo: -50
+xhi: 50
+ylo: -50
+yhi: 50
+zlo: -50
+zhi: 50
 
 # LAMMPS config (rule: lammps)
 timestep: 500
