@@ -25,6 +25,7 @@ end: 70234314
 HiC :
     matrix : /media/stephen/Data/genomes/hg19/tracks/GSE63525_GM12878_insitu_primary+replicate_combined_10000-chr1.cool
     log : True
+    binsize : 10000
 
 dpi: 1200
 xlo: -50

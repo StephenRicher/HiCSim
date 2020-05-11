@@ -44,6 +44,7 @@ default_config = {
     'n_types':        4,
     'n_clusters':     20,
     'HiC':            {'matrix' : None,
+                       'binsize': None,
                        'log' :    True},
     'xlo':            -100,
     'xhi':            100,
@@ -92,6 +93,15 @@ for file, character in config['masking'].items():
 # ADD TO CONFIG
 NMONOMERS = 200
 # Also see pairCoeffs in Beads2Lammps
+
+BINSIZE = int(config['HiC']['binsize'])
+if BINSIZE:
+    MERGEBINS, REMAINDER = divmod(BINSIZE, config['bases_per_bead'])
+    if REMAINDER:
+        sys.exit(f'Binsize {config["HiC"]["binsize"]} is not divisible by '
+            f'bases per bead {config["bases_per_bead"]}')
+else:
+    MERGEBINS = 1
 
 
 rule all:
@@ -568,6 +578,22 @@ rule homerToH5:
         '--inputFormat homer --outputFormat h5 &> {log}'
 
 
+rule mergeBins:
+    input:
+        rules.homerToH5.output
+    output:
+        f'matrices/merged/{{all}}-{BINSIZE}.h5'
+    params:
+        nbins = MERGEBINS
+    log:
+        'logs/mergeBins/{all}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'hicMergeMatrixBins --matrix {input} --numBins {params.nbins} '
+        '--outFileName {output} &> {log}'
+
+
 rule matrix2pre:
     input:
         'matrices/{all}.npz'
@@ -623,7 +649,7 @@ def getHiCconfig(wc):
 
 rule createConfig:
     input:
-        matrix = f'matrices/{NAME}-merged.h5',
+        matrix = f'matrices/merged/{NAME}-merged-{BINSIZE}.h5',
         ctcf_orientation = rules.scaleBed.output,
         genes = config['genes']
     output:
