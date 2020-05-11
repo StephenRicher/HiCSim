@@ -59,6 +59,7 @@ default_config = {
     'delay':          10,
     'loop':           0,
     'tmpdir':         tempfile.gettempdir(),
+    'coeffs':         ''
 }
 config = set_config(config, default_config)
 
@@ -408,6 +409,7 @@ rule BeadsToLammps:
         coeffs = f'sequence/{BUILD}-{REGION}-{{rep}}-coeffs.txt',
     params:
         nmonomers = NMONOMERS,
+        coeffs = config['coeffs'],
         xlo = config['xlo'],
         xhi = config['xhi'],
         ylo = config['ylo'],
@@ -425,7 +427,7 @@ rule BeadsToLammps:
         '--zlo {params.zlo} --zhi {params.zhi} '
         '--ctcf --coeffOut {output.coeffs} '
         '--monomer {params.nmonomers},T '
-        '--pairCoeffs /home/stephen/phd/modelling/pipeline/config/pair_coeffs.txt '
+        '--pairCoeffs {params.coeffs} '
         '{input} > {output.dat} 2> {log}'
 
 
