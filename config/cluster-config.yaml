@@ -16,7 +16,9 @@ generate_polymer:
   time : 10
 
 lammps:
-  time : 180
+  time : 360
+  ntasks : 16
+  cpus_per_task : 1
 
 create_contact_matrix:
   time : 240
