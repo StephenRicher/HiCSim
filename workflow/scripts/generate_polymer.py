@@ -6,6 +6,7 @@ import sys
 import math
 import random
 import argparse
+import numpy as np
 import pyCommonTools as pct
 from utilities import commaPair
 from collections import namedtuple
@@ -74,11 +75,6 @@ def main():
     track_subparser.add_argument(
         'sequence',)
     track_subparser.add_argument(
-        '--bead_pair', nargs='+',
-        metavar="KEY=VALUE", action=ParseDict,
-        help='Set bead pair interactions. e.g. For 2 beads of type \'I\''
-        'and \'J\' we may set the interaction using I-J=1.0,1.0,2.5' )
-    track_subparser.add_argument(
         '--monomers', metavar='NBEADS,TYPE', type=commaPair,
         action='append', default=[],
         help='Add NBEADS number of monomers of TYPE.'
@@ -93,6 +89,9 @@ def main():
     track_subparser.add_argument(
         '--coeffOut', default=None,
         help='Outfile to write atom pair coefficients (default: stderr)')
+    track_subparser.add_argument(
+        '--groupOut', default=None,
+        help='Outfile to write atom group ID assignments (default: stderr)')
     track_subparser.set_defaults(function=create_polymer)
 
     # Assert correct version - required for preserving dictionary insert order
@@ -102,10 +101,11 @@ def main():
 
 class Sequence:
 
-    def __init__(self, sequence, ctcf=False, beadID=1):
+    def __init__(self, sequence, name='DNA', ctcf=False, beadID=1):
         self._beadID = beadID
         # Should beads set as 'F' or 'R' be processed as CTCF?
         self._ctcf = ctcf
+        self.name = name
         self.load(sequence)
 
     def load(self, sequence):
@@ -149,7 +149,7 @@ class lammps:
         self.typeIDs = {}
 
     def loadSequence(self, sequence_file, ctcf):
-        sequence = Sequence(sequence_file, ctcf, self._beadID)
+        sequence = Sequence(sequence_file, ctcf=ctcf, beadID=self._beadID)
         self.sequences.append(sequence)
         self._beadID += sequence.nBeads
         for type in sequence.types:
@@ -225,6 +225,7 @@ class lammps:
 
     def writePolymers(self, r=1.1):
         for sequence in self.sequences:
+            angle = 0
             for i, (beadID, type) in enumerate(sequence.sequence.items()):
                 if i == 0:
                     x = random.random()
@@ -242,6 +243,26 @@ class lammps:
                 prev_y = y
                 prev_z = z
 
+    def writePolymers_new(self):
+        for sequence in self.sequences:
+            bases_per_bead = 5000
+            bases_per_turn = 200 * 3000
+            bases_per_loop = 50_000
+            beads_per_turn = bases_per_turn / bases_per_bead
+            beads_per_loop = bases_per_loop / bases_per_bead
+            loops_per_turn = beads_per_turn / beads_per_loop
+            total_bases = sequence.nBeads * bases_per_bead
+            n_turns = total_bases / bases_per_turn
+            k = 6
+            vx = 0.38
+            theta = np.linspace(0, n_turns * 2 * np.pi, sequence.nBeads)
+            x = 12 * (vx + (1 - vx) * (np.cos(k * theta))**2 * np.cos(theta))
+            y = 12 * (vx + (1 - vx) * (np.cos(k * theta))**2 * np.sin(theta))
+            z = theta / (2 * np.pi)
+
+            for i, (beadID, type) in enumerate(sequence.sequence.items()):
+                typeID = self.typeIDs[type]
+                sys.stdout.write(f'{beadID} 1 {typeID} {x[i]} {y[i]} {z[i]} 0 0 0\n')
 
     def writeMonomers(self):
         for monomer in self.monomers:
@@ -320,9 +341,21 @@ class lammps:
         except KeyError:
             pass
 
+    def writeGroup(self, fh=sys.stderr):
+        fh.write(
+            '####################################\n'
+            '########       GROUPS        #######\n'
+            '####################################\n')
+        for sequence in self.sequences:
+            firstBeadID = min(sequence.sequence)
+            lastBeadID = max(sequence.sequence)
+            name = sequence.name
+            fh.write(f'group {name} id {firstBeadID}:{lastBeadID}\n')
 
-def create_polymer(sequence, seed, bead_pair, monomers, ctcf,
-        pairCoeffs, coeffOut, xlo, xhi, ylo, yhi, zlo, zhi):
+
+
+def create_polymer(sequence, seed, monomers, ctcf,
+        pairCoeffs, coeffOut, groupOut, xlo, xhi, ylo, yhi, zlo, zhi):
 
     random.seed(seed)
     dat = lammps()
@@ -345,6 +378,8 @@ def create_polymer(sequence, seed, bead_pair, monomers, ctcf,
                     dat.writeConvergentCTCFs(coeff, fh=out)
                 else:
                     dat.writeCoeffs(atom1, atom2, coeff, fh=out)
+    with pct.open(groupOut, 'w') as out:
+        dat.writeGroup(fh=out)
 
 
 def random_linear_polymer(

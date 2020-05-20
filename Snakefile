@@ -18,7 +18,6 @@ if not config:
 # Defaults configuration file - use empty string to represent no default value.
 # Note does not currently correctly deal with special case config['masking'] in set_config
 default_config = {
-    'name' :          'clustered_copolymer',
     'cluster':        False,
     'workdir':        workflow.basedir,
     'genome':         '',
@@ -67,8 +66,6 @@ config = set_config(config, default_config)
 
 
 workdir : config['workdir']
-# Define global configuration variables
-NAME = config['name']
 # Define list of N reps from 1 to N
 REPS = list(range(1, config['reps'] + 1))
 # Define random seed for each rep
@@ -106,9 +103,9 @@ else:
 
 rule all:
     input:
-        [f'vmd/{NAME}.gif', f'matrices/plots/{NAME}.png',
+        [f'vmd/simulation.gif', 'plots/simulation.png',
          #expand('matrices/{name}-{all}.{ext}', name=NAME, all=REPS+['merged'], ext=['h5', 'hic']),
-         expand('matrices/{name}-{all}.{ext}', name=NAME, all=REPS+['merged'], ext=['h5'])]
+         expand('matrices/h5/{all}.h5', all=REPS+['merged'])]
 
 
 rule bgzipGenome:
@@ -417,6 +414,7 @@ rule BeadsToLammps:
     output:
         dat = f'sequence/{BUILD}-{REGION}-{{rep}}.dat',
         coeffs = f'sequence/{BUILD}-{REGION}-{{rep}}-coeffs.txt',
+        groups = f'sequence/{BUILD}-{REGION}-{{rep}}-groups.txt'
     params:
         nmonomers = NMONOMERS,
         coeffs = config['coeffs'],
@@ -436,6 +434,7 @@ rule BeadsToLammps:
         '--ylo {params.ylo} --yhi {params.yhi} '
         '--zlo {params.zlo} --zhi {params.zhi} '
         '--ctcf --coeffOut {output.coeffs} '
+        '--groupOut {output.groups} '
         '--monomer {params.nmonomers},T '
         '--pairCoeffs {params.coeffs} '
         '{input} > {output.dat} 2> {log}'
@@ -444,20 +443,23 @@ rule BeadsToLammps:
 rule addCTCF:
     input:
         script = f'{SCRIPTS}/run-ctcf.lam',
-        coeffs = rules.BeadsToLammps.output.coeffs
+        coeffs = rules.BeadsToLammps.output.coeffs,
+        groups = rules.BeadsToLammps.output.groups
     output:
         'lammps/script/run-ctcf-{rep}.lam'
     log:
         'logs/addCTCF/{rep}.log'
     shell:
         "sed '/^#CTCF_COEFF/ r {input.coeffs}' {input.script} "
-        "> {output} 2> {log}"
+        "| sed '/^#GROUPS/ r {input.groups}' > {output} 2> {log}"
 
 
 lmp_cmd = ('-var infile {input.data} '
-           '-var outdir {params.outdir} '
-           '-var name {NAME}-{wildcards.rep} '
-           '-var warm_up {params.warm_up} '
+           '-var radius_gyration {output.radius_gyration} '
+           '-var warm_up {output.warm_up} '
+           '-var warm_up_time {params.warm_up_time} '
+           '-var restart {params.restart} '
+           '-var sim {output.simulation} '
            '-var sim_time {params.sim_time} '
            '-var timestep {params.timestep} '
            '-var seed {params.seed} '
@@ -468,20 +470,21 @@ if config['cluster']:
 else:
     lmp_cmd = 'lmp_serial ' + lmp_cmd
 
-
 rule lammps:
     input:
         data = rules.BeadsToLammps.output.dat,
         script = rules.addCTCF.output
     output:
-        warm_up = f'lammps/XYZ_{NAME}-{{rep}}-warm_up.xyz',
-        proper_run = f'lammps/XYZ_{NAME}-{{rep}}-proper_run.xyz'
+        warm_up = 'lammps/{rep}/warm_up.xyz',
+        simulation = 'lammps/{rep}/simulation.xyz',
+        radius_gyration = 'lammps/{rep}/radius_of_gyration.txt',
+        restart = directory('lammps/{rep}/restart/')
     params:
-        outdir = directory(f'lammps'),
         timestep = config['timestep'],
-        warm_up = config['warm_up'],
+        warm_up_time = config['warm_up'],
         sim_time = config['sim_time'],
-        seed = lambda wildcards: SEEDS[REPS.index(int(wildcards.rep))]
+        restart = lambda wc: f'lammps/{wc.rep}/restart/Restart-',
+        seed = lambda wc: SEEDS[REPS.index(int(wc.rep))]
     group:
         'lammps'
     threads:
@@ -496,9 +499,9 @@ rule lammps:
 
 rule filterMonomers:
     input:
-        rules.lammps.output.proper_run
+        rules.lammps.output.simulation
     output:
-        f'matrices/XYZ/XYZ_{NAME}-{{rep}}-proper_run.xyz'
+        'lammps/{rep}/simulation-filtered.xyz'
     params:
         nmonomers = NMONOMERS
     group:
@@ -514,9 +517,9 @@ rule filterMonomers:
 
 rule create_contact_matrix:
     input:
-        rules.filterMonomers.output
+        rules.lammps.output.simulation
     output:
-        f'matrices/{NAME}-{{rep}}.npz'
+        'matrices/npz/{rep}.npz'
     group:
         'lammps'
     log:
@@ -529,9 +532,9 @@ rule create_contact_matrix:
 
 rule mergeReplicates:
     input:
-        expand('matrices/{name}-{rep}.npz', name=NAME, rep=REPS)
+        expand('matrices/npz/{rep}.npz', rep=REPS)
     output:
-        f'matrices/{NAME}-merged.npz'
+        'matrices/npz/merged.npz'
     params:
         method = config['method']
     log:
@@ -545,9 +548,9 @@ rule mergeReplicates:
 
 rule matrix2homer:
     input:
-        'matrices/{all}.npz'
+        'matrices/npz/{all}.npz'
     output:
-        'matrices/{all}.homer'
+        'matrices/homer/{all}.homer'
     params:
         chr = CHR,
         start = START,
@@ -566,7 +569,7 @@ rule homerToH5:
     input:
         rules.matrix2homer.output
     output:
-        'matrices/{all}.h5'
+        'matrices/h5/{all}.h5'
     log:
         'logs/homerToH5/{all}.log'
     conda:
@@ -582,9 +585,10 @@ rule mergeBins:
     input:
         rules.homerToH5.output
     output:
-        f'matrices/merged/{{all}}-{BINSIZE}.h5'
+        f'matrices/h5/merged/{{all}}-{BINSIZE}.h5'
     params:
-        nbins = MERGEBINS
+        #nbins = MERGEBINS
+        nbins = 1
     log:
         'logs/mergeBins/{all}.log'
     conda:
@@ -596,9 +600,9 @@ rule mergeBins:
 
 rule matrix2pre:
     input:
-        'matrices/{all}.npz'
+        'matrices/npz/{all}.npz'
     output:
-        'matrices/{all}.pre.tsv'
+        'matrices/pre/{all}.pre.tsv'
     params:
         chr = CHR,
         start = START,
@@ -618,7 +622,7 @@ rule juicerPre:
         tsv = rules.matrix2pre.output,
         chrom_sizes = rules.getChromSizes.output
     output:
-        'matrices/{all}.hic'
+        'matrices/hic/{all}.hic'
     log:
         'logs/juicerPre/{all}.log'
     params:
@@ -649,7 +653,7 @@ def getHiCconfig(wc):
 
 rule createConfig:
     input:
-        matrix = f'matrices/merged/{NAME}-merged-{BINSIZE}.h5',
+        matrix = f'matrices/merged/merged-{BINSIZE}.h5',
         ctcf_orientation = rules.scaleBed.output,
         genes = config['genes']
     output:
@@ -672,7 +676,7 @@ rule plotHiC:
     input:
         rules.createConfig.output
     output:
-        f'matrices/plots/{NAME}.png'
+        'plots/simulation.png'
     params:
         region = f'{CHR}:{START}-{END}',
         title = f'"{REGION} : {CHR}:{START}-{END}"',
@@ -691,9 +695,9 @@ rule plotHiC:
 
 rule mean_xyz:
     input:
-        expand('lammps/XYZ_{name}-{rep}.xyz', name=NAME, rep=REPS)
+        expand('lammps/{rep}/simulation.xyz', rep=REPS)
     output:
-        f'lammps/XYZ_{NAME}-mean.xyz'
+        f'lammps/mean.xyz'
     log:
         'logs/mean_xyz.log'
     conda:
@@ -704,9 +708,9 @@ rule mean_xyz:
 
 rule smooth_xyz:
     input:
-        f'lammps/XYZ_{NAME}-1-proper_run.xyz'
+        'lammps/1/simulation.xyz'
     output:
-        f'lammps/XYZ_{NAME}-smooth.xyz'
+        'lammps/1/simulation-smooth.xyz'
     params:
         window_size = config['window_size'],
         overlap = config['overlap']
@@ -750,7 +754,7 @@ rule create_gif:
         rules.vmd.output,
         images = aggregateVMD
     output:
-        f'vmd/{NAME}.gif'
+        f'vmd/simulation.gif'
     params:
         delay = config['delay'],
         loop = config['loop']

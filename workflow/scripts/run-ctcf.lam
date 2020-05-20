@@ -13,10 +13,7 @@ neigh_modify every 1 delay 1 check yes
 ############################
 ####    DEFINITIONS     ####
 ############################
-variable name index ${name}
-variable outdir index ${outdir}
-shell mkdir ${outdir}/
-restart 10000 ${outdir}/Restart.${name}.
+restart 10000 ${restart}
 
 ############################
 ####   READ DATA FILE ######
@@ -54,8 +51,8 @@ angle_coeff 1 10.0
 ######################################
 # INTEGRATION OF Equations of motion #
 ######################################
-fix 1 all   nve
-fix 2 all  langevin   1.0 1.0 1.0 ${seed} #2142
+fix 1 all nve
+fix 2 all langevin   1.0 1.0 1.0 ${seed} #2142
 
 ######################
 #### CUSTOM INFO #####
@@ -65,26 +62,28 @@ thermo_style   custom   step  temp  epair vol cpu
 timestep 0.01
 reset_timestep 0
 
+#GROUPS
+compute RG DNA gyration
+variable RG equal c_RG
+variable time equal -(${warm_up_time}+${timestep}-step)
+fix RG DNA print ${timestep} "${time} ${RG}" file ${radius_gyration}
+
 ####################################
 ####    DUMP POSITIONS OF ATOMS ####
 ####################################
-##DAT (best for postprocessing)
-# dump 1 all custom 100 ${outdir}/${name}.* id type x y z ix iy iz
-# dump_modify   1   format '%d %d %.5f %.5f %.5f %d %d %d'
-##XYZ (best for visualisation)
-#visualise this with VMD (Extension -> Tk console -> topo readvarxyz XYZ_..)
-dump 2 all xyz ${timestep} ${outdir}/XYZ_${name}-warm_up.xyz
-# dump_modify 2 element N R F
+dump 2 DNA xyz ${timestep} ${warm_up}
 
 ####################################
 ####    RUN -- EQUIL         #######
 ####################################
-run ${warm_up}
+run ${warm_up_time}
 
-unfix pushapart  ##STOP DISPLACING WITH SOFT
+unfix pushapart  # STOP DISPLACING WITH SOFT
+unfix RG
 undump 2 # Close warm_up dump
-dump 3 all xyz ${timestep} ${outdir}/XYZ_${name}-proper_run.xyz
-# dump_modify 3 element N R F
+dump 3 DNA xyz ${timestep} ${sim}
+fix RG DNA print ${timestep} "$(step) ${RG}" append ${radius_gyration}
+
 ######################################
 ####    LENNARD JONES INTERACTIONS ###
 ######################################
