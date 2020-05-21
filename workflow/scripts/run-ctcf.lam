@@ -13,7 +13,7 @@ neigh_modify every 1 delay 1 check yes
 ############################
 ####    DEFINITIONS     ####
 ############################
-restart ${restart_time} ${restart}-1 ${restart}-2
+restart ${restart_time} ${restart}
 
 ############################
 ####   READ DATA FILE ######
@@ -70,6 +70,7 @@ fix RG DNA print ${timestep} "${time} ${RG}" file ${radius_gyration}
 ####################################
 ####    DUMP POSITIONS OF ATOMS ####
 ####################################
+dump 1 all xyz ${timestep} ${complete} # XYZ fill with all atoms
 dump 2 DNA xyz ${timestep} ${warm_up}
 
 ####################################
