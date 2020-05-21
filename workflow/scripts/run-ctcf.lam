@@ -13,7 +13,7 @@ neigh_modify every 1 delay 1 check yes
 ############################
 ####    DEFINITIONS     ####
 ############################
-restart 10000 ${restart}
+restart ${restart_time} ${restart}-1 ${restart}-2
 
 ############################
 ####   READ DATA FILE ######
@@ -23,8 +23,7 @@ read_data ${infile}
 ############################
 ####   CREATE BOX    #######
 ############################
-# no need to create box or atoms
-# it is read in the data file
+# Already in data file
 
 ####################################
 ####    PAIR INTERACTIONS    #######

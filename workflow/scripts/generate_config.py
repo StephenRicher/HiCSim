@@ -152,8 +152,8 @@ def write_matrix(
         depth=1000000, vMin=None, vMax=None,
         invert=False, log=False):
 
-    if invert:
-        depth = int(depth / 2)
+    #if invert:
+    #    depth = int(depth / 2)
     config = ['[Matrix]',
               f'file = {matrix}',
               f'depth = {depth}',

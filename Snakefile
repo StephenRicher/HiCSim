@@ -5,6 +5,9 @@ import random
 import tempfile
 from set_config import set_config, read_paths
 
+wildcard_constraints:
+    all = r'[^\/]+',
+
 BASE = workflow.basedir
 
 # Define path to conda environment specifications
@@ -418,6 +421,8 @@ rule BeadsToLammps:
     params:
         nmonomers = NMONOMERS,
         coeffs = config['coeffs'],
+        basesPerBead = config['bases_per_bead'],
+        seed = lambda wc: SEEDS[REPS.index(int(wc.rep))],
         xlo = config['xlo'],
         xhi = config['xhi'],
         ylo = config['ylo'],
@@ -429,7 +434,7 @@ rule BeadsToLammps:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/generate_polymer.py model '
+        '{SCRIPTS}/generate_polymer.py model --seed {params.seed} '
         '--xlo {params.xlo} --xhi {params.xhi} '
         '--ylo {params.ylo} --yhi {params.yhi} '
         '--zlo {params.zlo} --zhi {params.zhi} '
@@ -437,6 +442,7 @@ rule BeadsToLammps:
         '--groupOut {output.groups} '
         '--monomer {params.nmonomers},T '
         '--pairCoeffs {params.coeffs} '
+        '--basesPerBead {params.basesPerBead} '
         '{input} > {output.dat} 2> {log}'
 
 
@@ -446,7 +452,7 @@ rule addCTCF:
         coeffs = rules.BeadsToLammps.output.coeffs,
         groups = rules.BeadsToLammps.output.groups
     output:
-        'lammps/script/run-ctcf-{rep}.lam'
+        'lammps/{rep}/run-ctcf-{rep}.lam'
     log:
         'logs/addCTCF/{rep}.log'
     shell:
@@ -459,6 +465,7 @@ lmp_cmd = ('-var infile {input.data} '
            '-var warm_up {output.warm_up} '
            '-var warm_up_time {params.warm_up_time} '
            '-var restart {params.restart} '
+           '-var restart_time {params.restart_time} '
            '-var sim {output.simulation} '
            '-var sim_time {params.sim_time} '
            '-var timestep {params.timestep} '
@@ -475,15 +482,16 @@ rule lammps:
         data = rules.BeadsToLammps.output.dat,
         script = rules.addCTCF.output
     output:
-        warm_up = 'lammps/{rep}/warm_up.xyz',
-        simulation = 'lammps/{rep}/simulation.xyz',
-        radius_gyration = 'lammps/{rep}/radius_of_gyration.txt',
-        restart = directory('lammps/{rep}/restart/')
+        warm_up = 'lammps/{rep}/warm_up-{rep}.xyz',
+        simulation = 'lammps/{rep}/simulation-{rep}.xyz',
+        radius_gyration = 'lammps/{rep}/radius_of_gyration-{rep}.txt',
+        #restart = directory('lammps/{rep}/restart/')
     params:
         timestep = config['timestep'],
         warm_up_time = config['warm_up'],
         sim_time = config['sim_time'],
-        restart = lambda wc: f'lammps/{wc.rep}/restart/Restart-',
+        restart_time = 0, # Use 0 for no restart file
+        restart = lambda wc: f'lammps/{wc.rep}/restart/Restart-{wc.rep}',
         seed = lambda wc: SEEDS[REPS.index(int(wc.rep))]
     group:
         'lammps'
@@ -501,7 +509,7 @@ rule filterMonomers:
     input:
         rules.lammps.output.simulation
     output:
-        'lammps/{rep}/simulation-filtered.xyz'
+        'lammps/{rep}/simulation-filtered-{rep}.xyz'
     params:
         nmonomers = NMONOMERS
     group:
@@ -587,8 +595,7 @@ rule mergeBins:
     output:
         f'matrices/h5/merged/{{all}}-{BINSIZE}.h5'
     params:
-        #nbins = MERGEBINS
-        nbins = 1
+        nbins = MERGEBINS
     log:
         'logs/mergeBins/{all}.log'
     conda:
@@ -653,7 +660,7 @@ def getHiCconfig(wc):
 
 rule createConfig:
     input:
-        matrix = f'matrices/merged/merged-{BINSIZE}.h5',
+        matrix = f'matrices/h5/merged/merged-{BINSIZE}.h5',
         ctcf_orientation = rules.scaleBed.output,
         genes = config['genes']
     output:
@@ -695,7 +702,7 @@ rule plotHiC:
 
 rule mean_xyz:
     input:
-        expand('lammps/{rep}/simulation.xyz', rep=REPS)
+        expand('lammps/{rep}/simulation-{rep}.xyz', rep=REPS)
     output:
         f'lammps/mean.xyz'
     log:
@@ -708,9 +715,9 @@ rule mean_xyz:
 
 rule smooth_xyz:
     input:
-        'lammps/1/simulation.xyz'
+        'lammps/1/simulation-1.xyz'
     output:
-        'lammps/1/simulation-smooth.xyz'
+        'lammps/1/simulation-smooth-1.xyz'
     params:
         window_size = config['window_size'],
         overlap = config['overlap']

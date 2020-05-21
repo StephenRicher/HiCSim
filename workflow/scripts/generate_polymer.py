@@ -92,6 +92,9 @@ def main():
     track_subparser.add_argument(
         '--groupOut', default=None,
         help='Outfile to write atom group ID assignments (default: stderr)')
+    track_subparser.add_argument(
+        '--basesPerBead', required=True, type=int,
+        help='Number of bases used to represent 1 bead.')
     track_subparser.set_defaults(function=create_polymer)
 
     # Assert correct version - required for preserving dictionary insert order
@@ -101,8 +104,10 @@ def main():
 
 class Sequence:
 
-    def __init__(self, sequence, name='DNA', ctcf=False, beadID=1):
+    def __init__(self, sequence, basesPerBead,
+            name='DNA', ctcf=False, beadID=1):
         self._beadID = beadID
+        self.basesPerBead = basesPerBead
         # Should beads set as 'F' or 'R' be processed as CTCF?
         self._ctcf = ctcf
         self.name = name
@@ -148,8 +153,9 @@ class lammps:
         self._typeID = 1
         self.typeIDs = {}
 
-    def loadSequence(self, sequence_file, ctcf):
-        sequence = Sequence(sequence_file, ctcf=ctcf, beadID=self._beadID)
+    def loadSequence(self, sequence_file, basesPerBead, ctcf):
+        sequence = Sequence(sequence_file, basesPerBead=basesPerBead,
+            ctcf=ctcf, beadID=self._beadID)
         self.sequences.append(sequence)
         self._beadID += sequence.nBeads
         for type in sequence.types:
@@ -223,7 +229,7 @@ class lammps:
         self.writeMonomers()
         sys.stdout.write('\n')
 
-    def writePolymers(self, r=1.1):
+    def writePolymers_old(self, r=1.1):
         for sequence in self.sequences:
             angle = 0
             for i, (beadID, type) in enumerate(sequence.sequence.items()):
@@ -243,17 +249,17 @@ class lammps:
                 prev_y = y
                 prev_z = z
 
-    def writePolymers_new(self):
+    def writePolymers(self):
         for sequence in self.sequences:
-            bases_per_bead = 5000
-            bases_per_turn = 200 * 3000
-            bases_per_loop = 50_000
-            beads_per_turn = bases_per_turn / bases_per_bead
-            beads_per_loop = bases_per_loop / bases_per_bead
-            loops_per_turn = beads_per_turn / beads_per_loop
-            total_bases = sequence.nBeads * bases_per_bead
-            n_turns = total_bases / bases_per_turn
-            k = 6
+            # Randomly select rosette length between 30kbp - 100kbp
+            rosette_length = random.randint(30,100) * 1000
+            beads_per_loop = rosette_length / sequence.basesPerBead
+            # Randomly select number of loops per turn between 4 and 12
+            loops_per_turn = random.randint(4,12)
+            beads_per_turn = beads_per_loop * loops_per_turn
+            n_turns = sequence.nBeads / beads_per_turn
+
+            k = loops_per_turn / 2
             vx = 0.38
             theta = np.linspace(0, n_turns * 2 * np.pi, sequence.nBeads)
             x = 12 * (vx + (1 - vx) * (np.cos(k * theta))**2 * np.cos(theta))
@@ -354,13 +360,13 @@ class lammps:
 
 
 
-def create_polymer(sequence, seed, monomers, ctcf,
+def create_polymer(sequence, seed, monomers, ctcf, basesPerBead,
         pairCoeffs, coeffOut, groupOut, xlo, xhi, ylo, yhi, zlo, zhi):
 
     random.seed(seed)
     dat = lammps()
     dat.loadBox(xlo, xhi, ylo, yhi, zlo, zhi)
-    dat.loadSequence(sequence, ctcf)
+    dat.loadSequence(sequence, basesPerBead, ctcf)
     for monomer in monomers:
         nbeads = int(monomer[0])
         type = monomer[1]
