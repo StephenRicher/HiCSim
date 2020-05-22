@@ -66,8 +66,6 @@ default_config = {
 }
 config = set_config(config, default_config)
 
-
-
 workdir : config['workdir']
 # Define list of N reps from 1 to N
 REPS = list(range(1, config['reps'] + 1))
@@ -480,9 +478,9 @@ rule lammps:
         data = rules.BeadsToLammps.output.dat,
         script = rules.addCTCF.output
     output:
-        warm_up = 'replicates/{rep}/lammps/warm_up-{rep}.xyz',
-        simulation = 'replicates/{rep}/lammps/simulation-{rep}.xyz',
-        complete = 'replicates/{rep}/lammps/complete-{rep}.xyz',
+        warm_up = 'replicates/{rep}/lammps/warm_up-{rep}.xyz.gz',
+        simulation = 'replicates/{rep}/lammps/simulation-{rep}.xyz.gz',
+        complete = 'replicates/{rep}/lammps/complete-{rep}.xyz.gz',
         radius_gyration = 'replicates/{rep}/lammps/radius_of_gyration-{rep}.txt',
         restart = directory('replicates/{rep}/lammps/restart/')
     params:
@@ -504,7 +502,6 @@ rule lammps:
         lmp_cmd
 
 
-
 rule create_contact_matrix:
     input:
         rules.lammps.output.simulation
@@ -517,7 +514,8 @@ rule create_contact_matrix:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/create_contact_matrix.py --outdata {output} {input} &> {log}'
+        '{SCRIPTS}/create_contact_matrix.py --outdata {output} '
+        '<(zcat {input}) &> {log}'
 
 
 rule mergeReplicates:
@@ -684,7 +682,7 @@ rule plotHiC:
 
 rule smooth_xyz:
     input:
-        'replicates/1/lammps/complete-1.xyz'
+        'replicates/1/lammps/complete-1.xyz.gz'
     output:
         'replicates/1/lammps/complete-smooth-1.xyz'
     params:
@@ -698,7 +696,7 @@ rule smooth_xyz:
         '{SCRIPTS}/smooth_xyz.py '
         '--size {params.window_size} '
         '--overlap {params.overlap} '
-        '{input} > {output} 2> {log}'
+        '<(zcat {input}) > {output} 2> {log}'
 
 
 checkpoint vmd:
