@@ -28,7 +28,6 @@ def main():
 
 
 def filterXYZ(xyz, nMonomers):
-    nMonomers = 200
     with open(xyz) as fh:
         for line in fh:
             line = line.strip()
