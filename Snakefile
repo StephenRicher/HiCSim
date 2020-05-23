@@ -104,7 +104,8 @@ else:
 
 rule all:
     input:
-        [f'vmd/simulation.gif', 'merged/simulation.png']
+        [expand('{region}/vmd/simulation.gif', region=REGION),
+         expand('{region}/merged/simulation.png', region=REGION)]
 
 
 rule bgzipGenome:
@@ -126,7 +127,7 @@ rule indexGenome:
     output:
         multiext(f'{rules.bgzipGenome.output}', '.fai', '.gzi')
     log:
-        'logs/indexGenome.log'
+        f'logs/indexGenome/{BUILD}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -137,51 +138,22 @@ rule getChromSizes:
     input:
         rules.indexGenome.output
     output:
-        f'genome/chrom_sizes/{BUILD}.chrom.sizes'
+        f'genome/{BUILD}-chrom.sizes'
     log:
         f'logs/getChromSizes/{BUILD}.log'
     shell:
         'cut -f 1,2 {input} > {output} 2> {log}'
 
 
-rule extractChrom:
-    input:
-        fasta = rules.bgzipGenome.output,
-        index = rules.indexGenome.output
-    output:
-        f'genome/{BUILD}-{CHR}.fa'
-    params:
-        chrom = CHR
-    log:
-        'logs/extractChrom.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    shell:
-        'samtools faidx {input.fasta} {params.chrom} > {output} 2> {log}'
-
-
-rule indexChrom:
-    input:
-        rules.extractChrom.output
-    output:
-        multiext(f'{rules.extractChrom.output}', '.fai')
-    log:
-        'logs/indexChrom.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    shell:
-        'samtools faidx {input}'
-
-
 if config['ctcf'] is not None:
 
     rule getOrientationCTCF:
         input:
-            genome = rules.extractChrom.output,
-            index = rules.indexChrom.output,
+            genome = rules.bgzipGenome.output,
+            index = rules.indexGenome.output,
             ctcf = lambda wc: config['ctcf'][int(wc.rep)]
         output:
-            'tracks/CTCF-{rep}.bed'
+            'genome/tracks/CTCF-{rep}.bed'
         log:
             'logs/getOrientationCTCF/{rep}.log'
         conda:
@@ -193,10 +165,10 @@ if config['ctcf'] is not None:
 
     rule sortBed:
         input:
-            expand('tracks/CTCF-{rep}.bed',
+            expand('genome/tracks/CTCF-{rep}.bed',
                 rep = range(0, len(config['ctcf'])))
         output:
-            'tracks/CTCF.sort.bed'
+            'genome/tracks/CTCF.sort.bed'
         group:
             'bedtools'
         log:
@@ -211,7 +183,7 @@ if config['ctcf'] is not None:
         input:
             rules.sortBed.output
         output:
-            'tracks/CTCF.merged.bed'
+            'genome/tracks/CTCF.merged.bed'
         group:
             'bedtools'
         log:
@@ -227,7 +199,7 @@ if config['ctcf'] is not None:
         input:
             rules.mergeBed.output
         output:
-            'tracks/CTCF-squeezed.bed'
+            'genome/tracks/CTCF-squeezed.bed'
         params:
             length = 20
         log:
@@ -243,7 +215,7 @@ if config['ctcf'] is not None:
         input:
             rules.squeezeCTCF.output
         output:
-            'tracks/CTCF.scaled.bed'
+            'genome/tracks/CTCF.scaled.bed'
         group:
             'bedtools'
         log:
@@ -258,7 +230,7 @@ if config['ctcf'] is not None:
         input:
             rules.scaleBed.output
         output:
-            'replicates/{rep}/tracks/CTCF-sampled-{rep}.bed'
+            'genome/replicates/{rep}/tracks/CTCF-sampled-{rep}.bed'
         params:
             rep = REPS,
             seed = lambda wildcards: SEEDS[REPS.index(int(wildcards.rep))]
@@ -275,8 +247,8 @@ if config['ctcf'] is not None:
         input:
             rules.filterBedScore.output
         output:
-            forward = 'replicates/{rep}/tracks/CTCF-forward-{rep}.bed',
-            reverse = 'replicates/{rep}/tracks/CTCF-reverse-{rep}.bed'
+            forward = 'genome/replicates/{rep}/tracks/CTCF-forward-{rep}.bed',
+            reverse = 'genome/replicates/{rep}/tracks/CTCF-reverse-{rep}.bed'
         params:
             min_rep = config['min_rep']
         group:
@@ -295,7 +267,7 @@ rule squeezeBed:
     input:
         lambda wc: squeezed_bed[wc.squeezed_bed]['source']
     output:
-        'tracks/squeezed/{squeezed_bed}'
+        'genome/tracks/{squeezed_bed}'
     params:
         length = 20
     log:
@@ -307,38 +279,71 @@ rule squeezeBed:
         '> {output} 2> {log}'
 
 
-def getMasking(wc):
-    """ Build masking command for maskFasta for track data """
+rule maskGenome:
+    input:
+        rules.bgzipGenome.output
+    output:
+        f'genome/masked/{BUILD}-masked.fa.gz'
+    log:
+        f'logs/maskGenome/{BUILD}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/maskGenome.py <(zcat {input}) | gzip > {output} 2> {log}'
+
+
+def getCommonMasking(wc):
+    """ Build masking command for maskCommonFasta for track data """
     command = ''
     for bed in squeezed_bed:
         character = squeezed_bed[bed]['character']
-        command += f'--bed tracks/squeezed/{bed},{character} '
+        command += f'--bed genome/tracks/{bed},{character} '
+    return command
+
+
+rule maskCommonFasta:
+    input:
+        expand('genome/tracks/{squeezed_bed}',
+            squeezed_bed = squeezed_bed.keys()),
+        genome = rules.maskGenome.output
+    output:
+        f'genome/masked/{BUILD}-masked-common.fa.gz'
+    params:
+        masking = getCommonMasking
+    log:
+        f'logs/maskCommonFasta/{BUILD}.log'
+    conda:
+        f'{ENVS}/bedtools.yaml'
+    shell:
+        'zcat {input.genome} | {SCRIPTS}/maskFasta.py {params.masking} '
+        '| gzip > {output} 2> {log}'
+
+
+def getMasking(wc):
+    """ Build masking command for maskFasta for track data """
+    command = ''
     if config['ctcf']:
-        command += (f'--bed replicates/{wc.rep}/tracks/CTCF-forward-{wc.rep}.bed,F '
-                    f'--bed replicates/{wc.rep}/tracks/CTCF-reverse-{wc.rep}.bed,R ')
+        command += (f'--bed genome/replicates/{wc.rep}/tracks/CTCF-forward-{wc.rep}.bed,F '
+                    f'--bed genome/replicates/{wc.rep}/tracks/CTCF-reverse-{wc.rep}.bed,R ')
     return command
 
 
 rule maskFasta:
     input:
-        expand('tracks/squeezed/{squeezed_bed}',
-            squeezed_bed = squeezed_bed.keys()),
         rules.splitOrientation.output,
-        genome = rules.extractChrom.output
+        genome = rules.maskCommonFasta.output
     output:
-        pipe(f'replicates/{{rep}}/genome/{BUILD}-masked-{{rep}}.fa')
+        pipe(f'genome/replicates/{{rep}}/sequence/{BUILD}-masked.fa')
     params:
-        tmpdir = config['tmpdir'],
         masking = getMasking
     group:
         'mask'
     log:
-        'logs/maskFasta/{rep}.log'
+        f'logs/maskFasta/{BUILD}-{{rep}}.log'
     conda:
         f'{ENVS}/bedtools.yaml'
     shell:
-        '{SCRIPTS}/maskFasta.py --tmp {params.tmpdir} '
-        '--genome {input.genome} {params.masking} '
+        'zcat {input.genome} | {SCRIPTS}/maskFasta.py {params.masking} '
         '> {output} 2> {log}'
 
 rule bgzipMasked:
@@ -363,7 +368,7 @@ rule indexMasked:
     group:
         'mask'
     log:
-        'logs/indexMasked/{rep}.log'
+        f'logs/indexMasked/{BUILD}-{{rep}}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -375,13 +380,13 @@ rule extractRegion:
         fasta = rules.bgzipMasked.output,
         index = rules.indexMasked.output
     output:
-        pipe(f'replicates/{{rep}}/genome/{BUILD}-{REGION}-masked-{{rep}}.fa')
+        pipe('{region}/replicates/{rep}/genome/{region}-masked-{rep}.fa')
     group:
         'convert2Beads'
     params:
         region = f'{CHR}:{START}-{END}'
     log:
-        f'logs/extractRegion/{BUILD}-{REGION}-{{rep}}.log'
+        'logs/extractRegion/{region}-{rep}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
@@ -392,13 +397,13 @@ rule FastaToBeads:
     input:
         rules.extractRegion.output
     output:
-        f'replicates/{{rep}}/sequence/{BUILD}-{REGION}-beads-{{rep}}.txt'
+        '{region}/replicates/{rep}/sequence/{region}-beads-{rep}.txt'
     group:
         'convert2Beads'
     params:
         bases_per_bead = config['bases_per_bead']
     log:
-        'logs/sequenceToBeads/{rep}.log'
+        'logs/sequenceToBeads/{region}-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -410,9 +415,9 @@ rule BeadsToLammps:
     input:
         rules.FastaToBeads.output
     output:
-        dat = f'replicates/{{rep}}/lammps/config/{BUILD}-{REGION}-{{rep}}.dat',
-        coeffs = f'replicates/{{rep}}/lammps/config/{BUILD}-{REGION}-{{rep}}-coeffs.txt',
-        groups = f'replicates/{{rep}}/lammps/config/{BUILD}-{REGION}-{{rep}}-groups.txt'
+        dat = '{region}/replicates/{rep}/lammps/config/lammps_input.dat',
+        coeffs = '{region}/replicates/{rep}/lammps/config/coeffs.txt',
+        groups = '{region}/replicates/{rep}/lammps/config/groups.txt'
     params:
         nmonomers = NMONOMERS,
         coeffs = config['coeffs'],
@@ -425,7 +430,7 @@ rule BeadsToLammps:
         zlo = config['zlo'],
         zhi = config['zhi']
     log:
-        f'logs/{BUILD}-{REGION}-{{rep}}-sequence_to_lammps.log'
+        'logs/BeadsToLammps/{region}-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -447,9 +452,9 @@ rule addCTCF:
         coeffs = rules.BeadsToLammps.output.coeffs,
         groups = rules.BeadsToLammps.output.groups
     output:
-        'replicates/{rep}/lammps/config/run-ctcf-{rep}.lam'
+        '{region}/replicates/{rep}/lammps/config/run-ctcf.lam'
     log:
-        'logs/addCTCF/{rep}.log'
+        'logs/addCTCF/{region}-{rep}.log'
     shell:
         "sed '/^#CTCF_COEFF/ r {input.coeffs}' {input.script} "
         "| sed '/^#GROUPS/ r {input.groups}' > {output} 2> {log}"
@@ -478,24 +483,24 @@ rule lammps:
         data = rules.BeadsToLammps.output.dat,
         script = rules.addCTCF.output
     output:
-        warm_up = 'replicates/{rep}/lammps/warm_up-{rep}.xyz.gz',
-        simulation = 'replicates/{rep}/lammps/simulation-{rep}.xyz.gz',
-        complete = 'replicates/{rep}/lammps/complete-{rep}.xyz.gz',
-        radius_gyration = 'replicates/{rep}/lammps/radius_of_gyration-{rep}.txt',
-        restart = directory('replicates/{rep}/lammps/restart/')
+        warm_up = '{region}/replicates/{rep}/lammps/warm_up.xyz.gz',
+        simulation = '{region}/replicates/{rep}/lammps/simulation.xyz.gz',
+        complete = '{region}/replicates/{rep}/lammps/complete.xyz.gz',
+        radius_gyration = '{region}/replicates/{rep}/lammps/radius_of_gyration.txt',
+        restart = directory('{region}/replicates/{rep}/lammps/restart/')
     params:
         timestep = config['timestep'],
         warm_up_time = config['warm_up'],
         sim_time = config['sim_time'],
         restart_time = int(config['timestep']) * 100, # Use 0 for no restart file
-        restart = lambda wc: f'replicates/{wc.rep}/lammps/restart/Restart-{wc.rep}',
+        restart = lambda wc: f'{wc.region}/replicates/{wc.rep}/lammps/restart/Restart',
         seed = lambda wc: SEEDS[REPS.index(int(wc.rep))]
     group:
         'lammps'
     threads:
         config['threads'] if config['cluster'] else 1
     log:
-        'logs/lammps-{rep}.log'
+        'logs/lammps/{region}-{rep}.log'
     conda:
         f'{ENVS}/lammps.yaml'
     shell:
@@ -506,11 +511,11 @@ rule create_contact_matrix:
     input:
         rules.lammps.output.simulation
     output:
-        'replicates/{rep}/matrices/{rep}.npz'
+        '{region}/replicates/{rep}/matrices/contacts.npz'
     group:
         'lammps'
     log:
-        'logs/contact_frequency-{rep}.log'
+        'logs/create_contact_matrix/{region}-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -520,13 +525,13 @@ rule create_contact_matrix:
 
 rule mergeReplicates:
     input:
-        expand('replicates/{rep}/matrices/{rep}.npz', rep=REPS)
+        expand('{{region}}/replicates/{rep}/matrices/contacts.npz', rep=REPS)
     output:
-        'merged/merged.npz'
+        '{region}/merged/contacts.npz'
     params:
         method = config['method']
     log:
-        'logs/mergeReplicates.log'
+        'logs/mergeReplicates/{region}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -538,13 +543,13 @@ rule matrix2homer:
     input:
         rules.mergeReplicates.output
     output:
-        'merged/merged.homer'
+        '{region}/merged/contacts.homer'
     params:
         chr = CHR,
         start = START,
         binsize = config['bases_per_bead']
     log:
-        'logs/matrix2homer.log'
+        'logs/matrix2homer/{region}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -557,9 +562,9 @@ rule homer2H5:
     input:
         rules.matrix2homer.output
     output:
-        'merged/merged.h5'
+        '{region}/merged/contacts.h5'
     log:
-        'logs/homer2H5.log'
+        'logs/homer2H5/{region}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     threads:
@@ -573,11 +578,11 @@ rule mergeBins:
     input:
         rules.homer2H5.output
     output:
-        f'merged/merged-{BINSIZE}.h5'
+        f'{{region}}/merged/contacts-{BINSIZE}.h5'
     params:
         nbins = MERGEBINS
     log:
-        'logs/mergeBins.log'
+        'logs/mergeBins/{region}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -589,13 +594,13 @@ rule matrix2pre:
     input:
         rules.mergeReplicates.output
     output:
-        'merged/merged.pre.tsv'
+        '{region}/merged/contacts.pre.tsv'
     params:
         chr = CHR,
         start = START,
         binsize = config['bases_per_bead']
     log:
-        'logs/matrix2pre.log'
+        'logs/matrix2pre/{region}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -609,9 +614,9 @@ rule juicerPre:
         tsv = rules.matrix2pre.output,
         chrom_sizes = rules.getChromSizes.output
     output:
-        'merged/merged.hic'
+        '{region}/merged/contacts.hic'
     log:
-        'logs/juicerPre.log'
+        'logs/juicerPre/{region}.log'
     params:
         chr = CHR,
         resolutions = '500,1000,1500'
@@ -644,14 +649,14 @@ rule createConfig:
         ctcf_orientation = rules.scaleBed.output,
         genes = config['genes']
     output:
-        'merged/configs.ini'
+        '{region}/merged/configs.ini'
     conda:
         f'{ENVS}/python3.yaml'
     params:
         depth = int((END - START) / 2),
         hicConfig = getHiCconfig
     log:
-        'logs/createConfig.log'
+        'logs/createConfig/{region}.log'
     shell:
         '{SCRIPTS}/generate_config.py --matrix {input.matrix} '
         '--ctcf_orientation {input.ctcf_orientation} --log '
@@ -663,13 +668,13 @@ rule plotHiC:
     input:
         rules.createConfig.output
     output:
-        'merged/simulation.png'
+        '{region}/merged/simulation.png'
     params:
         region = f'{CHR}:{START}-{END}',
         title = f'"{REGION} : {CHR}:{START}-{END}"',
         dpi = 600
     log:
-        'logs/plotHiC.log'
+        'logs/plotHiC/{region}.log'
     conda:
         f'{ENVS}/pygenometracks.yaml'
     shell:
@@ -682,14 +687,14 @@ rule plotHiC:
 
 rule smooth_xyz:
     input:
-        'replicates/1/lammps/complete-1.xyz.gz'
+        '{region}/replicates/1/lammps/complete.xyz.gz'
     output:
-        'replicates/1/lammps/complete-smooth-1.xyz'
+        '{region}/replicates/1/lammps/complete-smooth.xyz'
     params:
         window_size = config['window_size'],
         overlap = config['overlap']
     log:
-        'logs/smooth_xyz.log'
+        'logs/smooth_xyz/{region}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -703,9 +708,9 @@ checkpoint vmd:
     input:
         rules.smooth_xyz.output
     output:
-        directory(f'vmd/sequence')
+        directory('{region}/vmd/sequence')
     log:
-        'logs/vmd.log'
+        'logs/vmd/{region}.log'
     conda:
         f'{ENVS}/vmd.yaml'
     shell:
@@ -728,12 +733,12 @@ rule create_gif:
         rules.vmd.output,
         images = aggregateVMD
     output:
-        f'vmd/simulation.gif'
+        '{region}/vmd/simulation.gif'
     params:
         delay = config['delay'],
         loop = config['loop']
     log:
-        'logs/create_gif.log'
+        'logs/create_gif/{region}.log'
     conda:
         f'{ENVS}/imagemagick.yaml'
     shell:
