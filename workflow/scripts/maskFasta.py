@@ -4,7 +4,6 @@
 
 import os
 import sys
-import tempfile
 import argparse
 import pyCommonTools as pct
 from utilities import commaPair
@@ -20,43 +19,45 @@ def main():
     parser = pct.make_parser(verbose=True, version=__version__,)
     parser.set_defaults(function=mask)
     parser.add_argument(
-        '--genome', metavar='FASTA', required=True,
-        help='Input genome to perform masking.')
+        'fasta', metavar='FASTA', nargs='?', default='/dev/stdin',
+        help='Input fasta to perform masking.')
     parser.add_argument(
-        '--bed', metavar='BED,CHAR', type=commaPair,
-        action='append', required=True,
+        '--bed', metavar='BED,CHAR', default=None,
+        type=commaPair, action='append',
         help='BED file of regions to mask, paired with masking character.'
         'Call multiple times to add more files.')
-    parser.add_argument(
-        '--tmp', default=tempfile.gettempdir(),
-        help='Set temp directory (default: %(default)s)')
 
     return (pct.execute(parser))
 
 
-def mask(genome, bed, tmp):
+def mask(fasta, bed):
     log = pct.create_logger()
 
-    tempfile.tempdir = tmp
-    if duplicateMask(bed): sys.exit(1)
+    if not bed:
+        catFile(fasta)
+    elif duplicateMask(bed):
+        sys.exit(1)
+    else:
+        processes = []
+        for i, (file, char) in enumerate(bed):
+            input = fasta if i == 0 else '/dev/stdin'
+            cmd = ['bedtools', 'maskfasta', '-bed', file, '-mc', char,
+                   '-fi', input, '-fo', '/dev/stdout']
+            stdin = None if i == 0 else processes[-1].stdout
+            stdout = None if i == len(bed) - 1 else PIPE
+            processes.append(Popen(cmd, stdin=stdin, stdout=stdout))
 
-    allMasked = maskAllBases(genome)
-    processes = []
-    for i, (file, char) in enumerate(bed):
-        input = allMasked if i == 0 else '/dev/stdin'
-        cmd = ['bedtools', 'maskfasta', '-bed', file, '-mc', char,
-               '-fi', input, '-fo', '/dev/stdout']
-        stdin = None if i == 0 else processes[-1].stdout
-        stdout = None if i == len(bed) - 1 else PIPE
-        processes.append(Popen(cmd, stdin=stdin, stdout=stdout))
+        for i, process in enumerate(processes):
+            if i == len(processes) - 1:
+                process.wait()
+            else:
+                process.stdout.close()
 
-    for i, process in enumerate(processes):
-        if i == len(processes) - 1:
-            process.wait()
-        else:
-            process.stdout.close()
 
-    os.remove(allMasked)
+def catFile(file):
+    with pct.open(file) as fh:
+        for line in fh:
+            sys.stdout.write(line)
 
 
 def duplicateMask(bed):
@@ -75,25 +76,6 @@ def duplicateMask(bed):
     else:
         return False
     return True
-
-
-def maskAllBases(genome):
-    """ Replace all bases in genome sequence with N. """
-
-    with ExitStack() as stack:
-        genome = stack.enter_context(open(genome))
-        masked = stack.enter_context(
-            tempfile.NamedTemporaryFile(mode='wt', delete=False))
-        for line in genome:
-            if line.startswith('>'):
-                masked.write(line)
-            else:
-                masked.write(f'{"N"*len(line.strip())}\n')
-    return masked.name
-
-
-
-
 
 
 if __name__ == '__main__':
