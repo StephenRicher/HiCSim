@@ -512,6 +512,8 @@ rule create_contact_matrix:
         rules.lammps.output.simulation
     output:
         '{region}/replicates/{rep}/matrices/contacts.npz'
+    params:
+        distance = 3
     group:
         'lammps'
     log:
@@ -519,7 +521,8 @@ rule create_contact_matrix:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/create_contact_matrix.py --outdata {output} '
+        '{SCRIPTS}/create_contact_matrix.py '
+        '--outdata {output} --distance {params.distance} '
         '<(zcat {input}) &> {log}'
 
 
@@ -654,12 +657,14 @@ rule createConfig:
         f'{ENVS}/python3.yaml'
     params:
         depth = int((END - START) / 2),
-        hicConfig = getHiCconfig
+        hicConfig = getHiCconfig,
+        colourMap = 'Purples'
     log:
         'logs/createConfig/{region}.log'
     shell:
         '{SCRIPTS}/generate_config.py --matrix {input.matrix} '
         '--ctcf_orientation {input.ctcf_orientation} --log '
+        '--colourmap {params.colourMap} '
         '--genes {input.genes} {params.hicConfig} '
         '--depth {params.depth} > {output} 2> {log}'
 
