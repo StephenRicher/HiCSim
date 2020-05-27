@@ -395,6 +395,7 @@ lmp_cmd = ('-var infile {input.data} '
            '-var sim_time {params.sim_time} '
            '-var complete {output.complete} '
            '-var timestep {params.timestep} '
+           '-var cosine_potential {params.cosine_potential} '
            '-var seed {params.seed} '
            '-in {input.script} '
            '-log /dev/null &> {log}')
@@ -418,6 +419,7 @@ rule lammps:
         warm_up_time = config['warm_up'],
         sim_time = config['sim_time'],
         restart_time = int(config['timestep']) * 100, # Use 0 for no restart file
+        cosine_potential = lambda wc: 10000 / config['bases_per_bead'],
         restart = lambda wc: f'{wc.region}/replicates/{wc.rep}/lammps/restart/Restart',
         seed = lambda wc: SEEDS[REPS.index(int(wc.rep))]
     group:
