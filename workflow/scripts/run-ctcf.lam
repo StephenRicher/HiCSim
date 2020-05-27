@@ -25,27 +25,27 @@ read_data ${infile}
 ############################
 # Already in data file
 
-####################################
-####    PAIR INTERACTIONS    #######
-####    DISPLACE OVERLAPS    #######
-####################################
+##################################
+####    PAIR INTERACTIONS    #####
+####    DISPLACE OVERLAPS    #####
+##################################
 pair_style  soft 1.12246
 pair_modify     shift yes
 pair_coeff      * * 20 1.12246
 variable prefactor equal ramp(0,50)
 fix pushapart all adapt 1 pair soft a * * v_prefactor
 
-####################################
-####    BONDS                #######
-####################################
+##################################
+####    BONDS                #####
+##################################
 bond_style harmonic
 bond_coeff 1 100.0 1.1
 
-####################################
-####    ANGLES                #######
-####################################
+##################################
+####    ANGLES                ####
+##################################
 angle_style cosine
-angle_coeff 1 10.0
+angle_coeff 1 ${cosine_potential}
 
 ######################################
 # INTEGRATION OF Equations of motion #
