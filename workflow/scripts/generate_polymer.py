@@ -325,12 +325,25 @@ class lammps:
             else:
                 continue
             pairs.add((forwardTypeID, reverseTypeID))
-        return pairs
+        return list(pairs)
+
+
+    def writeConvergentCTCFs_old(self, coeff, fh=sys.stderr):
+        for sequence in self.sequences:
+            for forward, rev in self.detectConvertCTCF(sequence):
+                fh.write(f'pair_coeff {forward} {rev} {coeff}\n')
 
 
     def writeConvergentCTCFs(self, coeff, fh=sys.stderr):
+        usedCTCFs = set()
         for sequence in self.sequences:
-            for forward, rev in self.detectConvertCTCF(sequence):
+            convergentCTCFs = self.detectConvertCTCF(sequence)
+            random.shuffle(convergentCTCFs)
+            for forward, rev in convergentCTCFs:
+                if forward in usedCTCFs or reverse in usedCTCFs:
+                    continue
+                usedCTCFs.add(forward)
+                usedCTCFs.add(reverse)
                 fh.write(f'pair_coeff {forward} {rev} {coeff}\n')
 
 
