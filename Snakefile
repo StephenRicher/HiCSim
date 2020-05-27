@@ -33,6 +33,7 @@ default_config = {
     'end':            '',
     'min_rep':        1,
     'bases_per_bead': 1000,
+    'monomers':       100,
     'method':         'mean',
     'dpi':            600,
     'cmap':           'Reds',
@@ -80,10 +81,6 @@ CHR = config['chr']
 START = config['start']
 END = config['end']
 
-# ADD TO CONFIG
-NMONOMERS = 200
-# Also see pairCoeffs in Beads2Lammps
-
 BINSIZE = int(config['HiC']['binsize'])
 if BINSIZE:
     MERGEBINS, REMAINDER = divmod(BINSIZE, config['bases_per_bead'])
@@ -93,6 +90,11 @@ if BINSIZE:
 else:
     MERGEBINS = 1
 
+
+track_data = {}
+for file, character in config['masking'].items():
+    track_file = f'{os.path.basename(file)}'
+    track_data[track_file] = {'source' : file, 'character' : character}
 
 rule all:
     input:
@@ -240,7 +242,48 @@ if config['ctcf'] is not None:
             '{input} &> {log}'
 
 
+rule scaleTracks:
+    input:
+        lambda wc: track_data[wc.track]['source']
+    output:
+        'genome/tracks/scaled/{track}'
+    log:
+        'logs/scaleTracks/{track}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/scaleBedScore.py --log {input} > {output} 2> {log}'
+
+
+rule filterTracks:
+    input:
+        rules.scaleTracks.output
+    output:
+        'genome/replicates/{rep}/tracks/scaled/{track}'
+    params:
+        rep = REPS,
+        seed = lambda wildcards: SEEDS[REPS.index(int(wildcards.rep))]
+    log:
+        'logs/filterTracks/{track}-{rep}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/filterBedScore.py --seed {params.seed} '
+        '{input} > {output} 2> {log}'
+
+
 def getMasking(wc):
+    """ Build masking command for maskFasta for track data """
+    command = ''
+    for track in track_data:
+        character = track_data[track]['character']
+        command += f'--bed genome/replicates/{wc.rep}/tracks/scaled/{track},{character} '
+    if config['ctcf']:
+        command += (f'--bed genome/replicates/{wc.rep}/tracks/CTCF-forward-{wc.rep}.bed,F '
+                    f'--bed genome/replicates/{wc.rep}/tracks/CTCF-reverse-{wc.rep}.bed,R ')
+    return command
+
+def getMasking2(wc):
     """ Build masking command for maskFasta for track data """
     command = ''
     for bed, character in config['masking'].items():
@@ -250,10 +293,11 @@ def getMasking(wc):
                     f'--bed genome/replicates/{wc.rep}/tracks/CTCF-reverse-{wc.rep}.bed,R ')
     return command
 
-
 rule maskFasta:
     input:
         rules.splitOrientation.output,
+        expand('genome/replicates/{{rep}}/tracks/scaled/{track}',
+            track = track_data.keys()),
         chromSizes = rules.getChromSizes.output
     output:
         pipe(f'genome/replicates/{{rep}}/sequence/{BUILD}-masked.fa')
@@ -344,7 +388,7 @@ rule BeadsToLammps:
         coeffs = '{region}/replicates/{rep}/lammps/config/coeffs.txt',
         groups = '{region}/replicates/{rep}/lammps/config/groups.txt'
     params:
-        nmonomers = NMONOMERS,
+        nmonomers = config['monomers'],
         coeffs = config['coeffs'],
         basesPerBead = config['bases_per_bead'],
         seed = lambda wc: SEEDS[REPS.index(int(wc.rep))],
