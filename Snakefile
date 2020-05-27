@@ -80,14 +80,6 @@ CHR = config['chr']
 START = config['start']
 END = config['end']
 
-## Replace file name to generate dictionary of modified BEDS
-squeezed_bed = {}
-for file, character in config['masking'].items():
-    if file in squeezed_bed:
-        sys.exit(f'Duplicate file {file} in config["masking"].')
-    squeezed_file = f'{os.path.basename(file)}'
-    squeezed_bed[squeezed_file] = {'source' : file, 'character' : character}
-
 # ADD TO CONFIG
 NMONOMERS = 200
 # Also see pairCoeffs in Beads2Lammps
@@ -125,7 +117,8 @@ rule indexGenome:
     input:
         rules.bgzipGenome.output
     output:
-        multiext(f'{rules.bgzipGenome.output}', '.fai', '.gzi')
+        fai = f'{rules.bgzipGenome.output}.fai',
+        gzi = f'{rules.bgzipGenome.output}.gzi'
     log:
         f'logs/indexGenome/{BUILD}.log'
     conda:
@@ -136,7 +129,7 @@ rule indexGenome:
 
 rule getChromSizes:
     input:
-        rules.indexGenome.output
+        rules.indexGenome.output.fai
     output:
         f'genome/{BUILD}-chrom.sizes'
     log:
@@ -195,25 +188,9 @@ if config['ctcf'] is not None:
             '-i {input} > {output} 2> {log}'
 
 
-    rule squeezeCTCF:
-        input:
-            rules.mergeBed.output
-        output:
-            'genome/tracks/CTCF-squeezed.bed'
-        params:
-            length = 20
-        log:
-            'logs/squeezeCTCF.log'
-        conda:
-            f'{ENVS}/python3.yaml'
-        shell:
-            '{SCRIPTS}/squeezeBed.py {params.length} {input} '
-            '> {output} 2> {log}'
-
-
     rule scaleBed:
         input:
-            rules.squeezeCTCF.output
+            rules.mergeBed.output
         output:
             'genome/tracks/CTCF.scaled.bed'
         group:
@@ -263,65 +240,11 @@ if config['ctcf'] is not None:
             '{input} &> {log}'
 
 
-rule squeezeBed:
-    input:
-        lambda wc: squeezed_bed[wc.squeezed_bed]['source']
-    output:
-        'genome/tracks/{squeezed_bed}'
-    params:
-        length = 20
-    log:
-        'logs/squeezeBed/{squeezed_bed}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/squeezeBed.py {params.length} {input} '
-        '> {output} 2> {log}'
-
-
-rule maskGenome:
-    input:
-        rules.bgzipGenome.output
-    output:
-        f'genome/masked/{BUILD}-masked.fa.gz'
-    log:
-        f'logs/maskGenome/{BUILD}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/maskGenome.py <(zcat {input}) | gzip > {output} 2> {log}'
-
-
-def getCommonMasking(wc):
-    """ Build masking command for maskCommonFasta for track data """
-    command = ''
-    for bed in squeezed_bed:
-        character = squeezed_bed[bed]['character']
-        command += f'--bed genome/tracks/{bed},{character} '
-    return command
-
-
-rule maskCommonFasta:
-    input:
-        expand('genome/tracks/{squeezed_bed}',
-            squeezed_bed = squeezed_bed.keys()),
-        genome = rules.maskGenome.output
-    output:
-        f'genome/masked/{BUILD}-masked-common.fa.gz'
-    params:
-        masking = getCommonMasking
-    log:
-        f'logs/maskCommonFasta/{BUILD}.log'
-    conda:
-        f'{ENVS}/bedtools.yaml'
-    shell:
-        'zcat {input.genome} | {SCRIPTS}/maskFasta.py {params.masking} '
-        '| gzip > {output} 2> {log}'
-
-
 def getMasking(wc):
     """ Build masking command for maskFasta for track data """
     command = ''
+    for bed, character in config['masking'].items():
+        command += f'--bed {bed},{character} '
     if config['ctcf']:
         command += (f'--bed genome/replicates/{wc.rep}/tracks/CTCF-forward-{wc.rep}.bed,F '
                     f'--bed genome/replicates/{wc.rep}/tracks/CTCF-reverse-{wc.rep}.bed,R ')
@@ -331,7 +254,7 @@ def getMasking(wc):
 rule maskFasta:
     input:
         rules.splitOrientation.output,
-        genome = rules.maskCommonFasta.output
+        chromSizes = rules.getChromSizes.output
     output:
         pipe(f'genome/replicates/{{rep}}/sequence/{BUILD}-masked.fa')
     params:
@@ -343,8 +266,9 @@ rule maskFasta:
     conda:
         f'{ENVS}/bedtools.yaml'
     shell:
-        'zcat {input.genome} | {SCRIPTS}/maskFasta.py {params.masking} '
+        '{SCRIPTS}/maskFastaV2.py {input.chromSizes} {params.masking} '
         '> {output} 2> {log}'
+
 
 rule bgzipMasked:
     input:
@@ -359,6 +283,7 @@ rule bgzipMasked:
         f'{ENVS}/tabix.yaml'
     shell:
         'bgzip -c {input} > {output} 2> {log}'
+
 
 rule indexMasked:
     input:
