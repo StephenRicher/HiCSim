@@ -17,8 +17,7 @@ def main():
     parser = pct.make_parser(verbose=True, version=__version__,)
     parser.set_defaults(function=mask)
     parser.add_argument(
-        '--chromSizes', required=True,
-        help='Chromosome sizes file.')
+        'chromSizes', help='Chromosome sizes file.')
     parser.add_argument(
         '--bed', metavar='BED,CHAR', default=[],
         type=commaPair, action='append',
@@ -44,8 +43,14 @@ def readChromosomes(chrom_sizes):
 
 
 def processBed(beds):
+    log = pct.create_logger()
     regions = defaultdict(lambda: defaultdict(list))
+    invalid_maskings = ['N', 'B']
     for bed, mask in beds:
+        if mask in invalid_maskings:
+            log.error(f'Invalid masking character {mask}. '
+                      f'Character must not be in {invalid_maskings}.')
+            sys.exit(1)
         with open(bed) as fh:
             for line in fh:
                 entries = line.split()
@@ -59,7 +64,6 @@ def processBed(beds):
 
 def writeMaskedFasta(regions, chromosomes):
     for chromosome, length in chromosomes.items():
-        sys.stderr.write(f'>{chromosome}\n')
         sys.stdout.write(f'>{chromosome}\n')
         for index in range(1, length + 1):
             if index in regions[chromosome]:
