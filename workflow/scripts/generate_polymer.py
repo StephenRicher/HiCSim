@@ -339,12 +339,11 @@ class lammps:
         for sequence in self.sequences:
             convergentCTCFs = self.detectConvertCTCF(sequence)
             random.shuffle(convergentCTCFs)
-            for forward, rev in convergentCTCFs:
-                if forward in usedCTCFs or reverse in usedCTCFs:
-                    continue
+            for forward, reverse in convergentCTCFs:
+                if not forward in usedCTCFs and not reverse in usedCTCFs:
+                    fh.write(f'pair_coeff {forward} {reverse} {coeff}\n')
                 usedCTCFs.add(forward)
                 usedCTCFs.add(reverse)
-                fh.write(f'pair_coeff {forward} {rev} {coeff}\n')
 
 
     def writeCoeffs(self, type1, type2, coeff, fh=sys.stderr):
