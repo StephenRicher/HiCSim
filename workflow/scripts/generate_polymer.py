@@ -110,6 +110,7 @@ class Sequence:
         self.basesPerBead = basesPerBead
         # Should beads set as 'F' or 'R' be processed as CTCF?
         self._ctcf = ctcf
+        self.ctcfs = {}
         self.name = name
         self.load(sequence)
 
@@ -121,6 +122,8 @@ class Sequence:
                 type = line.strip()
                 if self._ctcf and type in ['F', 'R', 'B']:
                     type = f'{type}-{self._beadID}'
+                    # Associate unique CTCF type with bead ID
+                    self.ctcfs[type] = self._beadID
                 if type not in self.types:
                     self.types.append(type)
                 self.sequence[self._beadID] = type
@@ -146,12 +149,13 @@ class Sequence:
 class lammps:
 
     def __init__(self):
-        self._log = pct.create_logger()
         self.sequences = []
         self.monomers = []
         self._beadID = 1
         self._typeID = 1
+        self._bondID = 1
         self.typeIDs = {}
+        self._seed = random.randint(1, 1e100)
 
     def loadSequence(self, sequence_file, basesPerBead, ctcf):
         sequence = Sequence(sequence_file, basesPerBead=basesPerBead,
@@ -191,7 +195,20 @@ class lammps:
 
     @property
     def nBonds(self):
-        return sum([sequence.nBonds for sequence in self.sequences])
+        bonds = 0
+        for sequence in self.sequences:
+            bonds += sequence.nBonds + len(self.detectConvertCTCF(sequence))
+        return bonds
+
+    @property
+    def nBondTypes(self):
+        for sequence in self.sequences:
+            if len(self.detectConvertCTCF(sequence)) > 0:
+                n = 2
+                break
+        else:
+            n = 1
+        return n
 
     @property
     def nTypes(self):
@@ -211,11 +228,12 @@ class lammps:
             f'{self.nBonds} bonds\n'
             f'{self.nAngles} angles\n\n'
             f'{self.nTypes} atom types\n'
-            f'1 bond types\n'
+            f'{self.nBondTypes} bond types\n'
             f'1 angle types\n\n'
             f'{self.box.x.lo} {self.box.x.hi} xlo xhi\n'
             f'{self.box.y.lo} {self.box.y.hi} ylo yhi\n'
             f'{self.box.z.lo} {self.box.z.hi} zlo zhi\n\n')
+
 
     def writeMasses(self):
         sys.stdout.write('Masses\n\n')
@@ -223,31 +241,13 @@ class lammps:
             sys.stdout.write(f'{typeID} 1 # {type}\n')
         sys.stdout.write('\n')
 
+
     def writeBeads(self):
         sys.stdout.write('Atoms\n\n')
         self.writePolymers()
         self.writeMonomers()
         sys.stdout.write('\n')
 
-    def writePolymers_old(self, r=1.1):
-        for sequence in self.sequences:
-            angle = 0
-            for i, (beadID, type) in enumerate(sequence.sequence.items()):
-                if i == 0:
-                    x = random.random()
-                    y = random.random()
-                    z = random.random()
-                else:
-                    phi = random.random() * 2 * math.pi
-                    theta = random.random() * math.pi
-                    x = prev_x + (r * math.sin(theta) * math.cos(phi))
-                    y = prev_y + (r * math.sin(theta) * math.sin(phi))
-                    z = prev_z + (r * math.cos(theta))
-                typeID = self.typeIDs[type]
-                sys.stdout.write(f'{beadID} 1 {typeID} {x} {y} {z} 0 0 0\n')
-                prev_x = x
-                prev_y = y
-                prev_z = z
 
     def writePolymers(self):
         for sequence in self.sequences:
@@ -270,6 +270,7 @@ class lammps:
                 typeID = self.typeIDs[type]
                 sys.stdout.write(f'{beadID} 1 {typeID} {x[i]} {y[i]} {z[i]} 0 0 0\n')
 
+
     def writeMonomers(self):
         for monomer in self.monomers:
             for beadID, type in monomer.items():
@@ -287,7 +288,11 @@ class lammps:
             for i, beadID in enumerate(sequence.sequence):
                 if i == sequence.nBonds:
                     break
-                sys.stdout.write(f'{beadID} 1 {beadID} {beadID+1}\n')
+                sys.stdout.write(f'{self._bondID} 1 {beadID} {beadID+1}\n')
+                self._bondID += 1
+            for forward, reverse in self.detectConvertCTCF(sequence):
+                sys.stdout.write(f'{self._bondID} 2 {forward} {reverse}\n')
+                self._bondID += 1
         sys.stdout.write('\n')
 
 
@@ -309,41 +314,38 @@ class lammps:
         """
         pairs = set()
         typeList = sequence.types
-        for beadIdx in range(len(typeList) - 1):
+        for typeIdx in range(len(typeList) - 1):
             # Reverse down the list until reach forward CTCF
-            for forwardBead in reversed(typeList[:beadIdx + 1]):
+            for forwardBead in reversed(typeList[:typeIdx + 1]):
                 if forwardBead.startswith(('F', 'B')):
-                    forwardTypeID = self.typeIDs[forwardBead]
                     break
             else:
                 continue
             # Move up the list until reach reverse CTCF
-            for reverseBead in typeList[beadIdx + 1:]:
+            for reverseBead in typeList[typeIdx + 1:]:
                 if reverseBead.startswith(('R', 'B')):
-                    reverseTypeID = self.typeIDs[reverseBead]
                     break
             else:
                 continue
-            pairs.add((forwardTypeID, reverseTypeID))
-        return list(pairs)
+            pairs.add((sequence.ctcfs[forwardBead], sequence.ctcfs[reverseBead]))
+        pairs = self.uniqueCTCF(list(pairs))
+        return pairs
 
 
-    def writeConvergentCTCFs(self, coeff, fh=sys.stderr):
-        for sequence in self.sequences:
-            for forward, rev in self.detectConvertCTCF(sequence):
-                fh.write(f'pair_coeff {forward} {rev} {coeff}\n')
+    def uniqueCTCF(self, CTCFpairs):
+        """ Randomly filter CTCF pairs to permit only 1 CTCF bond per site """
 
-
-    def writeConvergentCTCFs_unique(self, coeff, fh=sys.stderr):
-        usedCTCFs = set()
-        for sequence in self.sequences:
-            convergentCTCFs = self.detectConvertCTCF(sequence)
-            random.shuffle(convergentCTCFs)
-            for forward, reverse in convergentCTCFs:
-                if not forward in usedCTCFs and not reverse in usedCTCFs:
-                    fh.write(f'pair_coeff {forward} {reverse} {coeff}\n')
-                usedCTCFs.add(forward)
-                usedCTCFs.add(reverse)
+        usedCTCFs = []
+        filteredCTCFs = []
+        # Ensure shuffle is same for each call within object
+        random.seed(self._seed)
+        random.shuffle(CTCFpairs)
+        for forward, reverse in CTCFpairs:
+            if not forward in usedCTCFs and not reverse in usedCTCFs:
+                filteredCTCFs.append((forward, reverse))
+                usedCTCFs.append(forward)
+                usedCTCFs.append(reverse)
+        return filteredCTCFs
 
 
     def writeCoeffs(self, type1, type2, coeff, fh=sys.stderr):
@@ -392,10 +394,7 @@ def create_polymer(sequence, seed, monomers, ctcf, basesPerBead,
                 atom1 = line[0]
                 atom2 = line[1]
                 # IF F-R or R-C (CTCF interaction)
-                if sorted([atom1, atom2]) == ['F', 'R']:
-                    dat.writeConvergentCTCFs(coeff, fh=out)
-                else:
-                    dat.writeCoeffs(atom1, atom2, coeff, fh=out)
+                dat.writeCoeffs(atom1, atom2, coeff, fh=out)
     with pct.open(groupOut, 'w') as out:
         dat.writeGroup(fh=out)
 

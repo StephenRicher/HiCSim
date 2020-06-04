@@ -39,7 +39,7 @@ fix pushapart all adapt 1 pair soft a * * v_prefactor
 ####    BONDS                #####
 ##################################
 bond_style harmonic
-bond_coeff 1 100.0 1.1
+bond_coeff * 100.0 1.1
 
 ##################################
 ####    ANGLES                ####
@@ -95,8 +95,11 @@ pair_coeff * *  1.0 1.0 1.12246 ##REPULSIVE ANY TWO BEADS
 ####################################
 ####    FENE BONDS           #######
 ####################################
-bond_style fene
-bond_coeff 1 30.0 1.5 1.0 1.0
+# bond_style fene
+# bond_coeff 1 30.0 1.5 1.0 1.0
+bond_style hybrid fene harmonic
+bond_coeff 1 fene 30.0 1.5 1.0 1.0
+bond_coeff 2 harmonic 1.0 1.0
 
 ####################################
 ####    RUN -- EQUIL         #######
