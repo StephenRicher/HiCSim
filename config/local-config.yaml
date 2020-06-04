@@ -1,26 +1,38 @@
 # Simulation output directory - will be created if neccessary.
-workdir: /media/stephen/Data/modelling-ctcf2
-tmpdir: /media/stephen/Data/modelling-ctcf2
+workdir: /media/stephen/Data/modelling/
+tmpdir: /media/stephen/Data/modelling/
 cluster: False
 
-reps: 500
+reps: 100
 threads: 6
 bases_per_bead: 5000
+monomers: 100
 genome: /media/stephen/Data/genomes/hg19/Homo_sapiens.GRCh37.dna.primary_assembly.fa.gz
 
 ctcf :
     - /media/stephen/Data/genomes/hg19/tracks/GM12878-CTCF-hg19.bed
 genes : /media/stephen/Data/genomes/hg19/tracks/UCSC-genes-hg19.bed
 masking:
-    /media/stephen/Data/genomes/hg19/tracks/GM12878-H3K4m1-hg19.bed : 1
     /media/stephen/Data/genomes/hg19/tracks/GM12878-H3K4m3-hg19.bed : 3
+    /media/stephen/Data/genomes/hg19/tracks/GM12878-H3K27Ac-hg19.bed : 7
+    /media/stephen/Data/genomes/hg19/tracks/GM12878-H3K4m1-hg19.bed : 1
 
 coeffs: /home/stephen/phd/modelling/pipeline/config/pair_coeffs.txt
 
-region: GNG12_AS1
+region: GNG12_v2
 chr: 1
 start: 65834316
 end: 70234314
+
+#region: TET1
+#chr: 10
+#start: 66560359
+#end: 70694482
+
+#region: TET2
+#chr: 4
+#start: 103146684
+#end: 107279803
 
 HiC :
     matrix : /media/stephen/Data/genomes/hg19/tracks/GSE63525_GM12878_insitu_primary+replicate_combined_10000-chr1.cool
