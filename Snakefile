@@ -158,10 +158,27 @@ if config['ctcf'] is not None:
             '> {output} 2> {log}'
 
 
+    rule processCTCFprediction:
+        input:
+            '/media/stephen/Data/genomes/hg19/tracks/GM12878-CTCF-hg19-prediction.tsv'
+        output:
+            #'genome/tracks/CTCF-{rep}.bed'
+            'genome/tracks/CTCF-prediction.bed'
+        params:
+            threshold = 15
+        log:
+            'logs/processCTCFprediction.log'
+        conda:
+            f'{ENVS}/python3.yaml'
+        shell:
+            '{SCRIPTS}/processCTCFBSDB.py --threshold {params.threshold} '
+            '{input} > {output} 2> {log}'
+
+
     rule sortBed:
         input:
-            expand('genome/tracks/CTCF-{rep}.bed',
-                rep = range(0, len(config['ctcf'])))
+            #expand('genome/tracks/CTCF-{rep}.bed', rep = range(0, len(config['ctcf'])))
+            rules.processCTCFprediction.output
         output:
             'genome/tracks/CTCF.sort.bed'
         group:
