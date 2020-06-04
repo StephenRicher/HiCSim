@@ -328,13 +328,13 @@ class lammps:
         return list(pairs)
 
 
-    def writeConvergentCTCFs_old(self, coeff, fh=sys.stderr):
+    def writeConvergentCTCFs(self, coeff, fh=sys.stderr):
         for sequence in self.sequences:
             for forward, rev in self.detectConvertCTCF(sequence):
                 fh.write(f'pair_coeff {forward} {rev} {coeff}\n')
 
 
-    def writeConvergentCTCFs(self, coeff, fh=sys.stderr):
+    def writeConvergentCTCFs_unique(self, coeff, fh=sys.stderr):
         usedCTCFs = set()
         for sequence in self.sequences:
             convergentCTCFs = self.detectConvertCTCF(sequence)
