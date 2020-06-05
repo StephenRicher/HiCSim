@@ -71,8 +71,7 @@ fix RG DNA print ${timestep} "${time} ${RG}" file ${radius_gyration}
 ####################################
 ####    DUMP POSITIONS OF ATOMS ####
 ####################################
-dump 1 all xyz ${timestep} ${complete} # XYZ fill with all atoms
-dump 2 DNA xyz ${timestep} ${warm_up}
+dump 1 all xyz ${timestep} ${warm_up}
 
 ####################################
 ####    RUN -- EQUIL         #######
@@ -81,8 +80,8 @@ run ${warm_up_time}
 
 unfix pushapart  # STOP DISPLACING WITH SOFT
 unfix RG
-undump 2 # Close warm_up dump
-dump 3 DNA xyz ${timestep} ${sim}
+undump 1 # Close warm_up dump
+dump 2 all xyz ${timestep} ${sim}
 fix RG DNA print ${timestep} "$(step) ${RG}" append ${radius_gyration}
 
 ######################################
