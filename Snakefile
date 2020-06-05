@@ -89,6 +89,7 @@ if BINSIZE:
             f'bases per bead {config["bases_per_bead"]}')
 else:
     MERGEBINS = 1
+    BINSIZE = config['bases_per_bead']
 
 
 track_data = {}
@@ -99,7 +100,8 @@ for file, character in config['masking'].items():
 rule all:
     input:
         [expand('{region}/vmd/simulation.gif', region=REGION),
-         expand('{region}/merged/simulation.png', region=REGION)]
+         expand('{region}/merged/simulation-{binsize}.png',
+            region=REGION, binsize=BINSIZE)]
 
 
 rule bgzipGenome:
@@ -569,11 +571,11 @@ rule mergeBins:
     input:
         rules.homer2H5.output
     output:
-        f'{{region}}/merged/contacts-{BINSIZE}.h5'
+        '{region}/merged/contacts-{binsize}.h5'
     params:
         nbins = MERGEBINS
     log:
-        'logs/mergeBins/{region}.log'
+        'logs/mergeBins/{region}-{binsize}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -585,13 +587,13 @@ rule matrix2pre:
     input:
         rules.mergeReplicates.output
     output:
-        '{region}/merged/contacts.pre.tsv'
+        '{region}/merged/contacts-{binsize}.pre.tsv'
     params:
         chr = CHR,
         start = START,
         binsize = config['bases_per_bead']
     log:
-        'logs/matrix2pre/{region}.log'
+        'logs/matrix2pre/{region}-{binsize}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -605,9 +607,9 @@ rule juicerPre:
         tsv = rules.matrix2pre.output,
         chrom_sizes = rules.getChromSizes.output
     output:
-        '{region}/merged/contacts.hic'
+        '{region}/merged/contacts-{binsize}.hic'
     log:
-        'logs/juicerPre/{region}.log'
+        'logs/juicerPre/{region}-{binsize}.log'
     params:
         chr = CHR,
         resolutions = '500,1000,1500'
@@ -640,7 +642,7 @@ rule createConfig:
         ctcf_orientation = rules.scaleBed.output,
         genes = config['genes']
     output:
-        '{region}/merged/configs.ini'
+        '{region}/merged/configs-{binsize}.ini'
     conda:
         f'{ENVS}/python3.yaml'
     params:
@@ -648,7 +650,7 @@ rule createConfig:
         hicConfig = getHiCconfig,
         colourMap = 'Purples'
     log:
-        'logs/createConfig/{region}.log'
+        'logs/createConfig/{region}-{binsize}.log'
     shell:
         '{SCRIPTS}/generate_config.py --matrix {input.matrix} '
         '--ctcf_orientation {input.ctcf_orientation} --log '
@@ -661,13 +663,13 @@ rule plotHiC:
     input:
         rules.createConfig.output
     output:
-        '{region}/merged/simulation.png'
+        '{region}/merged/simulation-{binsize}.png'
     params:
         region = f'{CHR}:{START}-{END}',
         title = f'"{REGION} : {CHR}:{START}-{END}"',
         dpi = 600
     log:
-        'logs/plotHiC/{region}.log'
+        'logs/plotHiC/{region}-{binsize}.log'
     conda:
         f'{ENVS}/pygenometracks.yaml'
     shell:
