@@ -99,9 +99,10 @@ for file, character in config['masking'].items():
 
 rule all:
     input:
-        [expand('{region}/vmd/simulation.gif', region=REGION),
-         expand('{region}/merged/simulation-{binsize}.png',
-            region=REGION, binsize=BINSIZE)]
+        [expand('{region}/{nbases}/vmd/simulation.gif',
+            nbases=config['bases_per_bead'], region=REGION),
+         expand('{region}/{nbases}/merged/simulation-{binsize}.png',
+            nbases=config['bases_per_bead'], region=REGION, binsize=BINSIZE)]
 
 
 rule bgzipGenome:
@@ -368,7 +369,7 @@ rule extractRegion:
         fasta = rules.bgzipMasked.output,
         index = rules.indexMasked.output
     output:
-        pipe('{region}/replicates/{rep}/genome/{region}-masked-{rep}.fa')
+        pipe('genome/replicates/{rep}/genome/{region}-masked-{rep}.fa')
     group:
         'convert2Beads'
     params:
@@ -385,13 +386,13 @@ rule FastaToBeads:
     input:
         rules.extractRegion.output
     output:
-        '{region}/replicates/{rep}/sequence/{region}-beads-{rep}.txt'
+        '{region}/{nbases}/reps/{rep}/sequence/{region}-beads-{rep}.txt'
     group:
         'convert2Beads'
     params:
         bases_per_bead = config['bases_per_bead']
     log:
-        'logs/sequenceToBeads/{region}-{rep}.log'
+        'logs/sequenceToBeads/{region}-{nbases}-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -403,9 +404,9 @@ rule BeadsToLammps:
     input:
         rules.FastaToBeads.output
     output:
-        dat = '{region}/replicates/{rep}/lammps/config/lammps_input.dat',
-        coeffs = '{region}/replicates/{rep}/lammps/config/coeffs.txt',
-        groups = '{region}/replicates/{rep}/lammps/config/groups.txt'
+        dat = '{region}/{nbases}/reps/{rep}/lammps/config/lammps_input.dat',
+        coeffs = '{region}/{nbases}/reps/{rep}/lammps/config/coeffs.txt',
+        groups = '{region}/{nbases}/reps/{rep}/lammps/config/groups.txt'
     params:
         nmonomers = config['monomers'],
         coeffs = config['coeffs'],
@@ -418,7 +419,7 @@ rule BeadsToLammps:
         zlo = config['zlo'],
         zhi = config['zhi']
     log:
-        'logs/BeadsToLammps/{region}-{rep}.log'
+        'logs/BeadsToLammps/{region}-{nbases}-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -440,9 +441,9 @@ rule addCTCF:
         coeffs = rules.BeadsToLammps.output.coeffs,
         groups = rules.BeadsToLammps.output.groups
     output:
-        '{region}/replicates/{rep}/lammps/config/run-ctcf.lam'
+        '{region}/{nbases}/reps/{rep}/lammps/config/run-ctcf.lam'
     log:
-        'logs/addCTCF/{region}-{rep}.log'
+        'logs/addCTCF/{region}-{nbases}-{rep}.log'
     shell:
         "sed '/^#CTCF_COEFF/ r {input.coeffs}' {input.script} "
         "| sed '/^#GROUPS/ r {input.groups}' > {output} 2> {log}"
@@ -472,11 +473,11 @@ rule lammps:
         data = rules.BeadsToLammps.output.dat,
         script = rules.addCTCF.output
     output:
-        warm_up = '{region}/replicates/{rep}/lammps/warm_up.xyz.gz',
-        simulation = '{region}/replicates/{rep}/lammps/simulation.xyz.gz',
-        complete = '{region}/replicates/{rep}/lammps/complete.xyz.gz',
-        radius_gyration = '{region}/replicates/{rep}/lammps/radius_of_gyration.txt',
-        restart = directory('{region}/replicates/{rep}/lammps/restart/')
+        warm_up = '{region}/{nbases}/reps/{rep}/lammps/warm_up.xyz.gz',
+        simulation = '{region}/{nbases}/reps/{rep}/lammps/simulation.xyz.gz',
+        complete = '{region}/{nbases}/reps/{rep}/lammps/complete.xyz.gz',
+        radius_gyration = '{region}/{nbases}/reps/{rep}/lammps/radius_of_gyration.txt',
+        restart = directory('{region}/{nbases}/reps/{rep}/lammps/restart/')
     params:
         timestep = config['timestep'],
         warm_up_time = config['warm_up'],
@@ -490,7 +491,7 @@ rule lammps:
     threads:
         config['threads'] if config['cluster'] else 1
     log:
-        'logs/lammps/{region}-{rep}.log'
+        'logs/lammps/{region}-{nbases}-{rep}.log'
     conda:
         f'{ENVS}/lammps.yaml'
     shell:
@@ -501,13 +502,13 @@ rule create_contact_matrix:
     input:
         rules.lammps.output.simulation
     output:
-        '{region}/replicates/{rep}/matrices/contacts.npz'
+        '{region}/{nbases}/reps/{rep}/matrices/contacts.npz'
     params:
         distance = 3
     group:
         'lammps'
     log:
-        'logs/create_contact_matrix/{region}-{rep}.log'
+        'logs/create_contact_matrix/{region}-{nbases}-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -518,13 +519,14 @@ rule create_contact_matrix:
 
 rule mergeReplicates:
     input:
-        expand('{{region}}/replicates/{rep}/matrices/contacts.npz', rep=REPS)
+        expand('{{region}}/{{nbases}}/reps/{rep}/matrices/contacts.npz',
+            rep=REPS)
     output:
-        '{region}/merged/contacts.npz'
+        '{region}/{nbases}/merged/contacts.npz'
     params:
         method = config['method']
     log:
-        'logs/mergeReplicates/{region}.log'
+        'logs/mergeReplicates/{region}-{nbases}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -536,13 +538,13 @@ rule matrix2homer:
     input:
         rules.mergeReplicates.output
     output:
-        '{region}/merged/contacts.homer'
+        '{region}/{nbases}/merged/contacts.homer'
     params:
         chr = CHR,
         start = START,
         binsize = config['bases_per_bead']
     log:
-        'logs/matrix2homer/{region}.log'
+        'logs/matrix2homer/{region}-{nbases}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -555,9 +557,9 @@ rule homer2H5:
     input:
         rules.matrix2homer.output
     output:
-        '{region}/merged/contacts.h5'
+        '{region}/{nbases}/merged/contacts.h5'
     log:
-        'logs/homer2H5/{region}.log'
+        'logs/homer2H5/{region}-{nbases}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     threads:
@@ -571,59 +573,16 @@ rule mergeBins:
     input:
         rules.homer2H5.output
     output:
-        '{region}/merged/contacts-{binsize}.h5'
+        '{region}/{nbases}/merged/contacts-{binsize}.h5'
     params:
         nbins = MERGEBINS
     log:
-        'logs/mergeBins/{region}-{binsize}.log'
+        'logs/mergeBins/{region}-{nbases}-{binsize}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
         'hicMergeMatrixBins --matrix {input} --numBins {params.nbins} '
         '--outFileName {output} &> {log}'
-
-
-rule matrix2pre:
-    input:
-        rules.mergeReplicates.output
-    output:
-        '{region}/merged/contacts-{binsize}.pre.tsv'
-    params:
-        chr = CHR,
-        start = START,
-        binsize = config['bases_per_bead']
-    log:
-        'logs/matrix2pre/{region}-{binsize}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/npz2pre.py --chromosome {params.chr} '
-        '--start {params.start} --binsize {params.binsize} '
-        '{input} > {output} 2> {log}'
-
-
-rule juicerPre:
-    input:
-        tsv = rules.matrix2pre.output,
-        chrom_sizes = rules.getChromSizes.output
-    output:
-        '{region}/merged/contacts-{binsize}.hic'
-    log:
-        'logs/juicerPre/{region}-{binsize}.log'
-    params:
-        chr = CHR,
-        resolutions = '500,1000,1500'
-    resources:
-         mem_mb = 16000
-    threads:
-        12
-    conda:
-        f'{ENVS}/openjdk.yaml'
-    shell:
-        'java -Xmx{resources.mem_mb}m '
-        '-jar {SCRIPTS}/juicer_tools_1.14.08.jar pre '
-        '-c {params.chr} -r {params.resolutions} '
-        '{input.tsv} {output} {input.chrom_sizes} &> {log}'
 
 
 def getHiCconfig(wc):
@@ -642,7 +601,7 @@ rule createConfig:
         ctcf_orientation = rules.scaleBed.output,
         genes = config['genes']
     output:
-        '{region}/merged/configs-{binsize}.ini'
+        '{region}/{nbases}/merged/configs-{binsize}.ini'
     conda:
         f'{ENVS}/python3.yaml'
     params:
@@ -650,7 +609,7 @@ rule createConfig:
         hicConfig = getHiCconfig,
         colourMap = 'Purples'
     log:
-        'logs/createConfig/{region}-{binsize}.log'
+        'logs/createConfig/{region}-{nbases}-{binsize}.log'
     shell:
         '{SCRIPTS}/generate_config.py --matrix {input.matrix} '
         '--ctcf_orientation {input.ctcf_orientation} --log '
@@ -663,13 +622,13 @@ rule plotHiC:
     input:
         rules.createConfig.output
     output:
-        '{region}/merged/simulation-{binsize}.png'
+        '{region}/{nbases}/merged/simulation-{binsize}.png'
     params:
         region = f'{CHR}:{START}-{END}',
         title = f'"{REGION} : {CHR}:{START}-{END}"',
         dpi = 600
     log:
-        'logs/plotHiC/{region}-{binsize}.log'
+        'logs/plotHiC/{region}-{nbases}-{binsize}.log'
     conda:
         f'{ENVS}/pygenometracks.yaml'
     shell:
@@ -680,16 +639,58 @@ rule plotHiC:
         '--dpi {params.dpi} &> {log}'
 
 
+rule matrix2pre:
+    input:
+        rules.mergeReplicates.output
+    output:
+        '{region}/{nbases}/merged/contacts.pre.tsv'
+    params:
+        chr = CHR,
+        start = START,
+        binsize = config['bases_per_bead']
+    log:
+        'logs/matrix2pre/{region}-{nbases}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/npz2pre.py --chromosome {params.chr} '
+        '--start {params.start} --binsize {params.binsize} '
+        '{input} > {output} 2> {log}'
+
+
+rule juicerPre:
+    input:
+        tsv = rules.matrix2pre.output,
+        chrom_sizes = rules.getChromSizes.output
+    output:
+        '{region}/{nbases}/merged/contacts.hic'
+    log:
+        'logs/juicerPre/{region}-{nbases}.log'
+    params:
+        chr = CHR,
+        resolutions = '1000'
+    resources:
+         mem_mb = 16000
+    threads:
+        12
+    conda:
+        f'{ENVS}/openjdk.yaml'
+    shell:
+        'java -Xmx{resources.mem_mb}m '
+        '-jar {SCRIPTS}/juicer_tools_1.14.08.jar pre '
+        '-c {params.chr} -r {params.resolutions} '
+        '{input.tsv} {output} {input.chrom_sizes} &> {log}'
+
 rule smooth_xyz:
     input:
-        '{region}/replicates/1/lammps/complete.xyz.gz'
+        '{region}/{nbases}/reps/1/lammps/complete.xyz.gz'
     output:
-        '{region}/replicates/1/lammps/complete-smooth.xyz'
+        '{region}/{nbases}/reps/1/lammps/complete-smooth.xyz'
     params:
         window_size = config['window_size'],
         overlap = config['overlap']
     log:
-        'logs/smooth_xyz/{region}.log'
+        'logs/smooth_xyz/{region}-{nbases}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -703,9 +704,9 @@ checkpoint vmd:
     input:
         rules.smooth_xyz.output
     output:
-        directory('{region}/vmd/sequence')
+        directory('{region}/{nbases}/vmd/sequence')
     log:
-        'logs/vmd/{region}.log'
+        'logs/vmd/{region}-{nbases}.log'
     conda:
         f'{ENVS}/vmd.yaml'
     shell:
@@ -728,43 +729,14 @@ rule create_gif:
         rules.vmd.output,
         images = aggregateVMD
     output:
-        '{region}/vmd/simulation.gif'
+        '{region}/{nbases}/vmd/simulation.gif'
     params:
         delay = config['delay'],
         loop = config['loop']
     log:
-        'logs/create_gif/{region}.log'
+        'logs/create_gif/{region}-{nbases}.log'
     conda:
         f'{ENVS}/imagemagick.yaml'
     shell:
         'convert -delay {params.delay} -loop {params.loop} '
         '{input.images} {output} &> {log}'
-
-
-
-rule generate_random_polymer:
-    output:
-        f'polymer/poly.n{config["n_molecules"]}.dat'
-    params:
-        n_molecules = config['n_molecules'],
-        n_clusters = config['n_clusters'],
-        n_types = config['n_types'],
-        xlo = config['xlo'],
-        xhi = config['xhi'],
-        ylo = config['ylo'],
-        yhi = config['yhi'],
-        zlo = config['zlo'],
-        zhi = config['zhi'],
-    log:
-        'logs/generate_polymer.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/generate_polymer.py '
-        '--n_molecules {params.n_molecules} '
-        '--n_clusters {params.n_clusters} '
-        '--n_types {params.n_types} '
-        '--xlo {params.xlo} --xhi {params.xhi} '
-        '--ylo {params.ylo} --yhi {params.yhi} '
-        '--zlo {params.zlo} --zhi {params.zhi} '
-        '> {output} 2> {log}'
