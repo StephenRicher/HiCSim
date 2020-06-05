@@ -6,7 +6,7 @@ cluster: False
 reps: 100
 threads: 6
 bases_per_bead: 5000
-monomers: 100
+monomers: 200
 genome: /media/stephen/Data/genomes/hg19/Homo_sapiens.GRCh37.dna.primary_assembly.fa.gz
 
 ctcf :
@@ -19,7 +19,7 @@ masking:
 
 coeffs: /home/stephen/phd/modelling/pipeline/config/pair_coeffs.txt
 
-region: GNG12_v2
+region: GNG12
 chr: 1
 start: 65834316
 end: 70234314
@@ -37,7 +37,7 @@ end: 70234314
 HiC :
     matrix : /media/stephen/Data/genomes/hg19/tracks/GSE63525_GM12878_insitu_primary+replicate_combined_10000-chr1.cool
     log : True
-    binsize : 10000
+    binsize : 5000
 
 dpi: 1200
 xlo: -50
