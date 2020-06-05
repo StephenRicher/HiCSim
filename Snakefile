@@ -457,7 +457,6 @@ lmp_cmd = ('-var infile {input.data} '
            '-var restart_time {params.restart_time} '
            '-var sim {output.simulation} '
            '-var sim_time {params.sim_time} '
-           '-var complete {output.complete} '
            '-var timestep {params.timestep} '
            '-var cosine_potential {params.cosine_potential} '
            '-var seed {params.seed} '
@@ -475,7 +474,6 @@ rule lammps:
     output:
         warm_up = '{region}/{nbases}/reps/{rep}/lammps/warm_up.xyz.gz',
         simulation = '{region}/{nbases}/reps/{rep}/lammps/simulation.xyz.gz',
-        complete = '{region}/{nbases}/reps/{rep}/lammps/complete.xyz.gz',
         radius_gyration = '{region}/{nbases}/reps/{rep}/lammps/radius_of_gyration.txt',
         restart = directory('{region}/{nbases}/reps/{rep}/lammps/restart/')
     params:
@@ -484,7 +482,7 @@ rule lammps:
         sim_time = config['sim_time'],
         restart_time = int(config['timestep']) * 100, # Use 0 for no restart file
         cosine_potential = lambda wc: 10000 / config['bases_per_bead'],
-        restart = lambda wc: f'{wc.region}/replicates/{wc.rep}/lammps/restart/Restart',
+        restart = lambda wc: f'{wc.region}/{wc.nbases}/reps/{wc.rep}/lammps/restart/Restart',
         seed = lambda wc: SEEDS[REPS.index(int(wc.rep))]
     group:
         'lammps'
@@ -498,9 +496,28 @@ rule lammps:
         lmp_cmd
 
 
+rule extractDNA:
+    input:
+        simulation = rules.lammps.output.simulation,
+        groups = rules.BeadsToLammps.output.groups
+    output:
+        pipe('{region}/{nbases}/reps/{rep}/lammps/simulation-DNA.xyz')
+    params:
+        group = 'DNA'
+    log:
+        'logs/extractDNA/{region}-{nbases}-{rep}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/filterXYZ.py --groupFile {input.groups} '
+        '--group {params.group} <(zcat -f {input}) '
+        '> {output} 2> {log}'
+
+
+
 rule create_contact_matrix:
     input:
-        rules.lammps.output.simulation
+        rules.extractDNA.output
     output:
         '{region}/{nbases}/reps/{rep}/matrices/contacts.npz'
     params:
@@ -514,7 +531,7 @@ rule create_contact_matrix:
     shell:
         '{SCRIPTS}/create_contact_matrix.py '
         '--outdata {output} --distance {params.distance} '
-        '<(zcat {input}) &> {log}'
+        '{input} &> {log}'
 
 
 rule mergeReplicates:
@@ -683,7 +700,8 @@ rule juicerPre:
 
 rule smooth_xyz:
     input:
-        '{region}/{nbases}/reps/1/lammps/complete.xyz.gz'
+        warm_up = '{region}/{nbases}/reps/1/lammps/warm_up.xyz.gz',
+        simulation = '{region}/{nbases}/reps/1/lammps/simulation.xyz.gz'
     output:
         '{region}/{nbases}/reps/1/lammps/complete-smooth.xyz'
     params:
@@ -697,7 +715,8 @@ rule smooth_xyz:
         '{SCRIPTS}/smooth_xyz.py '
         '--size {params.window_size} '
         '--overlap {params.overlap} '
-        '<(zcat {input}) > {output} 2> {log}'
+        '<(zcat {input.warm_up} {input.simulation}) '
+        '> {output} 2> {log}'
 
 
 checkpoint vmd:
