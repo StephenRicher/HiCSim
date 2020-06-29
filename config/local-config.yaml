@@ -3,7 +3,7 @@ workdir: /media/stephen/Data/modelling/
 tmpdir: /media/stephen/Data/modelling/
 cluster: False
 
-reps: 100
+reps: 10
 threads: 6
 bases_per_bead: 5000
 monomers: 200

@@ -2,33 +2,22 @@
 
 """ Scale score column of BED file to between 0 and 1 """
 
-
 import sys
+import logging
+import argparse
+import fileinput
 import numpy as np
-import pyCommonTools as pct
+
+__version__ = '1.0.0'
 
 
-def main():
+def main(file : str, log : bool, **kwargs):
 
-    __version__ = '1.0.0'
-
-    parser = pct.make_parser(version=__version__, infile=True, in_type='BED')
-    parser.set_defaults(function=scaleBED)
-
-    parser.add_argument(
-        '--log', default=False, action='store_true',
-        help='Log transform scores before scaling')
-
-    return (pct.execute(parser))
-
-
-def scaleBED(infile, log):
-
-    max_score = maxScore(infile)
+    max_score = maxScore(file)
     if log:
         max_score = np.log(max_score)
-    with pct.open(infile) as f:
-        for line in f:
+    with fileinput.input(file) as fh:
+        for line in fh:
             if line.startswith('#'):
                 sys.stdout.write(f'{line}')
                 continue
@@ -44,7 +33,7 @@ def scaleBED(infile, log):
 
 def maxScore(BED):
     record = 0
-    with pct.open(BED) as f:
+    with fileinput.input(BED) as f:
         for line in f:
             if line.startswith('#'):
                 continue
@@ -55,5 +44,37 @@ def maxScore(BED):
     return max_score
 
 
+def parse_arguments():
+
+    custom = argparse.ArgumentParser(add_help=False)
+    custom.set_defaults(function=main)
+    custom.add_argument(
+        'file', metavar='BED', nargs='?', default=[],
+        help='Input BED file (default: stdin)')
+    custom.add_argument(
+        '--log', default=False, action='store_true',
+        help='Log transform scores before scaling (default: %(default)s)')
+    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+
+    base = argparse.ArgumentParser(add_help=False)
+    base.add_argument(
+        '--version', action='version', version=f'%(prog)s {__version__}')
+    base.add_argument(
+        '--verbose', action='store_const', const=logging.DEBUG,
+        default=logging.INFO, help='verbose logging for debugging')
+
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[base, custom])
+    args = parser.parse_args()
+
+    log_format='%(asctime)s - %(levelname)s - %(funcName)s - %(message)s'
+    logging.basicConfig(level=args.verbose, format=log_format)
+
+    return args
+
+
 if __name__ == '__main__':
-    sys.exit(main())
+    args = parse_arguments()
+    return_code = args.function(**vars(args))
+    logging.shutdown()
+    sys.exit(return_code)

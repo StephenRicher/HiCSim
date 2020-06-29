@@ -3,30 +3,27 @@
 """ Average contact frequency matrices and plot heatmap """
 
 import sys
+import logging
+import argparse
 import numpy as np
 from typing import List
 from utilities import npz
-import pyCommonTools as pct
 from scipy.sparse import save_npz, load_npz, csc_matrix
 
-def main():
 
-    __version__ = '1.0.0'
+__version__ = '1.0.0'
 
-    parser = pct.make_parser(verbose=True, version=__version__)
-    parser.set_defaults(function=average_heatmap)
 
-    parser.add_argument(
-        'matrices', nargs='+',
-        help='Input contact matrices')
-    parser.add_argument(
-        '-o', '--out', default='averaged-contacts.npz', type=npz,
-        help='Summed contact matrix (default: %(default)s)')
-    parser.add_argument(
-        '--method', default='sum', choices=['mean', 'median', 'sum'],
-        help='Method to compute average of matrices (default: %(default)s)')
+def main(matrices: List, out: str, method: str, **kwargs) -> None:
 
-    return (pct.execute(parser))
+    if method == 'median':
+        average_matrix = compute_median(matrices)
+    elif method == 'sum':
+        average_matrix = compute_sum(matrices)
+    else:
+        average_matrix = compute_mean(matrices)
+
+    save_npz(out, average_matrix)
 
 
 def compute_median(matrices: List):
@@ -47,17 +44,40 @@ def compute_mean(matrices: List):
     return summed_matrix / len(matrices)
 
 
-def average_heatmap(matrices: List, out: str, method: str) -> None:
+def parse_arguments():
 
-    if method == 'median':
-        average_matrix = compute_median(matrices)
-    elif method == 'sum':
-        average_matrix = compute_sum(matrices)
-    else:
-        average_matrix = compute_mean(matrices)
+    custom = argparse.ArgumentParser(add_help=False)
+    custom.set_defaults(function=main)
+    custom.add_argument(
+        'matrices', nargs='+',
+        help='Input contact matrices')
+    custom.add_argument(
+        '--out', default='averaged-contacts.npz', type=npz,
+        help='Summed contact matrix (default: %(default)s)')
+    custom.add_argument(
+        '--method', default='sum', choices=['mean', 'median', 'sum'],
+        help='Method to compute average of matrices (default: %(default)s)')
+    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
 
-    save_npz(out, average_matrix)
+    base = argparse.ArgumentParser(add_help=False)
+    base.add_argument(
+        '--version', action='version', version=f'%(prog)s {__version__}')
+    base.add_argument(
+        '--verbose', action='store_const', const=logging.DEBUG,
+        default=logging.INFO, help='verbose logging for debugging')
+
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[base, custom])
+    args = parser.parse_args()
+
+    log_format='%(asctime)s - %(levelname)s - %(funcName)s - %(message)s'
+    logging.basicConfig(level=args.verbose, format=log_format)
+
+    return args
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    args = parse_arguments()
+    return_code = args.function(**vars(args))
+    logging.shutdown()
+    sys.exit(return_code)

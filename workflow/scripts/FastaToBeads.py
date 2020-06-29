@@ -4,36 +4,25 @@
 
 import sys
 import random
-import pyCommonTools as pct
+import logging
+import argparse
+import fileinput
+
+__version__ = '1.0.0'
 
 
-def main():
+def main(file : str, nbases : int, **kwargs):
 
-    __version__ = '1.0.0'
-
-    parser = pct.make_parser(version=__version__)
-    parser.add_argument('fasta', metavar='FASTA', help='Input FASTA file')
-    parser.add_argument(
-        '--nbases', default=1000, type=int,
-        help='Number of base to represent 1 bead.')
-    parser.set_defaults(function=compress)
-
-    return (pct.execute(parser))
-
-
-def compress(fasta, nbases):
-
-    log = pct.create_logger()
-    with pct.open(fasta) as fh:
+    with fileinput.input(file) as fh:
         bases = []
         for i, line in enumerate(fh):
             if line.startswith('>'):
                 if i != 0:
-                    log.warning('Second FASTA record detected - skipping.')
+                    logging.warning('Second FASTA record detected - skipping.')
                     break
             else:
                 if i == 0:
-                    log.error('FASTA does not begin with ">".')
+                    logging.error('FASTA does not begin with ">".')
                     sys.exit(1)
                 else:
                     for base in line.strip():
@@ -58,5 +47,37 @@ def get_bead(bases):
     return bead
 
 
+def parse_arguments():
+
+    custom = argparse.ArgumentParser(add_help=False)
+    custom.set_defaults(function=main)
+    custom.add_argument(
+        'file', metavar='FASTA', nargs='?', default=[],
+        help='Input FASTA file (default: stdin)')
+    custom.add_argument(
+        '--nbases', default=1000, type=int,
+        help='Number of bases to represent 1 bead.')
+    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+
+    base = argparse.ArgumentParser(add_help=False)
+    base.add_argument(
+        '--version', action='version', version=f'%(prog)s {__version__}')
+    base.add_argument(
+        '--verbose', action='store_const', const=logging.DEBUG,
+        default=logging.INFO, help='verbose logging for debugging')
+
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[base, custom])
+    args = parser.parse_args()
+
+    log_format='%(asctime)s - %(levelname)s - %(funcName)s - %(message)s'
+    logging.basicConfig(level=args.verbose, format=log_format)
+
+    return args
+
+
 if __name__ == '__main__':
-    sys.exit(main())
+    args = parse_arguments()
+    return_code = args.function(**vars(args))
+    logging.shutdown()
+    sys.exit(return_code)

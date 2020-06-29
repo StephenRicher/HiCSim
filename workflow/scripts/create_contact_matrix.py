@@ -3,54 +3,66 @@
 """ Script to read LAMMPS output and generate contact frequency matrix """
 
 import sys
+import logging
+import argparse
+import fileinput
 import numpy as np
-import pyCommonTools as pct
-from utilities import read_XYZ, npz
+from utilities import read_XYZ
 from timeit import default_timer as timer
 from scipy.sparse import save_npz, csc_matrix
 from scipy.spatial.distance import pdist, squareform
 
-def main():
+__version__ = '1.0.0'
 
-    __version__ = '1.0.0'
+def main(file: str, outdata: str, distance: float, **kwargs) -> None:
 
-    parser = pct.make_parser(
-        verbose=True, version=__version__, infile=True,
-        in_type='XYZ')
-    parser.set_defaults(function=get_contact_frequency)
-
-    parser.add_argument(
-        '-d', '--distance', default=3, type=float,
-        help='Max contact distance between particles (default: %(default)s)')
-    parser.add_argument(
-        '--outdata', default='contacts.npz', type=npz,
-        help='Contact matrix output (default: %(default)s)')
-
-    return (pct.execute(parser))
-
-
-def get_contact_frequency(infile: str, outdata: str, distance: float) -> None:
-
-    log = pct.create_logger()
-    start = timer()
     sqdistance = distance**2
     contacts = 0
-    with pct.open(infile) as f:
+    with fileinput.input(file) as fh:
         while True:
             try:
-                start_step = timer()
-                xyz = read_XYZ(f)
+                xyz = read_XYZ(fh)
                 contacts += pdist(xyz['atoms'], 'sqeuclidean') < sqdistance
-                end_step = timer()
-                log.info(f'Block processed in {end_step - start_step} seconds.')
             except EOFError:
                 break
 
     save_npz(outdata, csc_matrix(squareform(contacts)))
 
-    end = timer()
-    log.info(f'Contact matrix created in {end - start} seconds.')
+
+def parse_arguments():
+
+    custom = argparse.ArgumentParser(add_help=False)
+    custom.set_defaults(function=main)
+    custom.add_argument(
+        'file', metavar='XYZ', nargs='?', default=[],
+        help='Input XYZ file (default: stdin)')
+    custom.add_argument(
+        '--distance', default=3, type=float,
+        help='Max contact distance between particles (default: %(default)s)')
+    custom.add_argument(
+        '--outdata', default='contacts.npz',
+        help='Contact matrix output (default: %(default)s)')
+    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+
+    base = argparse.ArgumentParser(add_help=False)
+    base.add_argument(
+        '--version', action='version', version=f'%(prog)s {__version__}')
+    base.add_argument(
+        '--verbose', action='store_const', const=logging.DEBUG,
+        default=logging.INFO, help='verbose logging for debugging')
+
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[base, custom])
+    args = parser.parse_args()
+
+    log_format='%(asctime)s - %(levelname)s - %(funcName)s - %(message)s'
+    logging.basicConfig(level=args.verbose, format=log_format)
+
+    return args
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    args = parse_arguments()
+    return_code = args.function(**vars(args))
+    logging.shutdown()
+    sys.exit(return_code)

@@ -1,34 +1,20 @@
 #!/usr/bin/env python3
 
-""" Squeeze/expand intervals of BED file to specified length """
+""" Reform intervals of BED file to specified length """
 
 import sys
 import math
-import random
-import pyCommonTools as pct
+import logging
+import argparse
+import fileinput
+
+__version__ = '1.0.0'
 
 
-def main():
+def main(file : str, length : int, **kwargs):
 
-    __version__ = '1.0.0'
-
-    parser = pct.make_parser(version=__version__)
-    parser.set_defaults(function=squeezeBED)
-
-    parser.add_argument(
-        'length', type=int,
-        help='Initialize the random number generator.')
-    parser.add_argument(
-        'bed', metavar='BED', nargs='?',
-        help='Input BED file.')
-
-    return (pct.execute(parser))
-
-
-def squeezeBED(bed, length):
-
-    with pct.open(bed) as f:
-        for line in f:
+    with fileinput.input(file) as fh:
+        for line in fh:
             if line.startswith('#'):
                 sys.stdout.write(f'{line}')
                 continue
@@ -41,5 +27,37 @@ def squeezeBED(bed, length):
             print('\t'.join(entry))
 
 
+def parse_arguments():
+
+    custom = argparse.ArgumentParser(add_help=False)
+    custom.set_defaults(function=main)
+    custom.add_argument(
+        'length', type=int,
+        help='BED interval size to reform to.')
+    custom.add_argument(
+        'file', metavar='BED', nargs='?', default=[],
+        help='Input BED file (default: stdin)')
+    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+
+    base = argparse.ArgumentParser(add_help=False)
+    base.add_argument(
+        '--version', action='version', version=f'%(prog)s {__version__}')
+    base.add_argument(
+        '--verbose', action='store_const', const=logging.DEBUG,
+        default=logging.INFO, help='verbose logging for debugging')
+
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[base, custom])
+    args = parser.parse_args()
+
+    log_format='%(asctime)s - %(levelname)s - %(funcName)s - %(message)s'
+    logging.basicConfig(level=args.verbose, format=log_format)
+
+    return args
+
+
 if __name__ == '__main__':
-    sys.exit(main())
+    args = parse_arguments()
+    return_code = args.function(**vars(args))
+    logging.shutdown()
+    sys.exit(return_code)

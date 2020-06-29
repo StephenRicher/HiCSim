@@ -44,8 +44,6 @@ default_config = {
     'reps':           5,
     'threads':        1,
     'seed':           42,
-    'n_types':        4,
-    'n_clusters':     20,
     'HiC':            {'matrix' : None,
                        'binsize': None,
                        'log' :    True},
@@ -85,7 +83,8 @@ BINSIZE = int(config['HiC']['binsize'])
 if BINSIZE:
     MERGEBINS, REMAINDER = divmod(BINSIZE, config['bases_per_bead'])
     if REMAINDER:
-        sys.exit(f'Binsize {config["HiC"]["binsize"]} is not divisible by '
+        sys.exit(
+            f'Binsize {config["HiC"]["binsize"]} is not divisible by '
             f'bases per bead {config["bases_per_bead"]}')
 else:
     MERGEBINS = 1
@@ -247,7 +246,7 @@ if config['ctcf'] is not None:
             rules.filterBedScore.output
         output:
             forward = 'genome/replicates/{rep}/tracks/CTCF-forward-{rep}.bed',
-            reverse = 'genome/replicates/{rep}/tracks/CTCF-reverse-{rep}.bed'
+            reversed = 'genome/replicates/{rep}/tracks/CTCF-reverse-{rep}.bed'
         params:
             min_rep = config['min_rep']
         group:
@@ -258,7 +257,7 @@ if config['ctcf'] is not None:
             f'{ENVS}/python3.yaml'
         shell:
             '{SCRIPTS}/split_bed.py --min_rep {params.min_rep} '
-            '--forward {output.forward} --reverse {output.reverse} '
+            '--forward {output.forward} --reverse {output.reversed} '
             '{input} &> {log}'
 
 
@@ -423,7 +422,7 @@ rule BeadsToLammps:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/generate_polymer.py model --seed {params.seed} '
+        '{SCRIPTS}/generate_polymer.py --seed {params.seed} '
         '--xlo {params.xlo} --xhi {params.xhi} '
         '--ylo {params.ylo} --yhi {params.yhi} '
         '--zlo {params.zlo} --zhi {params.zhi} '
@@ -521,7 +520,7 @@ rule create_contact_matrix:
     output:
         '{region}/{nbases}/reps/{rep}/matrices/contacts.npz'
     params:
-        distance = 3
+        distance =  3
     group:
         'lammps'
     log:

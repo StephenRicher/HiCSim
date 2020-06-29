@@ -5,101 +5,14 @@
 import sys
 import math
 import random
+import logging
 import argparse
+import fileinput
 import numpy as np
-import pyCommonTools as pct
 from utilities import commaPair
 from collections import namedtuple
-from collections import defaultdict
 
-#https://stackoverflow.com/questions/5154716/using-argparse-to-parse-arguments-of-form-arg-val
-def main():
-
-    __version__ = '1.0.0'
-
-    parser = pct.make_parser(
-        verbose=True, version=__version__,
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
-    base_args = pct.get_base_args()
-    subparser = pct.make_subparser(parser)
-
-    box_sizes = argparse.ArgumentParser(add_help=False)
-    box_sizes.add_argument(
-        '--xlo', default=-50, type=float,
-        help='Lower x-axis of simuluation box.')
-    box_sizes.add_argument(
-        '--xhi', default=50, type=float,
-        help='Upper x-axis of simuluation box.')
-    box_sizes.add_argument(
-        '--ylo', default=-50, type=float,
-        help='Lower y-axis of simuluation box.')
-    box_sizes.add_argument(
-        '--yhi', default=50, type=float,
-        help='Upper y-axis of simuluation box.')
-    box_sizes.add_argument(
-        '--zlo', default=-50, type=float,
-        help='Lower z-axis of simuluation box.')
-    box_sizes.add_argument(
-        '--zhi', default=50, type=float,
-        help='Upper z-axis of simuluation box.')
-
-    seed_arg = argparse.ArgumentParser(add_help=False)
-    seed_arg.add_argument(
-        '--seed', default=42, type=int,
-        help='Seed for random number generator.')
-
-    random_subparser = subparser.add_parser(
-        'random',
-        description=random_linear_polymer.__doc__,
-        help=random_linear_polymer.__doc__,
-        parents=[base_args, box_sizes, seed_arg],
-        epilog=parser.epilog)
-    random_subparser.add_argument(
-        '--n_molecules', default=1000, type=int,
-        help='Number of molecules in polymer.')
-    random_subparser.add_argument(
-        '--n_types', default=4, type=int,
-        help='Number of atom types in polymer.')
-    random_subparser.add_argument(
-        '--n_clusters', default=10, type=int,
-        help='Number of clusters in poymers.')
-    random_subparser.set_defaults(function=random_linear_polymer)
-
-    track_subparser = subparser.add_parser(
-        'model',
-        description=create_polymer.__doc__,
-        help=create_polymer.__doc__,
-        parents=[base_args, box_sizes, seed_arg],
-        epilog=parser.epilog)
-    track_subparser.add_argument(
-        'sequence',)
-    track_subparser.add_argument(
-        '--monomers', metavar='NBEADS,TYPE', type=commaPair,
-        action='append', default=[],
-        help='Add NBEADS number of monomers of TYPE.'
-        'Call multiple times to add multiple monomer types.')
-    track_subparser.add_argument(
-        '--ctcf', default=False, action='store_true',
-        help='Process beads labelled F and R as CTCF sites. Each bead is given '
-        'a unique ID and convergent orientation pair coeffs are output.')
-    track_subparser.add_argument(
-        '--pairCoeffs',
-        help='File of atom type coefficient pairings.')
-    track_subparser.add_argument(
-        '--coeffOut', default=None,
-        help='Outfile to write atom pair coefficients (default: stderr)')
-    track_subparser.add_argument(
-        '--groupOut', default=None,
-        help='Outfile to write atom group ID assignments (default: stderr)')
-    track_subparser.add_argument(
-        '--basesPerBead', required=True, type=int,
-        help='Number of bases used to represent 1 bead.')
-    track_subparser.set_defaults(function=create_polymer)
-
-    # Assert correct version - required for preserving dictionary insert order
-    assert sys.version_info >= (3, 7)
-    return (pct.execute(parser))
+__version__ = '1.0.0'
 
 
 class Sequence:
@@ -374,28 +287,28 @@ class lammps:
 
 
 
-def create_polymer(sequence, seed, monomers, ctcf, basesPerBead,
-        pairCoeffs, coeffOut, groupOut, xlo, xhi, ylo, yhi, zlo, zhi):
+def main(file, seed, monomers, ctcf, basesPerBead,
+        pairCoeffs, coeffOut, groupOut, xlo, xhi, ylo, yhi, zlo, zhi, **kwargs):
 
     random.seed(seed)
     dat = lammps()
     dat.loadBox(xlo, xhi, ylo, yhi, zlo, zhi)
-    dat.loadSequence(sequence, basesPerBead, ctcf)
+    dat.loadSequence(file, basesPerBead, ctcf)
     for monomer in monomers:
         nbeads = int(monomer[0])
         type = monomer[1]
         dat.loadMonomer(type, nbeads)
     dat.writeLammps()
-    with pct.open(pairCoeffs) as f:
-        with pct.open(coeffOut, 'w') as out:
-            for line in f:
+    with open(pairCoeffs) as fh:
+        with open(coeffOut, 'w') as out:
+            for line in fh:
                 line = line.strip().split()
                 coeff = ' '.join(line[2:])
                 atom1 = line[0]
                 atom2 = line[1]
                 # IF F-R or R-C (CTCF interaction)
                 dat.writeCoeffs(atom1, atom2, coeff, fh=out)
-    with pct.open(groupOut, 'w') as out:
+    with open(groupOut, 'w') as out:
         dat.writeGroup(fh=out)
 
 
@@ -461,5 +374,96 @@ class ParseDict(argparse.Action):
         setattr(namespace, self.dest, d)
 
 
+def parse_arguments():
+
+
+    random_subparser = argparse.ArgumentParser(add_help=False)
+    random_subparser.add_argument(
+        '--n_molecules', default=1000, type=int,
+        help='Number of molecules in polymer.')
+    random_subparser.add_argument(
+        '--n_types', default=4, type=int,
+        help='Number of atom types in polymer.')
+    random_subparser.add_argument(
+        '--n_clusters', default=10, type=int,
+        help='Number of clusters in poymers.')
+    random_subparser.set_defaults(function=random_linear_polymer)
+
+    box_sizes = argparse.ArgumentParser(add_help=False)
+    box_sizes.add_argument(
+        '--xlo', default=-50, type=float,
+        help='Lower x-axis of simuluation box.')
+    box_sizes.add_argument(
+        '--xhi', default=50, type=float,
+        help='Upper x-axis of simuluation box.')
+    box_sizes.add_argument(
+        '--ylo', default=-50, type=float,
+        help='Lower y-axis of simuluation box.')
+    box_sizes.add_argument(
+        '--yhi', default=50, type=float,
+        help='Upper y-axis of simuluation box.')
+    box_sizes.add_argument(
+        '--zlo', default=-50, type=float,
+        help='Lower z-axis of simuluation box.')
+    box_sizes.add_argument(
+        '--zhi', default=50, type=float,
+        help='Upper z-axis of simuluation box.')
+
+    seed_arg = argparse.ArgumentParser(add_help=False)
+    seed_arg.add_argument(
+        '--seed', default=42, type=int,
+        help='Seed for random number generator.')
+
+    custom = argparse.ArgumentParser(add_help=False)
+    custom.set_defaults(function=main)
+    custom.add_argument(
+        'file',metavar='SEQUENCE', help='Input bead sequence file.')
+    custom.add_argument(
+        '--monomers', metavar='NBEADS,TYPE', type=commaPair,
+        action='append', default=[],
+        help='Add NBEADS number of monomers of TYPE.'
+        'Call multiple times to add multiple monomer types.')
+    custom.add_argument(
+        '--ctcf', default=False, action='store_true',
+        help='Process beads labelled F and R as CTCF sites. Each '
+             'bead is given a unique ID and convergent orientation '
+             'pair coeffs are output (default: %(default)s)')
+    custom.add_argument(
+        '--pairCoeffs',
+        help='Outfile of atom type coefficient pairings.')
+    custom.add_argument(
+        '--coeffOut', default=None,
+        help='Outfile to write atom pair coefficients (default: stderr)')
+    custom.add_argument(
+        '--groupOut', default=None,
+        help='Outfile to write atom group ID assignments (default: stderr)')
+    custom.add_argument(
+        '--basesPerBead', required=True, type=int,
+        help='Number of bases used to represent 1 bead.')
+    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+
+    base = argparse.ArgumentParser(add_help=False)
+    base.add_argument(
+        '--version', action='version', version=f'%(prog)s {__version__}')
+    base.add_argument(
+        '--verbose', action='store_const', const=logging.DEBUG,
+        default=logging.INFO, help='verbose logging for debugging')
+
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[base, custom, box_sizes, seed_arg])
+    args = parser.parse_args()
+
+    log_format='%(asctime)s - %(levelname)s - %(funcName)s - %(message)s'
+    logging.basicConfig(level=args.verbose, format=log_format)
+
+    # Assert correct version - required for preserving dictionary insert order
+    assert sys.version_info >= (3, 7)
+
+    return args
+
+
 if __name__ == '__main__':
-    sys.exit(main())
+    args = parse_arguments()
+    return_code = args.function(**vars(args))
+    logging.shutdown()
+    sys.exit(return_code)
