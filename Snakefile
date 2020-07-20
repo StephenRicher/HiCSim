@@ -487,9 +487,8 @@ rule lammps:
         timestep = config['lammps']['timestep'],
         warm_up_time = config['lammps']['warm_up'],
         sim_time = config['lammps']['sim_time'],
-        restart_time = int(config['lammps']['timestep']) * int(config['lammps']['restart']),
         cosine_potential = lambda wc: 10000 / config['bases_per_bead'],
-        restart = restartCommand, #restart = lambda wc: f'{wc.region}/{wc.nbases}/reps/{wc.rep}/lammps/restart/Restart',
+        restart = restartCommand,
         seed = lambda wc: SEEDS[REPS.index(int(wc.rep))]
     group:
         'lammps'
