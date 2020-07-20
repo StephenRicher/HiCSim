@@ -52,7 +52,7 @@ HiC :
 
 # Define confguration for plotting Radius of Gyration
 plotRG :
-    dpi: 1200
+    dpi: 600
     confidence: 0.95
 
 xlo: -50
