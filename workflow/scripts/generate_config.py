@@ -49,7 +49,7 @@ def main():
         '--links', nargs=2, default=None,
         help = 'UP and DOWN links files showing differential interactions.')
     parser.add_argument(
-        '--ctcfs', nargs = '+', default = None,
+        '--ctcfs', nargs = '+', default=None,
         help = 'CTCF position in bigWig format.')
     parser.add_argument(
         '--ctcf_orientation',
@@ -58,7 +58,7 @@ def main():
         '--genes',
         help = 'Genes in BED format.')
     parser.add_argument(
-        '--depth', type = int, default = 1000000,
+        '--depth', type = int, default=1000000,
         help = 'HiC matrix depth.')
     parser.add_argument(
         '--colourmap', default='Purples',
@@ -152,8 +152,6 @@ def write_matrix(
         depth=1000000, vMin=None, vMax=None,
         invert=False, log=False):
 
-    #if invert:
-    #    depth = int(depth / 2)
     config = ['[Matrix]',
               f'file = {matrix}',
               f'depth = {depth}',

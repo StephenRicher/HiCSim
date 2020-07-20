@@ -13,7 +13,7 @@ neigh_modify every 1 delay 1 check yes
 ############################
 ####    DEFINITIONS     ####
 ############################
-restart ${restart_time} ${restart}
+restart ${restart}
 
 ############################
 ####   READ DATA FILE ######
@@ -71,7 +71,9 @@ fix RG DNA print ${timestep} "${time} ${RG}" file ${radius_gyration}
 ####################################
 ####    DUMP POSITIONS OF ATOMS ####
 ####################################
-dump 1 all xyz ${timestep} ${warm_up}
+#dump 1 all xyz ${timestep} ${warm_up}
+dump 1 all custom ${timestep} ${warm_up} id type x y z ix iy iz
+dump_modify 1 format line '%d %d %.5f %.5f %.5f %d %d %d' sort 1
 
 ####################################
 ####    RUN -- EQUIL         #######
@@ -81,7 +83,9 @@ run ${warm_up_time}
 unfix pushapart  # STOP DISPLACING WITH SOFT
 unfix RG
 undump 1 # Close warm_up dump
-dump 2 all xyz ${timestep} ${sim}
+#dump 2 all xyz ${timestep} ${sim}
+dump 2 all custom ${timestep} ${sim} id type x y z ix iy iz
+dump_modify 2 format line '%d %d %.5f %.5f %.5f %d %d %d' sort 1
 fix RG DNA print ${timestep} "$(step) ${RG}" append ${radius_gyration}
 
 ######################################

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+container: "docker://continuumio/miniconda3:4.7.12"
+
 import os
 import random
 import tempfile
@@ -35,18 +37,23 @@ default_config = {
     'bases_per_bead': 1000,
     'monomers':       100,
     'method':         'mean',
-    'dpi':            600,
-    'cmap':           'Reds',
-    'transform':      'log10',
-    'vmin':           0,
-    'vmax':           None,
     'n_molecules':    1000,
     'reps':           5,
     'threads':        1,
     'seed':           42,
-    'HiC':            {'matrix' : None,
-                       'binsize': None,
-                       'log' :    True},
+    'lammps':         {'restart':    0       ,
+                       'timestep':   1000    ,
+                       'warm_up':    20000   ,
+                       'sim_time':   2000000 ,},
+    'HiC':            {'matrix' :    None    ,
+                       'binsize':    None    ,
+                       'log' :       True    ,
+                       'colourMap': 'Purples',
+                       'dpi':        600 ,
+                       'vMin':       None    ,
+                       'vMax':       None    ,},
+    'plotRG':         {'dpi':        600     ,
+                       'confidence': 0.95    ,},
     'xlo':            -100,
     'xhi':            100,
     'ylo':            -100,
@@ -55,9 +62,6 @@ default_config = {
     'zhi':            100,
     'window_size':    10,
     'overlap':        2,
-    'timestep':       1000,
-    'warm_up':        20000,
-    'sim_time':       2000000,
     'delay':          10,
     'loop':           0,
     'tmpdir':         tempfile.gettempdir(),
@@ -91,6 +95,7 @@ else:
     BINSIZE = config['bases_per_bead']
 
 
+# Read track file basename and masking character into a dictionary
 track_data = {}
 for file, character in config['masking'].items():
     track_file = f'{os.path.basename(file)}'
@@ -101,7 +106,8 @@ rule all:
         [expand('{region}/{nbases}/vmd/simulation.gif',
             nbases=config['bases_per_bead'], region=REGION),
          expand('{region}/{nbases}/merged/simulation-{binsize}.png',
-            nbases=config['bases_per_bead'], region=REGION, binsize=BINSIZE)]
+            nbases=config['bases_per_bead'], region=REGION, binsize=BINSIZE),
+        f'{REGION}/{config["bases_per_bead"]}/merged/radius_of_gyration.png']
 
 
 rule bgzipGenome:
@@ -302,15 +308,6 @@ def getMasking(wc):
                     f'--bed genome/replicates/{wc.rep}/tracks/CTCF-reverse-{wc.rep}.bed,R ')
     return command
 
-def getMasking2(wc):
-    """ Build masking command for maskFasta for track data """
-    command = ''
-    for bed, character in config['masking'].items():
-        command += f'--bed {bed},{character} '
-    if config['ctcf']:
-        command += (f'--bed genome/replicates/{wc.rep}/tracks/CTCF-forward-{wc.rep}.bed,F '
-                    f'--bed genome/replicates/{wc.rep}/tracks/CTCF-reverse-{wc.rep}.bed,R ')
-    return command
 
 rule maskFasta:
     input:
@@ -466,22 +463,33 @@ if config['cluster']:
 else:
     lmp_cmd = 'lmp_serial ' + lmp_cmd
 
+
+def restartCommand(wc):
+    # Define reset command, turn restart OFF if set to 0
+    step = int(config['lammps']['restart'])
+    if step == 0:
+        return f'{step}'
+    else:
+        prefix = f'{wc.region}/{wc.nbases}/reps/{wc.rep}/lammps/restart/Restart'
+        interval = step * int(config['lammps']['timestep'])
+        return f'"{interval} {prefix}"'
+
 rule lammps:
     input:
         data = rules.BeadsToLammps.output.dat,
         script = rules.addCTCF.output
     output:
-        warm_up = '{region}/{nbases}/reps/{rep}/lammps/warm_up.xyz.gz',
-        simulation = '{region}/{nbases}/reps/{rep}/lammps/simulation.xyz.gz',
+        warm_up = '{region}/{nbases}/reps/{rep}/lammps/warm_up.custom.gz',
+        simulation = '{region}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
         radius_gyration = '{region}/{nbases}/reps/{rep}/lammps/radius_of_gyration.txt',
         restart = directory('{region}/{nbases}/reps/{rep}/lammps/restart/')
     params:
-        timestep = config['timestep'],
-        warm_up_time = config['warm_up'],
-        sim_time = config['sim_time'],
-        restart_time = int(config['timestep']) * 100, # Use 0 for no restart file
+        timestep = config['lammps']['timestep'],
+        warm_up_time = config['lammps']['warm_up'],
+        sim_time = config['lammps']['sim_time'],
+        restart_time = int(config['lammps']['timestep']) * int(config['lammps']['restart']),
         cosine_potential = lambda wc: 10000 / config['bases_per_bead'],
-        restart = lambda wc: f'{wc.region}/{wc.nbases}/reps/{wc.rep}/lammps/restart/Restart',
+        restart = restartCommand, #restart = lambda wc: f'{wc.region}/{wc.nbases}/reps/{wc.rep}/lammps/restart/Restart',
         seed = lambda wc: SEEDS[REPS.index(int(wc.rep))]
     group:
         'lammps'
@@ -494,10 +502,41 @@ rule lammps:
     shell:
         lmp_cmd
 
+rule plotRG:
+    input:
+        expand('{{region}}/{{nbases}}/reps/{rep}/lammps/radius_of_gyration.txt',
+            rep=REPS)
+    output:
+        '{region}/{nbases}/merged/radius_of_gyration.png'
+    params:
+        confidence = config['plotRG']['confidence'],
+        dpi = config['plotRG']['dpi']
+    log:
+        'logs/plotRG/{region}-{nbases}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/plotRG.py --output {output} --dpi {params.dpi} '
+        '--confidence {params.confidence} {input} 2> {log}'
+
+
+rule custom2XYZ:
+    input:
+        '{region}/{nbases}/reps/{rep}/lammps/{mode}.custom.gz'
+    output:
+        '{region}/{nbases}/reps/{rep}/lammps/{mode}.xyz.gz'
+    log:
+        'logs/custom2XYZ/{region}-{nbases}-{rep}-{mode}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '({SCRIPTS}/custom2XYZ.py <(zcat -f {input}) '
+        '| gzip > {output}) 2> {log}'
+
 
 rule extractDNA:
     input:
-        simulation = rules.lammps.output.simulation,
+        simulation = '{region}/{nbases}/reps/{rep}/lammps/simulation.xyz.gz',
         groups = rules.BeadsToLammps.output.groups
     output:
         pipe('{region}/{nbases}/reps/{rep}/lammps/simulation-DNA.xyz')
@@ -602,12 +641,16 @@ rule mergeBins:
 
 
 def getHiCconfig(wc):
-    """ Build config command for real HiC data """
+    """ Build config command for configuration """
     command = ''
     if config['HiC']['matrix']:
         command += f'--flip --matrix2 {config["HiC"]["matrix"]} '
+    if config['HiC']['vMin'] is not None:
+        command += f' --vMin {config["plot"]["vMin"]} '
+    if config['HiC']['vMax'] is not None:
+        command += f' --vMax {config["plot"]["vMax"]} '
     if config['HiC']['log']:
-        command += '--log_matrix2'
+        command += ' --log --log_matrix2 '
     return command
 
 
@@ -621,14 +664,14 @@ rule createConfig:
     conda:
         f'{ENVS}/python3.yaml'
     params:
-        depth = int((END - START) / 2),
+        depth = int(END - START),
         hicConfig = getHiCconfig,
-        colourMap = 'Purples'
+        colourMap = config['HiC']['colourMap'],
     log:
         'logs/createConfig/{region}-{nbases}-{binsize}.log'
     shell:
         '{SCRIPTS}/generate_config.py --matrix {input.matrix} '
-        '--ctcf_orientation {input.ctcf_orientation} --log '
+        '--ctcf_orientation {input.ctcf_orientation} '
         '--colourmap {params.colourMap} '
         '--genes {input.genes} {params.hicConfig} '
         '--depth {params.depth} > {output} 2> {log}'
@@ -642,7 +685,7 @@ rule plotHiC:
     params:
         region = f'{CHR}:{START}-{END}',
         title = f'"{REGION} : {CHR}:{START}-{END}"',
-        dpi = 600
+        dpi = config['HiC']['dpi']
     log:
         'logs/plotHiC/{region}-{nbases}-{binsize}.log'
     conda:

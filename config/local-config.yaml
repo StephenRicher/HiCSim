@@ -3,11 +3,12 @@ workdir: /media/stephen/Data/modelling/
 tmpdir: /media/stephen/Data/modelling/
 cluster: False
 
-reps: 10
+reps: 100
 threads: 6
 bases_per_bead: 5000
 monomers: 200
 genome: /media/stephen/Data/genomes/hg19/Homo_sapiens.GRCh37.dna.primary_assembly.fa.gz
+
 
 ctcf :
     - /media/stephen/Data/genomes/hg19/tracks/GM12878-CTCF-hg19.bed
@@ -18,6 +19,13 @@ masking:
     /media/stephen/Data/genomes/hg19/tracks/GM12878-H3K4m1-hg19.bed : 1
 
 coeffs: /home/stephen/phd/modelling/pipeline/config/pair_coeffs.txt
+
+# LAMMPS config (rule: lammps)
+lammps :
+    restart:  0
+    timestep: 500
+    warm_up:  500000
+    sim_time: 1000000
 
 region: GNG12
 chr: 1
@@ -35,19 +43,21 @@ end: 70234314
 #end: 107279803
 
 HiC :
-    matrix : /media/stephen/Data/genomes/hg19/tracks/GSE63525_GM12878_insitu_primary+replicate_combined_10000-chr1.cool
+    colourMap: 'Purples'
+    dpi: 1200
     log : True
+    matrix : /media/stephen/Data/genomes/hg19/tracks/GSE63525_GM12878_insitu_primary+replicate_combined_10000-chr1.cool
     binsize : 5000
 
-dpi: 1200
+
+# Define confguration for plotting Radius of Gyration
+plotRG :
+    dpi: 1200
+    confidence: 0.95
+
 xlo: -50
 xhi: 50
 ylo: -50
 yhi: 50
 zlo: -50
 zhi: 50
-
-# LAMMPS config (rule: lammps)
-timestep: 500
-warm_up: 500000
-sim_time: 1000000

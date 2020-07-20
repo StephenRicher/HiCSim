@@ -14,7 +14,6 @@ __version__ = '1.0.0'
 
 
 def main(file, groupFile, group, **kwargs):
-    """ Extract valid CTCFBSDB motifs and convert to BED. """
 
     groups = readGroup(groupFile)
     range = getIDRange(groups, group)
