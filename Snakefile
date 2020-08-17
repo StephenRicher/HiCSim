@@ -150,27 +150,23 @@ rule getChromSizes:
 
 if config['ctcf'] is not None:
 
-    rule getOrientationCTCF:
+    rule runCTCFpredict:
         input:
-            genome = rules.bgzipGenome.output,
-            index = rules.indexGenome.output,
-            ctcf = lambda wc: config['ctcf'][int(wc.rep)]
+            config['ctcf']
         output:
-            'genome/tracks/CTCF-{rep}.bed'
+            'genome/tracks/CTCF-prediction.tsv'
         log:
-            'logs/getOrientationCTCF/{rep}.log'
+            'logs/runCTCFpredict.log'
         conda:
-            f'{ENVS}/extract_ctcf_direction.yaml'
+            f'{ENVS}/python3.yaml'
         shell:
-            '{SCRIPTS}/extract_direction.py {input.genome} {input.ctcf} '
-            '> {output} 2> {log}'
+            '{SCRIPTS}/runCTCFpredict.py {input} > {output} 2> {log}'
 
 
     rule processCTCFprediction:
         input:
-            '/media/stephen/Data/genomes/hg19/tracks/GM12878-CTCF-hg19-prediction.tsv'
+            rules.runCTCFpredict.output
         output:
-            #'genome/tracks/CTCF-{rep}.bed'
             'genome/tracks/CTCF-prediction.bed'
         params:
             threshold = 15
@@ -185,7 +181,6 @@ if config['ctcf'] is not None:
 
     rule sortBed:
         input:
-            #expand('genome/tracks/CTCF-{rep}.bed', rep = range(0, len(config['ctcf'])))
             rules.processCTCFprediction.output
         output:
             'genome/tracks/CTCF.sort.bed'
@@ -450,7 +445,6 @@ lmp_cmd = ('-var infile {input.data} '
            '-var warm_up {output.warm_up} '
            '-var warm_up_time {params.warm_up_time} '
            '-var restart {params.restart} '
-           '-var restart_time {params.restart_time} '
            '-var sim {output.simulation} '
            '-var sim_time {params.sim_time} '
            '-var timestep {params.timestep} '
