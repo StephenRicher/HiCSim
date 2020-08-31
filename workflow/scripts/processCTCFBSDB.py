@@ -19,10 +19,10 @@ def main(file, threshold=3, **kwargs):
             motif, seq, name, pos, length, orient, motif_score = line.split()
             if float(motif_score) < threshold:
                 continue
-            score, chr, start, end = re.sub('[:-]', ' ', name).split()
+            chr, start, end, reps, score = re.sub('[:-]', ' ', name).split()
             start = int(start) + int(pos)
             end = start + int(pos) + int(length)
-            sys.stdout.write(f'{chr}\t{start}\t{end}\t.\t{score}\t{orient}\n')
+            sys.stdout.write(f'{chr}\t{start}\t{end}\t{name}\t{score}\t{orient}\n')
 
 
 def parse_arguments():
