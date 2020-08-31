@@ -28,12 +28,14 @@ default_config = {
     'genome':         '',
     'build':          'genome',
     'ctcf':           None,
+    'computeDirection': True,
     'masking':        {},
     'region':         '',
     'chr':            '',
     'start':          '',
     'end':            '',
     'min_rep':        1,
+    'logScore':       True,
     'bases_per_bead': 1000,
     'monomers':       100,
     'method':         'mean',
@@ -49,10 +51,10 @@ default_config = {
                        'binsize':    None    ,
                        'log' :       True    ,
                        'colourMap': 'Purples',
-                       'dpi':        600 ,
+                       'dpi':        300 ,
                        'vMin':       None    ,
                        'vMax':       None    ,},
-    'plotRG':         {'dpi':        600     ,
+    'plotRG':         {'dpi':        300     ,
                        'confidence': 0.95    ,},
     'xlo':            -100,
     'xhi':            100,
@@ -110,36 +112,33 @@ rule all:
         f'{REGION}/{config["bases_per_bead"]}/merged/radius_of_gyration.png']
 
 
-rule bgzipGenome:
+rule unzipGenome:
     input:
         GENOME
     output:
-        f'genome/{BUILD}.fa.gz'
+        temp(f'genome/{BUILD}.fa')
     log:
-        f'logs/bgzipGenome/{BUILD}.log'
-    conda:
-        f'{ENVS}/tabix.yaml'
+        f'logs/unzipGenome/{BUILD}.log'
     shell:
-        '(zcat -f {input} | bgzip > {output}) 2> {log}'
+        'zcat -f {input} > {output} 2> {log}'
 
 
 rule indexGenome:
     input:
-        rules.bgzipGenome.output
+        rules.unzipGenome.output
     output:
-        fai = f'{rules.bgzipGenome.output}.fai',
-        gzi = f'{rules.bgzipGenome.output}.gzi'
+        f'{rules.unzipGenome.output}.fai'
     log:
         f'logs/indexGenome/{BUILD}.log'
     conda:
         f'{ENVS}/samtools.yaml'
     shell:
-        'samtools faidx {input}'
+        'samtools faidx {input} &> {log}'
 
 
 rule getChromSizes:
     input:
-        rules.indexGenome.output.fai
+        rules.indexGenome.output
     output:
         f'genome/{BUILD}-chrom.sizes'
     log:
@@ -150,38 +149,74 @@ rule getChromSizes:
 
 if config['ctcf'] is not None:
 
-    rule runCTCFpredict:
-        input:
-            config['ctcf']
-        output:
-            'genome/tracks/CTCF-prediction.tsv'
-        log:
-            'logs/runCTCFpredict.log'
-        conda:
-            f'{ENVS}/python3.yaml'
-        shell:
-            '{SCRIPTS}/runCTCFpredict.py {input} > {output} 2> {log}'
+    if config['computeDirection']:
+
+        rule modifyBedName:
+            input:
+                config['ctcf']
+            output:
+                'genome/tracks/CTCF-modifyName.bed'
+            log:
+                'logs/modifyBedName.log'
+            conda:
+                f'{ENVS}/python3.yaml'
+            shell:
+                '{SCRIPTS}/modifyBedName.py {input} > {output} 2> {log}'
 
 
-    rule processCTCFprediction:
-        input:
-            rules.runCTCFpredict.output
-        output:
-            'genome/tracks/CTCF-prediction.bed'
-        params:
-            threshold = 15
-        log:
-            'logs/processCTCFprediction.log'
-        conda:
-            f'{ENVS}/python3.yaml'
-        shell:
-            '{SCRIPTS}/processCTCFBSDB.py --threshold {params.threshold} '
-            '{input} > {output} 2> {log}'
+        rule bed2Fasta:
+            input:
+                bed = rules.modifyBedName.output,
+                genome = rules.unzipGenome.output,
+                genomeIndex = rules.indexGenome.output
+            output:
+                'genome/tracks/CTCF-modifyName.fasta'
+            log:
+                'logs/bed2Fasta.log'
+            conda:
+                f'{ENVS}/bedtools.yaml'
+            shell:
+                'bedtools getfasta -name -fullHeader '
+                '-bed {input.bed} -fi {input.genome} > {output} 2> {log}'
 
+
+        rule runCTCFpredict:
+            input:
+                rules.bed2Fasta.output
+            output:
+                'genome/tracks/CTCF-prediction.tsv'
+            log:
+                'logs/runCTCFpredict.log'
+            conda:
+                f'{ENVS}/python3.yaml'
+            shell:
+                '{SCRIPTS}/runCTCFpredict.py {input} > {output} 2> {log}'
+
+
+        rule processCTCFprediction:
+            input:
+                rules.runCTCFpredict.output
+            output:
+                'genome/tracks/CTCF-prediction.bed'
+            params:
+                threshold = 15
+            log:
+                'logs/processCTCFprediction.log'
+            conda:
+                f'{ENVS}/python3.yaml'
+            shell:
+                '{SCRIPTS}/processCTCFBSDB.py --threshold {params.threshold} '
+                '{input} > {output} 2> {log}'
+
+    def CTCFinput(wildcards):
+        if config['computeDirection']:
+            return rules.processCTCFprediction.output
+        else:
+            return config['ctcf']
 
     rule sortBed:
         input:
-            rules.processCTCFprediction.output
+            CTCFinput
         output:
             'genome/tracks/CTCF.sort.bed'
         group:
@@ -191,7 +226,7 @@ if config['ctcf'] is not None:
         conda:
             f'{ENVS}/bedtools.yaml'
         shell:
-            'bedtools sort -i <(cat {input}) > {output} 2> {log}'
+            'bedtools sort -i {input} > {output} 2> {log}'
 
 
     rule mergeBed:
@@ -215,6 +250,8 @@ if config['ctcf'] is not None:
             rules.mergeBed.output
         output:
             'genome/tracks/CTCF.scaled.bed'
+        params:
+            logScore = '--log' if config['logScore'] else ''
         group:
             'bedtools'
         log:
@@ -222,7 +259,8 @@ if config['ctcf'] is not None:
         conda:
             f'{ENVS}/python3.yaml'
         shell:
-            '{SCRIPTS}/scaleBedScore.py --log {input} > {output} 2> {log}'
+            '{SCRIPTS}/scaleBedScore.py {params.logScore} {input} '
+            '> {output} 2> {log}'
 
 
     rule filterBedScore:
@@ -267,12 +305,15 @@ rule scaleTracks:
         lambda wc: track_data[wc.track]['source']
     output:
         'genome/tracks/scaled/{track}'
+    params:
+        logScore = '--log' if config['logScore'] else ''
     log:
         'logs/scaleTracks/{track}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/scaleBedScore.py --log {input} > {output} 2> {log}'
+        '{SCRIPTS}/scaleBedScore.py {params.logScore} {input} '
+        '{params.logScore} > {output} 2> {log}'
 
 
 rule filterTracks:
@@ -426,17 +467,32 @@ rule BeadsToLammps:
         '{input} > {output.dat} 2> {log}'
 
 
-rule addCTCF:
+rule checkCTCF:
     input:
         script = f'{SCRIPTS}/run-ctcf.lam',
+        dat = rules.BeadsToLammps.output.dat
+    output:
+        temp('{region}/{nbases}/reps/{rep}/lammps/config/run-ctcf.tmp.lam')
+    log:
+        'logs/checkCTCF/{region}-{nbases}-{rep}.log'
+    shell:
+        "(awk '/Bonds/,/Angles/{{print $2}}' {input.dat} "
+        "| grep -q 2 && cat {input.script} > {output} "
+        "|| sed -e '/bond_coeff 2/d' {input.script} "
+        "> {output}) 2> {log}"
+
+
+rule addCTCF:
+    input:
+        script = rules.checkCTCF.output,
         coeffs = rules.BeadsToLammps.output.coeffs,
-        groups = rules.BeadsToLammps.output.groups
+        groups = rules.BeadsToLammps.output.groups,
     output:
         '{region}/{nbases}/reps/{rep}/lammps/config/run-ctcf.lam'
     log:
         'logs/addCTCF/{region}-{nbases}-{rep}.log'
     shell:
-        "sed '/^#CTCF_COEFF/ r {input.coeffs}' {input.script} "
+        "sed '/^#PAIR_COEFF/ r {input.coeffs}' {input.script} "
         "| sed '/^#GROUPS/ r {input.groups}' > {output} 2> {log}"
 
 
@@ -495,6 +551,7 @@ rule lammps:
     shell:
         lmp_cmd
 
+
 rule plotRG:
     input:
         expand('{{region}}/{{nbases}}/reps/{rep}/lammps/radius_of_gyration.txt',
@@ -523,8 +580,7 @@ rule custom2XYZ:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '({SCRIPTS}/custom2XYZ.py <(zcat -f {input}) '
-        '| gzip > {output}) 2> {log}'
+        '(zcat {input} | {SCRIPTS}/custom2XYZ.py | gzip > {output}) 2> {log}'
 
 
 rule extractDNA:
@@ -732,6 +788,7 @@ rule juicerPre:
         '-jar {SCRIPTS}/juicer_tools_1.14.08.jar pre '
         '-c {params.chr} -r {params.resolutions} '
         '{input.tsv} {output} {input.chrom_sizes} &> {log}'
+
 
 rule smooth_xyz:
     input:
