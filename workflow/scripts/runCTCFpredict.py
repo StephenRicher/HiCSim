@@ -31,7 +31,11 @@ def predictCTCF(sequence):
 
     data = {'my_seqData': sequence, 'my_run' : 1}
     r = requests.post('http://insulatordb.uthsc.edu/storm_new.php', data=data)
-    results_table = pd.read_html(r.text)[2]
+    try:
+        results_table = pd.read_html(r.text)[2]
+    except IndexError:
+        sys.stderr.write(sequence)
+        return 1
     results_tsv = results_table.to_csv(index=False, header=False, sep='\t')
     if len(results_tsv) == '':
         sys.stderr.write(sequence)
