@@ -94,7 +94,7 @@ fix RG DNA print ${timestep} "$(step) ${RG}" append ${radius_gyration}
 pair_style  lj/cut 1.12246
 pair_modify     shift yes
 pair_coeff * *  1.0 1.0 1.12246 ##REPULSIVE ANY TWO BEADS
-#CTCF_COEFF
+#PAIR_COEFF
 
 ####################################
 ####    FENE BONDS           #######
