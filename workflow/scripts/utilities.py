@@ -146,6 +146,25 @@ def region(value):
     else:
         return regions
 
+def coordinates(value):
+    ''' Validate input for genomic coordinates  '''
+
+    pattern = re.compile('^[^:-]+:[0-9]+-[0-9]+$')
+    if not pattern.match(value):
+        raise argparse.ArgumentTypeError(
+            'Expected format is CHR:START-END e.g chr1:1-1000. '
+            'Chromosome name cannot contain ": -" .')
+    coords = {}
+    coords['chr'], coords['start'], coords['end'] = re.sub('[:-]', ' ', value).split()
+    coords['start'] = int(coords['start'])
+    coords['end'] = int(coords['end'])
+    if not coords['start'] < coords['end']:
+        raise argparse.ArgumentTypeError(
+            f'Start coordinate {coords["start"]} not less '
+            f'than end coordinate {coords["end"]}.')
+    else:
+        return coords
+
 
 def commaPair(value):
     ''' Split command seperated pair and return as dictionary '''
