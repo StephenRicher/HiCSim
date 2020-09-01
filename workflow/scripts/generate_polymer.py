@@ -227,21 +227,34 @@ class lammps:
         """
         pairs = set()
         typeList = sequence.types
-        for typeIdx in range(len(typeList) - 1):
+        typeIdxs = list(range(len(typeList) - 1))
+        # Ensure shuffle is same for each call within object
+        random.seed(self._seed)
+        # Shuffle to initiate loop extrusion differently per replicate
+        random.shuffle(typeIdxs)
+        usedSites = []
+        for typeIdx in typeIdxs:
+            # Set to True to prevent loops forming passed already formed loops
+            alreadyUsed = False
             # Reverse down the list until reach forward CTCF
             for forwardBead in reversed(typeList[:typeIdx + 1]):
-                if forwardBead.startswith(('F', 'B')):
+                if forwardBead in usedSites:
+                    alreadyUsed = True
+                if forwardBead.startswith(('F', 'B')) and not alreadyUsed:
                     break
             else:
                 continue
             # Move up the list until reach reverse CTCF
             for reverseBead in typeList[typeIdx + 1:]:
-                if reverseBead.startswith(('R', 'B')):
+                if reverseBead in usedSites:
+                    reverseUsed = True
+                if reverseBead.startswith(('R', 'B')) and not alreadyUsed:
                     break
             else:
                 continue
+            usedSites.extend([forwardBead, reverseBead])
             pairs.add((sequence.ctcfs[forwardBead], sequence.ctcfs[reverseBead]))
-        pairs = self.uniqueCTCF(list(pairs))
+        # pairs = self.uniqueCTCF(list(pairs))
         return pairs
 
 
