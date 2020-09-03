@@ -78,6 +78,9 @@ REPS = list(range(1, config['reps'] + 1))
 random.seed(config['seed'])
 SEEDS = [random.randint(1, (2**16) - 1) for i in REPS]
 
+# TEMPORARY - INTRODUCE CONSTANT SEED
+SEEDS = [1 for i in REPS]
+
 GENOME = config['genome']
 BUILD = config['build']
 REGION = config['region']
@@ -109,6 +112,8 @@ rule all:
             nbases=config['bases_per_bead'], region=REGION),
          expand('{region}/{nbases}/merged/simulation-{binsize}.png',
             nbases=config['bases_per_bead'], region=REGION, binsize=BINSIZE),
+         expand('{region}/{nbases}/merged/TFCorrelation.png',
+            nbases=config['bases_per_bead'], region=REGION),
         f'{REGION}/{config["bases_per_bead"]}/merged/radius_of_gyration.png']
 
 
@@ -403,7 +408,7 @@ rule extractRegion:
     output:
         pipe('genome/replicates/{rep}/genome/{region}-masked-{rep}.fa')
     group:
-        'convert2Beads'
+        'convert2Lammps'
     params:
         region = f'{CHR}:{START}-{END}'
     log:
@@ -420,16 +425,17 @@ rule FastaToBeads:
     output:
         '{region}/{nbases}/reps/{rep}/sequence/{region}-beads-{rep}.txt'
     group:
-        'convert2Beads'
+        'convert2Lammps'
     params:
-        bases_per_bead = config['bases_per_bead']
+        bases_per_bead = config['bases_per_bead'],
+        seed = lambda wildcards: SEEDS[REPS.index(int(wildcards.rep))]
     log:
         'logs/sequenceToBeads/{region}-{nbases}-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
         '{SCRIPTS}/FastaToBeads.py --nbases {params.bases_per_bead} '
-        '{input} > {output} 2> {log}'
+        '--seed {params.seed} {input} > {output} 2> {log}'
 
 
 rule BeadsToLammps:
@@ -451,7 +457,7 @@ rule BeadsToLammps:
         zlo = config['zlo'],
         zhi = config['zhi']
     group:
-        'lammps'
+        'convert2Lammps'
     log:
         'logs/BeadsToLammps/{region}-{nbases}-{rep}.log'
     conda:
@@ -594,7 +600,7 @@ rule extractDNA:
         simulation = '{region}/{nbases}/reps/{rep}/lammps/simulation.xyz.gz',
         groups = rules.BeadsToLammps.output.groups
     output:
-        pipe('{region}/{nbases}/reps/{rep}/lammps/simulation-DNA.xyz')
+        '{region}/{nbases}/reps/{rep}/lammps/simulation-DNA.xyz.gz'
     params:
         group = 'DNA'
     log:
@@ -604,8 +610,56 @@ rule extractDNA:
     shell:
         '{SCRIPTS}/filterXYZ.py --groupFile {input.groups} '
         '--group {params.group} <(zcat -f {input}) '
-        '> {output} 2> {log}'
+        '| gzip > {output} 2> {log}'
 
+
+rule extractTF:
+    input:
+        simulation = '{region}/{nbases}/reps/{rep}/lammps/simulation.xyz.gz',
+        groups = rules.BeadsToLammps.output.groups
+    output:
+        '{region}/{nbases}/reps/{rep}/lammps/simulation-MONOMER.xyz.gz'
+    params:
+        group = 'monomer'
+    log:
+        'logs/extractTF/{region}-{nbases}-{rep}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/filterXYZ.py --groupFile {input.groups} '
+        '--group {params.group} <(zcat -f {input}) '
+        '| gzip > {output} 2> {log}'
+
+
+rule computeNearestMonomer:
+    input:
+        monomers = rules.extractTF.output,
+        dna = rules.extractDNA.output
+    output:
+        '{region}/{nbases}/reps/{rep}/TFDistances.npy'
+    params:
+        distance = 1.3
+    log:
+        'logs/computeNearestMonomer/{region}-{nbases}-{rep}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/computeNearestMonomer.py '
+        '<(zcat -f {input.dna}) <(zcat -f {input.monomers}) '
+        '--distance {params.distance} --out {output} &> {log}'
+
+
+rule plotTFCorrelation:
+    input:
+        expand('{{region}}/{{nbases}}/reps/{rep}/TFDistances.npy', rep=REPS)
+    output:
+        '{region}/{nbases}/merged/TFCorrelation.png'
+    log:
+        'logs/plotTFCorrelation/{region}-{nbases}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/plotTFCorrelation.py {input} --out {output} &> {log}'
 
 
 rule create_contact_matrix:
@@ -624,7 +678,7 @@ rule create_contact_matrix:
     shell:
         '{SCRIPTS}/create_contact_matrix.py '
         '--outdata {output} --distance {params.distance} '
-        '{input} &> {log}'
+        '<(zcat -f {input}) &> {log}'
 
 
 rule mergeReplicates:
