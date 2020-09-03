@@ -98,9 +98,15 @@ class lammps:
 
     @property
     def nBeads(self):
+        """ Return total number of beads in simulated. """
         n = sum([sequence.nBeads for sequence in self.sequences])
-        n += sum([len(monomer) for monomer in self.monomers])
+        n += self.nMonomers
         return n
+
+    @property
+    def nMonomers(self):
+        """ Return total polymer beads across all types. """
+        return sum([len(monomer) for monomer in self.monomers])
 
     @property
     def nAngles(self):
@@ -297,6 +303,7 @@ class lammps:
             lastBeadID = max(sequence.sequence)
             name = sequence.name
             fh.write(f'group {name} id {firstBeadID}:{lastBeadID}\n')
+            fh.write(f'group monomer id {lastBeadID + 1}:{lastBeadID + self.nMonomers}\n')
 
 
 
