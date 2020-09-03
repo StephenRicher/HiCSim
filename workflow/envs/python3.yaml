@@ -9,3 +9,4 @@ dependencies :
     - seaborn
     - matplotlib
     - pyCommonTools==2.3.0
+    - requests
