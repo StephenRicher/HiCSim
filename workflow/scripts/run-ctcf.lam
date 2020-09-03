@@ -6,7 +6,7 @@
 units                lj
 atom_style           angle
 # Define boundary condition for x, y & z (p = periodic)
-boundary             p p p
+boundary             m m m
 neighbor             1.4 bin
 neigh_modify every 1 delay 1 check yes
 
@@ -65,13 +65,12 @@ reset_timestep 0
 #GROUPS
 compute RG DNA gyration
 variable RG equal c_RG
-variable time equal -(${warm_up_time}+${timestep}-step)
+variable time equal -(${warm_up_time}+200000+${timestep}-step)
 fix RG DNA print ${timestep} "${time} ${RG}" file ${radius_gyration}
 
 ####################################
 ####    DUMP POSITIONS OF ATOMS ####
 ####################################
-#dump 1 all xyz ${timestep} ${warm_up}
 dump 1 all custom ${timestep} ${warm_up} id type x y z ix iy iz
 dump_modify 1 format line '%d %d %.5f %.5f %.5f %d %d %d' sort 1
 
@@ -81,12 +80,7 @@ dump_modify 1 format line '%d %d %.5f %.5f %.5f %d %d %d' sort 1
 run ${warm_up_time}
 
 unfix pushapart  # STOP DISPLACING WITH SOFT
-unfix RG
 undump 1 # Close warm_up dump
-#dump 2 all xyz ${timestep} ${sim}
-dump 2 all custom ${timestep} ${sim} id type x y z ix iy iz
-dump_modify 2 format line '%d %d %.5f %.5f %.5f %d %d %d' sort 1
-fix RG DNA print ${timestep} "$(step) ${RG}" append ${radius_gyration}
 
 ######################################
 ####    LENNARD JONES INTERACTIONS ###
@@ -101,10 +95,45 @@ pair_coeff * *  1.0 1.0 1.12246 ##REPULSIVE ANY TWO BEADS
 ####################################
 bond_style hybrid fene harmonic
 bond_coeff 1 fene 30.0 1.5 1.0 1.0
+
+####################################
+####    Progressive -- EQUIL #######
+####################################
+bond_coeff 2 harmonic 0.0 1.0
+run 25000
+
+bond_coeff 2 harmonic 0.5 1.0
+run 25000
+
 bond_coeff 2 harmonic 1.0 1.0
+run 25000
+
+bond_coeff 2 harmonic 1.5 1.0
+run 25000
+
+bond_coeff 2 harmonic 2.0 1.0
+run 25000
+
+bond_coeff 2 harmonic 2.5 1.0
+run 25000
+
+bond_coeff 2 harmonic 3.0 1.0
+run 25000
+
+bond_coeff 2 harmonic 3.5 1.0
+run 25000
 
 ####################################
 ####    RUN -- EQUIL         #######
 ####################################
+
+bond_coeff 2 harmonic 4.0 1.0
+
+unfix RG
+fix RG DNA print ${timestep} "$(step) ${RG}" append ${radius_gyration}
+
+dump 2 all custom ${timestep} ${sim} id type x y z ix iy iz
+dump_modify 2 format line '%d %d %.5f %.5f %.5f %d %d %d' sort 1
+
 reset_timestep 0
 run ${sim_time}
