@@ -6,7 +6,7 @@
 units                lj
 atom_style           angle
 # Define boundary condition for x, y & z (p = periodic)
-boundary             m m m
+boundary             p p p
 neighbor             1.4 bin
 neigh_modify every 1 delay 1 check yes
 
