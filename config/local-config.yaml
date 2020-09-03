@@ -7,7 +7,7 @@ reps: 100
 threads: 6
 bases_per_bead: 5000
 monomers: 200
-genome: /media/stephen/Data/genomes/hg19/Homo_sapiens.GRCh37.dna.primary_assembly.fa.gz
+genome: /media/stephen/Data/genomes/hg19/Homo_sapiens.GRCh37.dna.primary_assembly-chr1.fa.gz
 
 
 ctcf :
@@ -27,10 +27,10 @@ lammps :
     warm_up:  500000
     sim_time: 1000000
 
-region: GNG12
+region: chr1-random
 chr: 1
-start: 65834316
-end: 70234314
+start: 50000000
+end: 60000000
 
 #region: TET1
 #chr: 10
@@ -44,7 +44,7 @@ end: 70234314
 
 HiC :
     colourMap: 'Purples'
-    dpi: 1200
+    dpi: 600
     log : True
     matrix : /media/stephen/Data/genomes/hg19/tracks/GSE63525_GM12878_insitu_primary+replicate_combined_10000-chr1.cool
     binsize : 5000
