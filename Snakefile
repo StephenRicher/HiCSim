@@ -450,6 +450,8 @@ rule BeadsToLammps:
         yhi = config['yhi'],
         zlo = config['zlo'],
         zhi = config['zhi']
+    group:
+        'lammps'
     log:
         'logs/BeadsToLammps/{region}-{nbases}-{rep}.log'
     conda:
@@ -473,6 +475,8 @@ rule checkCTCF:
         dat = rules.BeadsToLammps.output.dat
     output:
         temp('{region}/{nbases}/reps/{rep}/lammps/config/run-ctcf.tmp.lam')
+    group:
+        'lammps'
     log:
         'logs/checkCTCF/{region}-{nbases}-{rep}.log'
     shell:
@@ -489,6 +493,8 @@ rule addCTCF:
         groups = rules.BeadsToLammps.output.groups,
     output:
         '{region}/{nbases}/reps/{rep}/lammps/config/run-ctcf.lam'
+    group:
+        'lammps'
     log:
         'logs/addCTCF/{region}-{nbases}-{rep}.log'
     shell:
