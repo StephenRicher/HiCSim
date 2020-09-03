@@ -3,6 +3,7 @@
 """ Script to read a single record FASTA file and compress N bases to 1 bead """
 
 import sys
+import json
 import random
 import logging
 import argparse
@@ -11,7 +12,9 @@ import fileinput
 __version__ = '1.0.0'
 
 
-def main(file : str, nbases : int, **kwargs):
+def main(file : str, nbases : int, seed : float, **kwargs):
+
+    random.seed(seed)
 
     with fileinput.input(file) as fh:
         bases = []
@@ -57,6 +60,9 @@ def parse_arguments():
     custom.add_argument(
         '--nbases', default=1000, type=int,
         help='Number of bases to represent 1 bead.')
+    custom.add_argument(
+        '--seed', default=None, type=float,
+        help='Initialize the random number generator (default: %(default)s)')
     epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
 
     base = argparse.ArgumentParser(add_help=False)
