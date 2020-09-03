@@ -31,7 +31,7 @@ def main(file, groupFile, group, **kwargs):
             elif coordinateLine(line):
                 if range.start <= counter <= range.end:
                     print(line)
-                    counter += 1
+                counter += 1
 
 
 def commentLine(line):
