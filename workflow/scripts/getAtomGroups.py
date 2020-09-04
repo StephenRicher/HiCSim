@@ -1,24 +1,33 @@
 #!/usr/bin/env python3
 
-""" Average contact frequency matrices and plot heatmap """
+""" Read custom atom group assignments to JSON format """
 
 import sys
+import json
 import logging
 import argparse
-import numpy as np
-import seaborn as sns
-from typing import List
-from matplotlib import pyplot as plt
+import fileinput
+from collections import defaultdict
 
 __version__ = '1.0.0'
 
+def main(file : str, **kwargs):
 
-def main(files: List, out: str, **kwargs) -> None:
-
-    # Concatinate replicates
-    data = np.vstack([np.load(table) for table in files])
-    ax = sns.heatmap(np.corrcoef(data), cmap='bwr', vmin=-1, vmax=1)
-    plt.savefig(out)
+    atomGroups = defaultdict(list)
+    with fileinput.input(file) as fh:
+        for line in fh:
+            if line == 'Atoms\n':
+                next(fh) # Skip initial blank line
+                atomIdx = 1
+                for line in fh:
+                    line = line.strip().split()
+                    if not line: # Finished Atoms section
+                        json.dump(atomGroups, sys.stdout)
+                        return 0
+                    groups = line[line.index('#') + 1:]
+                    for group in groups:
+                        atomGroups[group].append(atomIdx)
+                    atomIdx += 1
 
 
 def parse_arguments():
@@ -26,13 +35,9 @@ def parse_arguments():
     custom = argparse.ArgumentParser(add_help=False)
     custom.set_defaults(function=main)
     custom.add_argument(
-        'files', nargs='+',
-        help='Input TF distance tables.')
-    custom.add_argument(
-        '--out', default='TF-correlation.png',
-        help='TF contact correlation heatmap (default: %(default)s)')
+        'file', metavar='DAT', nargs='?', default=[],
+        help='Input LAMMPS dat file (default: stdin)')
     epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
-
     base = argparse.ArgumentParser(add_help=False)
     base.add_argument(
         '--version', action='version', version=f'%(prog)s {__version__}')

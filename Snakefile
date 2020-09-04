@@ -112,9 +112,9 @@ rule all:
             nbases=config['bases_per_bead'], region=REGION),
          expand('{region}/{nbases}/merged/simulation-{binsize}.png',
             nbases=config['bases_per_bead'], region=REGION, binsize=BINSIZE),
-         expand('{region}/{nbases}/merged/TFCorrelation.png',
+         expand('{region}/{nbases}/merged/TUCorrelation.png',
             nbases=config['bases_per_bead'], region=REGION),
-        f'{REGION}/{config["bases_per_bead"]}/merged/radius_of_gyration.png']
+         f'{REGION}/{config["bases_per_bead"]}/merged/radius_of_gyration.png']
 
 
 rule unzipGenome:
@@ -595,76 +595,71 @@ rule custom2XYZ:
         '(zcat {input} | {SCRIPTS}/custom2XYZ.py | gzip > {output}) 2> {log}'
 
 
-rule extractDNA:
+rule getAtomGroups:
     input:
-        simulation = '{region}/{nbases}/reps/{rep}/lammps/simulation.xyz.gz',
-        groups = rules.BeadsToLammps.output.groups
+        rules.BeadsToLammps.output.dat
     output:
-        '{region}/{nbases}/reps/{rep}/lammps/simulation-DNA.xyz.gz'
-    params:
-        group = 'DNA'
+        '{region}/{nbases}/reps/{rep}/lammps/config/atomGroups.json'
     log:
-        'logs/extractDNA/{region}-{nbases}-{rep}.log'
+        'logs/getAtomGroups/{region}-{nbases}-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/filterXYZ.py --groupFile {input.groups} '
-        '--group {params.group} <(zcat -f {input}) '
+        '{SCRIPTS}/getAtomGroups.py {input} > {output} 2> {log}'
+
+
+rule filterXYZ:
+    input:
+        simulation = '{region}/{nbases}/reps/{rep}/lammps/simulation.xyz.gz',
+        groups = rules.getAtomGroups.output
+    output:
+        '{region}/{nbases}/reps/{rep}/lammps/simulation-{bead}.xyz.gz'
+    log:
+        'logs/filterXYZ/{region}-{nbases}-{rep}-{bead}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/filterXYZ.py {wildcards.bead} '
+        '{input.groups} <(zcat -f {input.simulation}) '
         '| gzip > {output} 2> {log}'
 
 
-rule extractTF:
+
+rule computeTUCorrelation:
     input:
-        simulation = '{region}/{nbases}/reps/{rep}/lammps/simulation.xyz.gz',
-        groups = rules.BeadsToLammps.output.groups
+        monomers = '{region}/{nbases}/reps/{rep}/lammps/simulation-MONOMER.xyz.gz',
+        dna = '{region}/{nbases}/reps/{rep}/lammps/simulation-TU.xyz.gz',
+        groups = rules.getAtomGroups.output
     output:
-        '{region}/{nbases}/reps/{rep}/lammps/simulation-MONOMER.xyz.gz'
+        '{region}/{nbases}/reps/{rep}/TUcorrelation.csv'
     params:
-        group = 'monomer'
+        distance = 1.1
     log:
-        'logs/extractTF/{region}-{nbases}-{rep}.log'
+        'logs/computeTUCorrelation/{region}-{nbases}-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/filterXYZ.py --groupFile {input.groups} '
-        '--group {params.group} <(zcat -f {input}) '
-        '| gzip > {output} 2> {log}'
-
-
-rule computeNearestMonomer:
-    input:
-        monomers = rules.extractTF.output,
-        dna = rules.extractDNA.output
-    output:
-        '{region}/{nbases}/reps/{rep}/TFDistances.npy'
-    params:
-        distance = 1.3
-    log:
-        'logs/computeNearestMonomer/{region}-{nbases}-{rep}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/computeNearestMonomer.py '
-        '<(zcat -f {input.dna}) <(zcat -f {input.monomers}) '
+        '{SCRIPTS}/computeTUCorrelation.py '
+        '<(zcat -f {input.dna}) <(zcat -f {input.monomers}) {input.groups} '
         '--distance {params.distance} --out {output} &> {log}'
 
 
-rule plotTFCorrelation:
+rule plotTUCorrelation:
     input:
-        expand('{{region}}/{{nbases}}/reps/{rep}/TFDistances.npy', rep=REPS)
+        expand('{{region}}/{{nbases}}/reps/{rep}/TUcorrelation.csv', rep=REPS),
     output:
-        '{region}/{nbases}/merged/TFCorrelation.png'
+        '{region}/{nbases}/merged/TUCorrelation.png'
     log:
-        'logs/plotTFCorrelation/{region}-{nbases}.log'
+        'logs/plotTUCorrelation/{region}-{nbases}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/plotTFCorrelation.py {input} --out {output} &> {log}'
+        '{SCRIPTS}/plotTUCorrelation.py {input} --out {output} &> {log}'
 
 
 rule create_contact_matrix:
     input:
-        rules.extractDNA.output
+        '{region}/{nbases}/reps/{rep}/lammps/simulation-DNA.xyz.gz'
     output:
         '{region}/{nbases}/reps/{rep}/matrices/contacts.npz'
     params:

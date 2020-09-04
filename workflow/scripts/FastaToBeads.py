@@ -3,7 +3,6 @@
 """ Script to read a single record FASTA file and compress N bases to 1 bead """
 
 import sys
-import json
 import random
 import logging
 import argparse

@@ -3,15 +3,18 @@
 """ Script to read LAMMPS output and generate contact frequency matrix """
 
 import sys
+import json
 import logging
 import argparse
+import itertools
 import numpy as np
+import pandas as pd
 from utilities import read_XYZ
 from scipy.spatial.distance import cdist
 
 __version__ = '1.0.0'
 
-def main(dnaXYZ: str, monomerXYZ: str, out: str, distance: float, **kwargs) -> None:
+def main(dnaXYZ: str, monomerXYZ: str, atomGroups: str, out: str, distance: float, **kwargs) -> None:
 
     with open(dnaXYZ) as dna_fh, open(monomerXYZ) as monomer_fh:
         allDistances = []
@@ -29,8 +32,39 @@ def main(dnaXYZ: str, monomerXYZ: str, out: str, distance: float, **kwargs) -> N
         # Convert list of distance arrays to 2D numpy matrix
         allDistances = np.vstack(tuple(allDistances))
 
-    with open(out, 'wb') as f:
-        np.save(f, allDistances)
+    # Read atomGroup and retrieve TU atom indexes
+    atomGroupsDict = readJSON(atomGroups)
+    TU_indexes = atomGroupsDict['TU']
+    # Convert to pandas so we can label columns with TU atom indexes
+    allDistances = pd.DataFrame(data=allDistances, columns=TU_indexes)
+    correlation = allDistances.corr() # Pearson correlation
+    # Convert to long format
+    correlation = correlation.stack().reset_index()
+    correlation.columns = ['row', 'column', 'score']
+
+    # Fill matrix with non-TU indexes to visualise scale
+    #correlation = createAllPairWise(correlation, len(atomGroupsDict['DNA']))
+
+    correlation.to_csv(out, index=False)
+
+
+def createAllPairWise(correlation, nAtoms):
+    """ Fill dataframe with missing DNA atoms as whitespace
+        Helps visualise scale on the heatmap. """
+
+    # Creat empty DF with matching column names and all atomID combinations
+    df = pd.DataFrame(
+        columns=['row', 'column'],
+        data=list(itertools.product(*[range(1,nAtoms+1), range(1,nAtoms+1)])))
+
+    return df.merge(correlation.reset_index(), how='left').fillna(0)
+
+
+def readJSON(file):
+    """ Read JSON encoded data to dictionary """
+    with open(file) as fh:
+        return json.load(fh)
+
 
 def parse_arguments():
 
@@ -43,10 +77,13 @@ def parse_arguments():
         'monomerXYZ', metavar='MONOMER',
         help='Monomer coordinates in XYZ format')
     custom.add_argument(
-        '--distance', default=1.3, type=float,
+        'atomGroups',
+        help='Atom group assignments in JSON format.')
+    custom.add_argument(
+        '--distance', default=1.8, type=float,
         help='Distance threshold for active transcription (default: %(default)s)')
     custom.add_argument(
-        '--out', default='TFDistances.npy',
+        '--out', default='TUcorrelation.csv',
         help='Contact matrix output (default: %(default)s)')
     epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
 

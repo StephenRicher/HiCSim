@@ -64,6 +64,7 @@ class lammps:
     def __init__(self):
         self.sequences = []
         self.monomers = []
+        self.TU_types = [] # Beads to be considered transcriptional units
         self._beadID = 1
         self._typeID = 1
         self._bondID = 1
@@ -187,7 +188,8 @@ class lammps:
 
             for i, (beadID, type) in enumerate(sequence.sequence.items()):
                 typeID = self.typeIDs[type]
-                sys.stdout.write(f'{beadID} 1 {typeID} {x[i]} {y[i]} {z[i]} 0 0 0\n')
+                comment = 'TU' if type in self.TU_types else ''
+                sys.stdout.write(f'{beadID} 1 {typeID} {x[i]} {y[i]} {z[i]} 0 0 0 # DNA {comment}\n')
 
 
     def writeMonomers(self):
@@ -197,7 +199,7 @@ class lammps:
                 y = random.uniform(self.box.y.lo, self.box.y.hi)
                 z = random.uniform(self.box.z.lo, self.box.z.hi)
                 typeID = self.typeIDs[type]
-                sys.stdout.write(f'{beadID} 1 {typeID} {x} {y} {z} 0 0 0\n')
+                sys.stdout.write(f'{beadID} 1 {typeID} {x} {y} {z} 0 0 0 # MONOMER\n')
 
 
     def writeBonds(self):
@@ -253,38 +255,21 @@ class lammps:
             # Move up the list until reach reverse CTCF
             for reverseBead in typeList[typeIdx + 1:]:
                 if reverseBead in usedSites:
-                    reverseUsed = True
+                    alreadyUsed = True
                 if reverseBead.startswith(('R', 'B')) and not alreadyUsed:
                     break
             else:
                 continue
             usedSites.extend([forwardBead, reverseBead])
             pairs.add((sequence.ctcfs[forwardBead], sequence.ctcfs[reverseBead]))
-        # pairs = self.uniqueCTCF(list(pairs))
         return pairs
-
-
-    def uniqueCTCF(self, CTCFpairs):
-        """ Randomly filter CTCF pairs to permit only 1 CTCF bond per site """
-
-        usedCTCFs = []
-        filteredCTCFs = []
-        # Ensure shuffle is same for each call within object
-        random.seed(self._seed)
-        random.shuffle(CTCFpairs)
-        for forward, reverse in CTCFpairs:
-            if not forward in usedCTCFs and not reverse in usedCTCFs:
-                filteredCTCFs.append((forward, reverse))
-                usedCTCFs.append(forward)
-                usedCTCFs.append(reverse)
-        return filteredCTCFs
 
 
     def writeCoeffs(self, type1, type2, coeff, fh=sys.stderr):
         try:
             type1ID = self.typeIDs[type1]
             type2ID = self.typeIDs[type2]
-            # Ensure the smaller type_ID is written first
+            # Ensure the smaller typeID is written first
             if type1ID > type2ID:
                 temp = type1ID
                 type1ID = type2ID
@@ -294,16 +279,12 @@ class lammps:
             pass
 
     def writeGroup(self, fh=sys.stderr):
-        fh.write(
-            '####################################\n'
-            '########       GROUPS        #######\n'
-            '####################################\n')
         for sequence in self.sequences:
             firstBeadID = min(sequence.sequence)
             lastBeadID = max(sequence.sequence)
             name = sequence.name
             fh.write(f'group {name} id {firstBeadID}:{lastBeadID}\n')
-            fh.write(f'group monomer id {lastBeadID + 1}:{lastBeadID + self.nMonomers}\n')
+        fh.write(f'group monomer id {lastBeadID + 1}:{lastBeadID + self.nMonomers}\n')
 
 
 
@@ -314,6 +295,8 @@ def main(file, seed, monomers, ctcf, basesPerBead,
     dat = lammps()
     dat.loadBox(xlo, xhi, ylo, yhi, zlo, zhi)
     dat.loadSequence(file, basesPerBead, ctcf)
+    # TO DO - the tye list needs to be input by user
+    dat.TU_types = ['1', '7', '3']
     for monomer in monomers:
         nbeads = int(monomer[0])
         type = monomer[1]
@@ -450,10 +433,10 @@ def parse_arguments():
              'pair coeffs are output (default: %(default)s)')
     custom.add_argument(
         '--pairCoeffs',
-        help='Outfile of atom type coefficient pairings.')
+        help='Input of bead name pair coefficients.')
     custom.add_argument(
         '--coeffOut', default=None,
-        help='Outfile to write atom pair coefficients (default: stderr)')
+        help='Outfile to write atom ID pair coefficients (default: stderr)')
     custom.add_argument(
         '--groupOut', default=None,
         help='Outfile to write atom group ID assignments (default: stderr)')
