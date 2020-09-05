@@ -3,34 +3,63 @@ workdir: /media/stephen/Data/modelling/
 tmpdir: /media/stephen/Data/modelling/
 cluster: False
 
-reps: 100
+reps: 500
 threads: 6
-bases_per_bead: 5000
-monomers: 200
-genome: /media/stephen/Data/genomes/hg19/Homo_sapiens.GRCh37.dna.primary_assembly-chr1.fa.gz
+bases_per_bead: 3000
+monomers: 10
 
+ctcf : /media/stephen/Data/genomes/hg19/tracks/GM12878-CTCF-hg19.bed
 
-ctcf :
-    - /media/stephen/Data/genomes/hg19/tracks/GM12878-CTCF-hg19.bed
-genes : /media/stephen/Data/genomes/hg19/tracks/UCSC-genes-hg19.bed
-masking:
+masking :
     /media/stephen/Data/genomes/hg19/tracks/GM12878-H3K4m3-hg19.bed : 3
     /media/stephen/Data/genomes/hg19/tracks/GM12878-H3K27Ac-hg19.bed : 7
     /media/stephen/Data/genomes/hg19/tracks/GM12878-H3K4m1-hg19.bed : 1
 
 coeffs: /home/stephen/phd/modelling/pipeline/config/pair_coeffs.txt
 
+# Set name for simulation
+name : synthetic
+
+genome :
+    build : hg19
+    sequence : /media/stephen/Data/genomes/hg19/Homo_sapiens.GRCh37.dna.primary_assembly-chr1.fa.gz
+    chr : 1
+    start : 65834316
+    end : 70234314
+    genes : /media/stephen/Data/genomes/hg19/tracks/UCSC-genes-hg19.bed
+
+# If synthetic is provided all genome and track configuration is ignored.
+syntheticSequence : /home/stephen/phd/modelling/pipeline/config/syntheticSequence.txt
+
+# Control randomess at various stages of pipeline.
+# If all set to False then each rep will be identical for a given seed.
+random :
+    seed : 42
+    sequence : False      # Set True to generate new bead sequence per rep
+    intialConform : True  # Set True to generate new initial conformation per rep
+    simulation : True     # Set True to vary simulation conditions per rep
+
+# Define simulation box dimensions
+box :
+    xlo: -50
+    xhi: 50
+    ylo: -50
+    yhi: 50
+    zlo: -50
+    zhi: 50
+
 # LAMMPS config (rule: lammps)
 lammps :
-    restart:  0
+    restart:  0       # Set restart to 0 to turn off
     timestep: 500
-    warm_up:  500000
-    sim_time: 1000000
+    warm_up:  200000
+    sim_time: 200000
 
-region: chr1-random
-chr: 1
-start: 50000000
-end: 60000000
+
+#region: chr1-random
+#chr: 1
+#start: 50000000
+#end: 60000000
 
 #region: TET1
 #chr: 10
@@ -43,21 +72,14 @@ end: 60000000
 #end: 107279803
 
 HiC :
-    colourMap: 'Purples'
-    dpi: 600
+    colourMap : 'Purples'
+    dpi : 300
     log : True
     matrix : /media/stephen/Data/genomes/hg19/tracks/GSE63525_GM12878_insitu_primary+replicate_combined_10000-chr1.cool
-    binsize : 5000
+    binsize : 6000
 
 
 # Define confguration for plotting Radius of Gyration
 plotRG :
-    dpi: 600
-    confidence: 0.95
-
-xlo: -50
-xhi: 50
-ylo: -50
-yhi: 50
-zlo: -50
-zhi: 50
+    dpi : 300
+    confidence : 0.95
