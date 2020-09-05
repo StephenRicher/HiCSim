@@ -14,7 +14,7 @@ from scipy.spatial.distance import cdist
 
 __version__ = '1.0.0'
 
-def main(dnaXYZ: str, monomerXYZ: str, atomGroups: str, out: str, distance: float, **kwargs) -> None:
+def main(dnaXYZ: str, monomerXYZ: str, atomGroups: str, out: str, distance: float, ignoreZeroPair: bool, **kwargs) -> None:
 
     with open(dnaXYZ) as dna_fh, open(monomerXYZ) as monomer_fh:
         allDistances = []
@@ -35,12 +35,25 @@ def main(dnaXYZ: str, monomerXYZ: str, atomGroups: str, out: str, distance: floa
     # Read atomGroup and retrieve TU atom indexes
     atomGroupsDict = readJSON(atomGroups)
     TU_indexes = atomGroupsDict['TU']
-    # Convert to pandas so we can label columns with TU atom indexes
-    allDistances = pd.DataFrame(data=allDistances, columns=TU_indexes)
-    correlation = allDistances.corr() # Pearson correlation
-    # Convert to long format
-    correlation = correlation.stack().reset_index()
-    correlation.columns = ['row', 'column', 'score']
+
+    # Compute  correlation ignore when both pairs are 0
+    if ignoreZeroPair:
+        for idx1, col1 in enumerate(TU_indexes):
+            for idx2, col2 in enumerate(TU_indexes):
+                if col2 > col1: # Do not repeat duplicates
+                    col1NoZero = allDistances[~((allDistances[:,idx1]==.0) & (allDistances[:,idx2]==.0)),idx1]
+                    col2NoZero = allDistances[~((allDistances[:,idx1]==.0) & (allDistances[:,idx2]==.0)),idx2]
+                    cor = np.corrcoef(col1NoZero, col2NoZero)[-1,0]
+                    correlations.append([col1, col2, cor])
+        correlations = pd.DataFrame(
+            correlations, columns=['row', 'column', 'score'])
+    else:
+        # Convert to pandas so we can label columns with TU atom indexes
+        allDistances = pd.DataFrame(data=allDistances, columns=TU_indexes)
+        correlations = allDistances.corr() # Pearson correlation
+        # Convert to long format
+        correlations = correlations.stack().reset_index()
+        correlations.columns = ['row', 'column', 'score']
 
     # Fill matrix with non-TU indexes to visualise scale
     #correlation = createAllPairWise(correlation, len(atomGroupsDict['DNA']))
@@ -85,6 +98,10 @@ def parse_arguments():
     custom.add_argument(
         '--out', default='TUcorrelation.csv',
         help='Contact matrix output (default: %(default)s)')
+    custom.add_argument(
+        '--ignoreZeroPair',  action='store_true',
+        help='Ignore timepoint where both TU pairs are inactive when '
+             'computing correlation. May be signicantly slower.')
     epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
 
     base = argparse.ArgumentParser(add_help=False)
