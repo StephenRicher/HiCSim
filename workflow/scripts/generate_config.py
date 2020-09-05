@@ -34,17 +34,14 @@ def main():
         help = 'HiC matrix.')
     parser.add_argument(
         '--log', default=False, action='store_true',
-        help='Log transform counts of matrix.')
+        help='Log transform counts of matrices.')
     parser.add_argument(
         '--compare', default=False, action='store_true',
         help='Generate .ini file for HiC compare.')
     parser.add_argument(
         '--matrix2',
-        help = 'If --flip argumnet is called, use to plot a different HiC'
+        help = 'If --flip argument is called, use to plot a different HiC'
         'matrix as inverted.')
-    parser.add_argument(
-        '--log_matrix2', default=False, action='store_true',
-        help='Log transform counts of matrix 2.')
     parser.add_argument(
         '--links', nargs=2, default=None,
         help = 'UP and DOWN links files showing differential interactions.')
@@ -52,7 +49,7 @@ def main():
         '--ctcfs', nargs = '+', default=None,
         help = 'CTCF position in bigWig format.')
     parser.add_argument(
-        '--ctcf_orientation',
+        '--ctcfOrient',
         help = 'CTCF orientations in BED format.')
     parser.add_argument(
         '--genes',
@@ -61,7 +58,7 @@ def main():
         '--depth', type = int, default=1000000,
         help = 'HiC matrix depth.')
     parser.add_argument(
-        '--colourmap', default='Purples',
+        '--colourMap', default='Purples',
         help = 'Matplotlib colour map to use for the heatmap.')
     parser.add_argument(
         '--vMin', type=float,
@@ -78,14 +75,14 @@ def main():
     return func(**vars(args))
 
 
-def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
-                links, ctcfs, compare, ctcf_orientation, genes, depth,
-                colourmap, vMin, vMax, flip):
+def make_config(insulations, matrix, log, matrix2, tads, loops,
+                links, ctcfs, compare, ctcfOrient, genes, depth,
+                colourMap, vMin, vMax, flip):
 
 
     print('[spacer]')
     if matrix and not_empty(matrix):
-        write_matrix(matrix, cmap=colourmap, depth=depth,
+        write_matrix(matrix, cmap=colourMap, depth=depth,
             vMin=vMin, vMax=vMax, log=log)
 
     if loops is not None:
@@ -100,10 +97,9 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
 
     if flip:
         inverted_matrix = matrix2 if matrix2 else matrix
-        log_transform = log_matrix2 if matrix2 else log
         if not_empty(inverted_matrix):
-            write_matrix(inverted_matrix, cmap=colourmap, depth=depth,
-                vMin=vMin, vMax=vMax, invert=True, log=log_transform)
+            write_matrix(inverted_matrix, cmap=colourMap, depth=depth,
+                vMin=vMin, vMax=vMax, invert=True, log=log)
     print('[spacer]')
 
     if insulations is not None:
@@ -133,12 +129,12 @@ def make_config(insulations, matrix, log, matrix2, log_matrix2, tads, loops,
                 write_ctcf(ctcf = ctcf, i = i)
         print('[spacer]')
 
-    if ctcf_orientation is not None and not_empty(ctcf_orientation):
-        write_ctcf_direction(ctcf_orientation = ctcf_orientation)
+    if ctcfOrient is not None and not_empty(ctcfOrient):
+        write_ctcf_direction(ctcfOrient=ctcfOrient)
         print('[spacer]')
 
     if genes and not_empty(genes):
-        write_genes(genes = genes)
+        write_genes(genes=genes)
         print('[spacer]')
     print('[x-axis]')
 
@@ -260,9 +256,9 @@ def write_ctcf(ctcf, i,
           f'file_type = bigwig',
           f'overlay_previous = {overlay}', sep = '\n')
 
-def write_ctcf_direction(ctcf_orientation):
+def write_ctcf_direction(ctcfOrient):
     print(f'[CTCF orientation]',
-          f'file = {ctcf_orientation}',
+          f'file = {ctcfOrient}',
           f'title = CTCF orientation',
           f'color = Reds',
           f'fontsize = 8',
