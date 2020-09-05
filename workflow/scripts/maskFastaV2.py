@@ -9,10 +9,10 @@ import pyCommonTools as pct
 from utilities import commaPair
 from collections import defaultdict
 
+__version__ = '1.0.0'
 
 def main():
 
-    __version__ = '1.0.0'
 
     parser = pct.make_parser(verbose=True, version=__version__,)
     parser.set_defaults(function=mask)
@@ -23,11 +23,17 @@ def main():
         type=commaPair, action='append',
         help='BED file of regions to mask, paired with masking character.'
         'Call multiple times to add more files.')
+    parser.add_argument(
+        '--seed', default=None, type=float,
+        help='Seed for random number generator.')
 
     return (pct.execute(parser))
 
 
-def mask(chromSizes, bed):
+def mask(chromSizes, bed, seed):
+
+    random.seed(seed)
+
     regions = processBed(bed)
     chromosomes = readChromosomes(chromSizes)
     writeMaskedFasta(regions, chromosomes)
