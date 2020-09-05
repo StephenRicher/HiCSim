@@ -69,6 +69,7 @@ class lammps:
         self._typeID = 1
         self._bondID = 1
         self.typeIDs = {}
+        self.random = False
         self._seed = random.randint(1, 1e100)
 
     def loadSequence(self, sequence_file, basesPerBead, ctcf):
@@ -169,22 +170,44 @@ class lammps:
         sys.stdout.write('\n')
 
 
+    def randomWalk(self, length, r=1.1):
+        x = []
+        y = []
+        z = []
+        for i in range(length):
+            if i == 0:
+                x.append(random.random())
+                y.append(random.random())
+                z.append(random.random())
+            else:
+                phi = random.random() * 2 * math.pi
+                theta = random.random() * math.pi
+                x.append(x[i-1] + (r * math.sin(theta) * math.cos(phi)))
+                y.append(y[i-1] + (r * math.sin(theta) * math.sin(phi)))
+                z.append(z[i-1] + (r * math.cos(theta)))
+        return x, y, z
+
+
     def writePolymers(self):
         for sequence in self.sequences:
-            # Randomly select rosette length between 30kbp - 100kbp
-            rosette_length = random.randint(30,100) * 1000
-            beads_per_loop = rosette_length / sequence.basesPerBead
-            # Randomly select number of loops per turn between 4 and 12
-            loops_per_turn = random.randint(4,12)
-            beads_per_turn = beads_per_loop * loops_per_turn
-            n_turns = sequence.nBeads / beads_per_turn
 
-            k = loops_per_turn / 2
-            vx = 0.38
-            theta = np.linspace(0, n_turns * 2 * np.pi, sequence.nBeads)
-            x = 12 * (vx + (1 - vx) * (np.cos(k * theta))**2 * np.cos(theta))
-            y = 12 * (vx + (1 - vx) * (np.cos(k * theta))**2 * np.sin(theta))
-            z = theta / (2 * np.pi)
+            if self.random:
+                x, y, z = self.randomWalk(sequence.nBeads)
+            else:
+                # Randomly select rosette length between 30kbp - 100kbp
+                rosette_length = random.randint(30,100) * 1000
+                beads_per_loop = rosette_length / sequence.basesPerBead
+                # Randomly select number of loops per turn between 4 and 12
+                loops_per_turn = random.randint(4,12)
+                beads_per_turn = beads_per_loop * loops_per_turn
+                n_turns = sequence.nBeads / beads_per_turn
+
+                k = loops_per_turn / 2
+                vx = 0.38
+                theta = np.linspace(0, n_turns * 2 * np.pi, sequence.nBeads)
+                x = 12 * (vx + (1 - vx) * (np.cos(k * theta))**2 * np.cos(theta))
+                y = 12 * (vx + (1 - vx) * (np.cos(k * theta))**2 * np.sin(theta))
+                z = theta / (2 * np.pi)
 
             for i, (beadID, type) in enumerate(sequence.sequence.items()):
                 typeID = self.typeIDs[type]
@@ -297,6 +320,7 @@ def main(file, seed, monomers, ctcf, basesPerBead,
     dat.loadSequence(file, basesPerBead, ctcf)
     # TO DO - the tye list needs to be input by user
     dat.TU_types = ['1', '7', '3']
+    dat.random = True
     for monomer in monomers:
         nbeads = int(monomer[0])
         type = monomer[1]
@@ -414,7 +438,7 @@ def parse_arguments():
 
     seed_arg = argparse.ArgumentParser(add_help=False)
     seed_arg.add_argument(
-        '--seed', default=42, type=int,
+        '--seed', default=None, type=float,
         help='Seed for random number generator.')
 
     custom = argparse.ArgumentParser(add_help=False)
