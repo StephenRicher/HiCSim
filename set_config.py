@@ -67,3 +67,12 @@ def read_paths(filepath):
     # Set index to start from 1 instead of 0
     data.index = [str(i+1) for i in range(len(data))]
     return data
+
+
+def nBeads(file):
+    """ Return number of beads in sequence file """
+    nBeads = 0
+    with open(file) as fh:
+        for line in fh:
+            nBeads += len(line.strip())
+    return nBeads
