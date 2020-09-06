@@ -27,8 +27,8 @@ def main(files: List, out: str, **kwargs) -> None:
 
     # Flip vertically to ensure diagonal goes from bottom left to top right
     correlation = correlation.iloc[::-1]
-
-    ax = sns.heatmap(correlation, cmap='bwr', vmin=-0.3, vmax=0.3)
+    #vmin=-0.3, vmax=0.3
+    ax = sns.heatmap(correlation, cmap='bwr', center=0)
     plt.savefig(out)
 
 
