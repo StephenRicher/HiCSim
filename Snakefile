@@ -152,8 +152,8 @@ rule all:
             nbases=config['bases_per_bead'], name=NAME),
          f'{NAME}/{config["bases_per_bead"]}/merged/radius_of_gyration.png']
 
-if config['syntheticSequence'] is not None:
-    
+if config['syntheticSequence'] is None:
+
     rule unzipGenome:
         input:
             config['genome']['sequence']
