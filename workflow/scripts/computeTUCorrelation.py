@@ -36,15 +36,20 @@ def main(dnaXYZ: str, monomerXYZ: str, atomGroups: str, out: str, distance: floa
     atomGroupsDict = readJSON(atomGroups)
     TU_indexes = atomGroupsDict['TU']
 
-    # Compute  correlation ignore when both pairs are 0
+    # Compute correlation ignore when both pairs are 0
     if ignoreZeroPair:
+        correlations = []
         for idx1, col1 in enumerate(TU_indexes):
             for idx2, col2 in enumerate(TU_indexes):
                 if col2 > col1: # Do not repeat duplicates
                     col1NoZero = allDistances[~((allDistances[:,idx1]==.0) & (allDistances[:,idx2]==.0)),idx1]
                     col2NoZero = allDistances[~((allDistances[:,idx1]==.0) & (allDistances[:,idx2]==.0)),idx2]
-                    cor = np.corrcoef(col1NoZero, col2NoZero)[-1,0]
-                    correlations.append([col1, col2, cor])
+                    # Ensure col1 and col2 both have atleast 1 True and False
+                    col1HaveTF = np.unique(col1NoZero).size == 2
+                    col2HaveTF = np.unique(col2NoZero).size == 2
+                    if col1HaveTF and col2HaveTF:
+                        cor = np.corrcoef(col1NoZero, col2NoZero)[-1,0]
+                        correlations.append([col1, col2, cor])
         correlations = pd.DataFrame(
             correlations, columns=['row', 'column', 'score'])
     else:
@@ -58,7 +63,7 @@ def main(dnaXYZ: str, monomerXYZ: str, atomGroups: str, out: str, distance: floa
     # Fill matrix with non-TU indexes to visualise scale
     #correlation = createAllPairWise(correlation, len(atomGroupsDict['DNA']))
 
-    correlation.to_csv(out, index=False)
+    correlations.to_csv(out, index=False)
 
 
 def createAllPairWise(correlation, nAtoms):
