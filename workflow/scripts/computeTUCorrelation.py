@@ -44,7 +44,7 @@ def main(dnaXYZ: str, monomerXYZ: str, atomGroups: str, out: str, distance: floa
                 if col2 > col1: # Do not repeat duplicates
                     col1NoZero = allDistances[~((allDistances[:,idx1]==.0) & (allDistances[:,idx2]==.0)),idx1]
                     col2NoZero = allDistances[~((allDistances[:,idx1]==.0) & (allDistances[:,idx2]==.0)),idx2]
-                    # Ensure col1 and col2 both have atleast 1 True and False
+                    # Ensure col1 & col2 both have atleast 1 True & False (TF)
                     col1HaveTF = np.unique(col1NoZero).size == 2
                     col2HaveTF = np.unique(col2NoZero).size == 2
                     if col1HaveTF and col2HaveTF:
