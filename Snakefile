@@ -37,6 +37,7 @@ default_config = {
                        'start':     None,
                        'end':       None,},
     'syntheticSequence' : None,
+    'ignoreZeroPair': True,
     'min_rep':        1,
     'logScore':       True,
     'bases_per_bead': 1000,
@@ -673,7 +674,8 @@ rule computeTUCorrelation:
     output:
         '{name}/{nbases}/reps/{rep}/TUcorrelation.csv'
     params:
-        distance = 10
+        distance = 1.8,
+        ignoreZeroPair = '--ignoreZeroPair' if config['ignoreZeroPair'] else ''
     log:
         'logs/computeTUCorrelation/{name}-{nbases}-{rep}.log'
     conda:
@@ -681,7 +683,8 @@ rule computeTUCorrelation:
     shell:
         '{SCRIPTS}/computeTUCorrelation.py '
         '<(zcat -f {input.dna}) <(zcat -f {input.monomers}) {input.groups} '
-        '--distance {params.distance} --out {output} &> {log}'
+        '--distance {params.distance} {params.ignoreZeroPair} '
+        '--out {output} &> {log}'
 
 
 rule plotTUCorrelation:
