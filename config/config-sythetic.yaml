@@ -1,0 +1,55 @@
+# Simulation output directory - will be created if neccessary.
+workdir: /home/u/sr467/scratch/projects/MolecularDynamics/analysis
+tmpdir: /home/u/sr467/scratch/projects/MolecularDynamics/analysis
+cluster: False
+
+reps: 100
+threads: 6
+bases_per_bead: 3000
+monomers: 20
+
+coeffs: /home/u/sr467/scratch/projects/MolecularDynamics/config/pair_coeffs.txt
+
+# Set name for simulation
+name : synthetic
+
+# If synthetic is provided all genome and track configuration is ignored.
+syntheticSequence : /home/u/sr467/scratch/projects/MolecularDynamics/config/syntheticSequence.txt
+
+# Set True to exclude timepoints where both TU pairs are inactive when '
+# computing correlation.
+ignoreZeroPair : False
+
+# Control randomess at various stages of pipeline.
+# If all set to False then each rep will be identical for a given seed.
+random :
+    seed : 42
+    sequence : False      # Set True to generate new bead sequence per rep
+    intialConform : True  # Set True to generate new initial conformation per rep
+    simulation : True     # Set True to vary simulation conditions per rep
+
+# Define simulation box dimensions
+box :
+    xlo: -50
+    xhi: 50
+    ylo: -50
+    yhi: 50
+    zlo: -50
+    zhi: 50
+
+# LAMMPS config (rule: lammps)
+lammps :
+    restart:  0       # Set restart to 0 to turn off
+    timestep: 500
+    warm_up:  200000
+    sim_time: 1000000
+
+HiC :
+    colourMap : 'Purples'
+    dpi : 300
+    log : True
+
+# Define confguration for plotting Radius of Gyration
+plotRG :
+    dpi : 300
+    confidence : 0.95
