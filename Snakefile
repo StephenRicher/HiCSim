@@ -91,7 +91,6 @@ if config['syntheticSequence'] is None:
     if invalid:
         sys.exit('\033[31mInvalid configuration setting.\033[m\n')
 else:
-    config['genome']['sequence'] = ''
     config['genome']['chr'] = 'synthetic'
     config['genome']['start'] = 1
     config['genome']['end'] = nBeads(config['syntheticSequence']) * config['bases_per_bead']
@@ -153,168 +152,222 @@ rule all:
             nbases=config['bases_per_bead'], name=NAME),
          f'{NAME}/{config["bases_per_bead"]}/merged/radius_of_gyration.png']
 
-
-rule unzipGenome:
-    input:
-        config['genome']['sequence']
-    output:
-        temp(f'genome/{BUILD}.fa')
-    log:
-        f'logs/unzipGenome/{BUILD}.log'
-    shell:
-        'zcat -f {input} > {output} 2> {log}'
-
-
-rule indexGenome:
-    input:
-        rules.unzipGenome.output
-    output:
-        f'{rules.unzipGenome.output}.fai'
-    log:
-        f'logs/indexGenome/{BUILD}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    shell:
-        'samtools faidx {input} &> {log}'
+if config['syntheticSequence'] is not None:
+    
+    rule unzipGenome:
+        input:
+            config['genome']['sequence']
+        output:
+            temp(f'genome/{BUILD}.fa')
+        log:
+            f'logs/unzipGenome/{BUILD}.log'
+        shell:
+            'zcat -f {input} > {output} 2> {log}'
 
 
-rule getChromSizes:
-    input:
-        rules.indexGenome.output
-    output:
-        f'genome/{BUILD}-chrom.sizes'
-    log:
-        f'logs/getChromSizes/{BUILD}.log'
-    shell:
-        'cut -f 1,2 {input} > {output} 2> {log}'
+    rule indexGenome:
+        input:
+            rules.unzipGenome.output
+        output:
+            f'{rules.unzipGenome.output}.fai'
+        log:
+            f'logs/indexGenome/{BUILD}.log'
+        conda:
+            f'{ENVS}/samtools.yaml'
+        shell:
+            'samtools faidx {input} &> {log}'
 
 
-if config['ctcf'] is not None:
+    rule getChromSizes:
+        input:
+            rules.indexGenome.output
+        output:
+            f'genome/{BUILD}-chrom.sizes'
+        log:
+            f'logs/getChromSizes/{BUILD}.log'
+        shell:
+            'cut -f 1,2 {input} > {output} 2> {log}'
 
-    if config['computeDirection']:
 
-        rule modifyBedName:
+    if config['ctcf'] is not None:
+
+        if config['computeDirection']:
+
+            rule modifyBedName:
+                input:
+                    config['ctcf']
+                output:
+                    'genome/tracks/CTCF-modifyName.bed'
+                log:
+                    'logs/modifyBedName.log'
+                conda:
+                    f'{ENVS}/python3.yaml'
+                shell:
+                    '{SCRIPTS}/modifyBedName.py {input} > {output} 2> {log}'
+
+
+            rule bed2Fasta:
+                input:
+                    bed = rules.modifyBedName.output,
+                    genome = rules.unzipGenome.output,
+                    genomeIndex = rules.indexGenome.output
+                output:
+                    'genome/tracks/CTCF-modifyName.fasta'
+                log:
+                    'logs/bed2Fasta.log'
+                conda:
+                    f'{ENVS}/bedtools.yaml'
+                shell:
+                    'bedtools getfasta -name -fullHeader '
+                    '-bed {input.bed} -fi {input.genome} > {output} 2> {log}'
+
+
+            rule runCTCFpredict:
+                input:
+                    rules.bed2Fasta.output
+                output:
+                    'genome/tracks/CTCF-prediction.tsv'
+                log:
+                    'logs/runCTCFpredict.log'
+                conda:
+                    f'{ENVS}/python3.yaml'
+                shell:
+                    '{SCRIPTS}/runCTCFpredict.py {input} > {output} 2> {log}'
+
+
+            rule processCTCFprediction:
+                input:
+                    rules.runCTCFpredict.output
+                output:
+                    'genome/tracks/CTCF-prediction.bed'
+                params:
+                    threshold = 15
+                log:
+                    'logs/processCTCFprediction.log'
+                conda:
+                    f'{ENVS}/python3.yaml'
+                shell:
+                    '{SCRIPTS}/processCTCFBSDB.py --threshold {params.threshold} '
+                    '{input} > {output} 2> {log}'
+
+        def CTCFinput(wildcards):
+            if config['computeDirection']:
+                return rules.processCTCFprediction.output
+            else:
+                return config['ctcf']
+
+        rule sortBed:
             input:
-                config['ctcf']
+                CTCFinput
             output:
-                'genome/tracks/CTCF-modifyName.bed'
+                'genome/tracks/CTCF.sort.bed'
+            group:
+                'bedtools'
             log:
-                'logs/modifyBedName.log'
-            conda:
-                f'{ENVS}/python3.yaml'
-            shell:
-                '{SCRIPTS}/modifyBedName.py {input} > {output} 2> {log}'
-
-
-        rule bed2Fasta:
-            input:
-                bed = rules.modifyBedName.output,
-                genome = rules.unzipGenome.output,
-                genomeIndex = rules.indexGenome.output
-            output:
-                'genome/tracks/CTCF-modifyName.fasta'
-            log:
-                'logs/bed2Fasta.log'
+                'logs/sortBed.log'
             conda:
                 f'{ENVS}/bedtools.yaml'
             shell:
-                'bedtools getfasta -name -fullHeader '
-                '-bed {input.bed} -fi {input.genome} > {output} 2> {log}'
+                'bedtools sort -i {input} > {output} 2> {log}'
 
 
-        rule runCTCFpredict:
+        rule mergeBed:
             input:
-                rules.bed2Fasta.output
+                rules.sortBed.output
             output:
-                'genome/tracks/CTCF-prediction.tsv'
+                'genome/tracks/CTCF.merged.bed'
+            group:
+                'bedtools'
             log:
-                'logs/runCTCFpredict.log'
+                'logs/mergeBed.log'
             conda:
-                f'{ENVS}/python3.yaml'
+                f'{ENVS}/bedtools.yaml'
             shell:
-                '{SCRIPTS}/runCTCFpredict.py {input} > {output} 2> {log}'
+                'bedtools merge -s -c 4,5,6 -o count,median,distinct '
+                '-i {input} > {output} 2> {log}'
 
 
-        rule processCTCFprediction:
+        rule scaleBed:
             input:
-                rules.runCTCFpredict.output
+                rules.mergeBed.output
             output:
-                'genome/tracks/CTCF-prediction.bed'
+                'genome/tracks/CTCF.scaled.bed'
             params:
-                threshold = 15
+                logScore = '--log' if config['logScore'] else ''
+            group:
+                'bedtools'
             log:
-                'logs/processCTCFprediction.log'
+                'logs/scaleBed.log'
             conda:
                 f'{ENVS}/python3.yaml'
             shell:
-                '{SCRIPTS}/processCTCFBSDB.py --threshold {params.threshold} '
+                '{SCRIPTS}/scaleBedScore.py {params.logScore} {input} '
+                '> {output} 2> {log}'
+
+
+        rule filterBedScore:
+            input:
+                rules.scaleBed.output
+            output:
+                'genome/replicates/{rep}/tracks/CTCF-sampled-{rep}.bed'
+            params:
+                rep = REPS,
+                seed = lambda wc: sequenceSeeds[int(wc.rep) - 1]
+            log:
+                'logs/sampleBed/{rep}.log'
+            conda:
+                f'{ENVS}/python3.yaml'
+            shell:
+                '{SCRIPTS}/filterBedScore.py --seed {params.seed} '
                 '{input} > {output} 2> {log}'
 
-    def CTCFinput(wildcards):
-        if config['computeDirection']:
-            return rules.processCTCFprediction.output
-        else:
-            return config['ctcf']
 
-    rule sortBed:
+        rule splitOrientation:
+            input:
+                rules.filterBedScore.output
+            output:
+                forward = 'genome/replicates/{rep}/tracks/CTCF-forward-{rep}.bed',
+                reversed = 'genome/replicates/{rep}/tracks/CTCF-reverse-{rep}.bed'
+            params:
+                min_rep = config['min_rep']
+            group:
+                'mask'
+            log:
+                'logs/splitOrientation/{rep}.log'
+            conda:
+                f'{ENVS}/python3.yaml'
+            shell:
+                '{SCRIPTS}/split_bed.py --min_rep {params.min_rep} '
+                '--forward {output.forward} --reverse {output.reversed} '
+                '{input} &> {log}'
+
+
+    rule scaleTracks:
         input:
-            CTCFinput
+            lambda wc: track_data[wc.track]['source']
         output:
-            'genome/tracks/CTCF.sort.bed'
-        group:
-            'bedtools'
-        log:
-            'logs/sortBed.log'
-        conda:
-            f'{ENVS}/bedtools.yaml'
-        shell:
-            'bedtools sort -i {input} > {output} 2> {log}'
-
-
-    rule mergeBed:
-        input:
-            rules.sortBed.output
-        output:
-            'genome/tracks/CTCF.merged.bed'
-        group:
-            'bedtools'
-        log:
-            'logs/mergeBed.log'
-        conda:
-            f'{ENVS}/bedtools.yaml'
-        shell:
-            'bedtools merge -s -c 4,5,6 -o count,median,distinct '
-            '-i {input} > {output} 2> {log}'
-
-
-    rule scaleBed:
-        input:
-            rules.mergeBed.output
-        output:
-            'genome/tracks/CTCF.scaled.bed'
+            'genome/tracks/scaled/{track}'
         params:
             logScore = '--log' if config['logScore'] else ''
-        group:
-            'bedtools'
         log:
-            'logs/scaleBed.log'
+            'logs/scaleTracks/{track}.log'
         conda:
             f'{ENVS}/python3.yaml'
         shell:
             '{SCRIPTS}/scaleBedScore.py {params.logScore} {input} '
-            '> {output} 2> {log}'
+            '{params.logScore} > {output} 2> {log}'
 
 
-    rule filterBedScore:
+    rule filterTracks:
         input:
-            rules.scaleBed.output
+            rules.scaleTracks.output
         output:
-            'genome/replicates/{rep}/tracks/CTCF-sampled-{rep}.bed'
+            'genome/replicates/{rep}/tracks/scaled/{track}'
         params:
             rep = REPS,
             seed = lambda wc: sequenceSeeds[int(wc.rep) - 1]
         log:
-            'logs/sampleBed/{rep}.log'
+            'logs/filterTracks/{track}-{rep}.log'
         conda:
             f'{ENVS}/python3.yaml'
         shell:
@@ -322,158 +375,105 @@ if config['ctcf'] is not None:
             '{input} > {output} 2> {log}'
 
 
-    rule splitOrientation:
+    def getMasking(wc):
+        """ Build masking command for maskFasta for track data """
+        command = ''
+        for track in track_data:
+            character = track_data[track]['character']
+            command += f'--bed genome/replicates/{wc.rep}/tracks/scaled/{track},{character} '
+        if config['ctcf']:
+            command += (f'--bed genome/replicates/{wc.rep}/tracks/CTCF-forward-{wc.rep}.bed,F '
+                        f'--bed genome/replicates/{wc.rep}/tracks/CTCF-reverse-{wc.rep}.bed,R ')
+        return command
+
+
+    rule maskFasta:
         input:
-            rules.filterBedScore.output
+            rules.splitOrientation.output,
+            expand('genome/replicates/{{rep}}/tracks/scaled/{track}',
+                track = track_data.keys()),
+            chromSizes = rules.getChromSizes.output
         output:
-            forward = 'genome/replicates/{rep}/tracks/CTCF-forward-{rep}.bed',
-            reversed = 'genome/replicates/{rep}/tracks/CTCF-reverse-{rep}.bed'
+            pipe(f'genome/replicates/{{rep}}/sequence/{BUILD}-masked.fa')
         params:
-            min_rep = config['min_rep']
+            masking = getMasking,
+            seed = lambda wc: sequenceSeeds[int(wc.rep) - 1]
         group:
             'mask'
         log:
-            'logs/splitOrientation/{rep}.log'
+            f'logs/maskFasta/{BUILD}-{{rep}}.log'
+        conda:
+            f'{ENVS}/bedtools.yaml'
+        shell:
+            '{SCRIPTS}/maskFastaV2.py {input.chromSizes} {params.masking} '
+            '--seed {params.seed} > {output} 2> {log}'
+
+
+    rule bgzipMasked:
+        input:
+            rules.maskFasta.output
+        output:
+            f'{rules.maskFasta.output}.gz'
+        group:
+            'mask'
+        log:
+            f'logs/bgzipMasked/{BUILD}-{{rep}}.log'
+        conda:
+            f'{ENVS}/tabix.yaml'
+        shell:
+            'bgzip -c {input} > {output} 2> {log}'
+
+
+    rule indexMasked:
+        input:
+            rules.bgzipMasked.output
+        output:
+            multiext(f'{rules.bgzipMasked.output}', '.fai', '.gzi')
+        group:
+            'mask'
+        log:
+            f'logs/indexMasked/{BUILD}-{{rep}}.log'
+        conda:
+            f'{ENVS}/samtools.yaml'
+        shell:
+            'samtools faidx {input} &> {log}'
+
+
+    rule extractRegion:
+        input:
+            fasta = rules.bgzipMasked.output,
+            index = rules.indexMasked.output
+        output:
+            pipe('genome/replicates/{rep}/genome/{name}-masked-{rep}.fa')
+        group:
+            'convert2Lammps'
+        params:
+            region = f'{CHR}:{START}-{END}'
+        log:
+            'logs/extractRegion/{name}-{rep}.log'
+        conda:
+            f'{ENVS}/samtools.yaml'
+        shell:
+            'samtools faidx {input.fasta} {params.region} > {output} 2> {log}'
+
+
+    rule FastaToBeads:
+        input:
+            rules.extractRegion.output
+        output:
+            '{name}/{nbases}/reps/{rep}/sequence/{name}-beads-{rep}.txt'
+        group:
+            'convert2Lammps'
+        params:
+            bases_per_bead = config['bases_per_bead'],
+            seed = lambda wc: sequenceSeeds[int(wc.rep) - 1]
+        log:
+            'logs/sequenceToBeads/{name}-{nbases}-{rep}.log'
         conda:
             f'{ENVS}/python3.yaml'
         shell:
-            '{SCRIPTS}/split_bed.py --min_rep {params.min_rep} '
-            '--forward {output.forward} --reverse {output.reversed} '
-            '{input} &> {log}'
-
-
-rule scaleTracks:
-    input:
-        lambda wc: track_data[wc.track]['source']
-    output:
-        'genome/tracks/scaled/{track}'
-    params:
-        logScore = '--log' if config['logScore'] else ''
-    log:
-        'logs/scaleTracks/{track}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/scaleBedScore.py {params.logScore} {input} '
-        '{params.logScore} > {output} 2> {log}'
-
-
-rule filterTracks:
-    input:
-        rules.scaleTracks.output
-    output:
-        'genome/replicates/{rep}/tracks/scaled/{track}'
-    params:
-        rep = REPS,
-        seed = lambda wc: sequenceSeeds[int(wc.rep) - 1]
-    log:
-        'logs/filterTracks/{track}-{rep}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/filterBedScore.py --seed {params.seed} '
-        '{input} > {output} 2> {log}'
-
-
-def getMasking(wc):
-    """ Build masking command for maskFasta for track data """
-    command = ''
-    for track in track_data:
-        character = track_data[track]['character']
-        command += f'--bed genome/replicates/{wc.rep}/tracks/scaled/{track},{character} '
-    if config['ctcf']:
-        command += (f'--bed genome/replicates/{wc.rep}/tracks/CTCF-forward-{wc.rep}.bed,F '
-                    f'--bed genome/replicates/{wc.rep}/tracks/CTCF-reverse-{wc.rep}.bed,R ')
-    return command
-
-
-rule maskFasta:
-    input:
-        rules.splitOrientation.output,
-        expand('genome/replicates/{{rep}}/tracks/scaled/{track}',
-            track = track_data.keys()),
-        chromSizes = rules.getChromSizes.output
-    output:
-        pipe(f'genome/replicates/{{rep}}/sequence/{BUILD}-masked.fa')
-    params:
-        masking = getMasking,
-        seed = lambda wc: sequenceSeeds[int(wc.rep) - 1]
-    group:
-        'mask'
-    log:
-        f'logs/maskFasta/{BUILD}-{{rep}}.log'
-    conda:
-        f'{ENVS}/bedtools.yaml'
-    shell:
-        '{SCRIPTS}/maskFastaV2.py {input.chromSizes} {params.masking} '
-        '--seed {params.seed} > {output} 2> {log}'
-
-
-rule bgzipMasked:
-    input:
-        rules.maskFasta.output
-    output:
-        f'{rules.maskFasta.output}.gz'
-    group:
-        'mask'
-    log:
-        f'logs/bgzipMasked/{BUILD}-{{rep}}.log'
-    conda:
-        f'{ENVS}/tabix.yaml'
-    shell:
-        'bgzip -c {input} > {output} 2> {log}'
-
-
-rule indexMasked:
-    input:
-        rules.bgzipMasked.output
-    output:
-        multiext(f'{rules.bgzipMasked.output}', '.fai', '.gzi')
-    group:
-        'mask'
-    log:
-        f'logs/indexMasked/{BUILD}-{{rep}}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    shell:
-        'samtools faidx {input} &> {log}'
-
-
-rule extractRegion:
-    input:
-        fasta = rules.bgzipMasked.output,
-        index = rules.indexMasked.output
-    output:
-        pipe('genome/replicates/{rep}/genome/{name}-masked-{rep}.fa')
-    group:
-        'convert2Lammps'
-    params:
-        region = f'{CHR}:{START}-{END}'
-    log:
-        'logs/extractRegion/{name}-{rep}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    shell:
-        'samtools faidx {input.fasta} {params.region} > {output} 2> {log}'
-
-
-rule FastaToBeads:
-    input:
-        rules.extractRegion.output
-    output:
-        '{name}/{nbases}/reps/{rep}/sequence/{name}-beads-{rep}.txt'
-    group:
-        'convert2Lammps'
-    params:
-        bases_per_bead = config['bases_per_bead'],
-        seed = lambda wc: sequenceSeeds[int(wc.rep) - 1]
-    log:
-        'logs/sequenceToBeads/{name}-{nbases}-{rep}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/FastaToBeads.py --nbases {params.bases_per_bead} '
-        '--seed {params.seed} {input} > {output} 2> {log}'
+            '{SCRIPTS}/FastaToBeads.py --nbases {params.bases_per_bead} '
+            '--seed {params.seed} {input} > {output} 2> {log}'
 
 
 def beadsInput(wc):
