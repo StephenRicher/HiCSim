@@ -123,8 +123,9 @@ if config['random']['simulation']:
 else:
     simulationSeeds = [random.randint(1, (2**16) - 1)] * config['reps']
 
-BINSIZE = int(config['HiC']['binsize'])
-if BINSIZE:
+
+if config['HiC']['binsize'] is not None:
+    BINSIZE = int(config['HiC']['binsize'])
     MERGEBINS, REMAINDER = divmod(BINSIZE, config['bases_per_bead'])
     if REMAINDER:
         sys.exit(
