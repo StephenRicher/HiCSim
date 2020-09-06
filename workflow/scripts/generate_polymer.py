@@ -320,6 +320,7 @@ def main(file, seed, monomers, ctcf, basesPerBead,
     dat.loadSequence(file, basesPerBead, ctcf)
     # TO DO - the tye list needs to be input by user
     dat.TU_types = ['1', '7', '3']
+    # TO DO - random walk action to be input by user
     dat.random = True
     for monomer in monomers:
         nbeads = int(monomer[0])
