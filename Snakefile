@@ -387,9 +387,16 @@ def getMasking(wc):
     return command
 
 
+def getSplitOrient(wc):
+    """ Return rule output only if used. """
+    if config['ctcf']:
+        return rules.splitOrientation.output
+    else:
+        return []
+
 rule maskFasta:
     input:
-        rules.splitOrientation.output,
+        getSplitOrient,
         expand('genome/replicates/{{rep}}/tracks/scaled/{track}',
             track = track_data.keys()),
         chromSizes = rules.getChromSizes.output
