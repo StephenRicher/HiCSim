@@ -91,7 +91,7 @@ if config['syntheticSequence'] is None:
     if invalid:
         sys.exit('\033[31mInvalid configuration setting.\033[m\n')
 else:
-    config['genome']['chr'] = ''
+    config['genome']['sequence'] = ''
     config['genome']['chr'] = 'synthetic'
     config['genome']['start'] = 1
     config['genome']['end'] = nBeads(config['syntheticSequence']) * config['bases_per_bead']
