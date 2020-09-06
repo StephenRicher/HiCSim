@@ -79,7 +79,8 @@ config = set_config(config, default_config)
 
 workdir : config['workdir']
 
-if config['syntheticSequence'] is not None:
+if config['syntheticSequence'] is None:
+    # If no synthetic sequence ensure genome information is provided.
     invalid = False
     for key in ['sequence', 'chr', 'start', 'end']:
         if config['genome'][key] is None:
@@ -89,10 +90,10 @@ if config['syntheticSequence'] is not None:
             invalid = True
     if invalid:
         sys.exit('\033[31mInvalid configuration setting.\033[m\n')
-    else:
-        config['genome']['chr'] = 'synthetic'
-        config['genome']['start'] = 1
-        config['genome']['end'] = nBeads(config['syntheticSequence']) * config['bases_per_bead']
+else:
+    config['genome']['chr'] = 'synthetic'
+    config['genome']['start'] = 1
+    config['genome']['end'] = nBeads(config['syntheticSequence']) * config['bases_per_bead']
 
 BUILD = config['genome']['build']
 NAME = config['name']
