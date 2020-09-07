@@ -37,6 +37,7 @@ default_config = {
                        'start':     None,
                        'end':       None,},
     'syntheticSequence' : None,
+    'randomWalk':     False,
     'ignoreZeroPair': True,
     'min_rep':        1,
     'logScore':       True,
@@ -68,8 +69,6 @@ default_config = {
                        'vMax':       None    ,},
     'plotRG':         {'dpi':        300     ,
                        'confidence': 0.95    ,},
-    'window_size':    1,
-    'overlap':        0,
     'delay':          10,
     'loop':           0,
     'tmpdir':         tempfile.gettempdir(),
@@ -497,7 +496,7 @@ rule BeadsToLammps:
         coeffs = '{name}/{nbases}/reps/{rep}/lammps/config/coeffs.txt',
         groups = '{name}/{nbases}/reps/{rep}/lammps/config/groups.txt'
     params:
-        nmonomers = config['monomers'],
+        nMonomers = config['monomers'],
         coeffs = config['coeffs'],
         basesPerBead = config['bases_per_bead'],
         seed = lambda wc: intialConformSeeds[int(wc.rep) - 1],
@@ -506,7 +505,8 @@ rule BeadsToLammps:
         ylo = config['box']['ylo'],
         yhi = config['box']['yhi'],
         zlo = config['box']['zlo'],
-        zhi = config['box']['zhi']
+        zhi = config['box']['zhi'],
+        randomWalk = '--randomWalk' if config['randomWalk'] else ''
     group:
         'convert2Lammps'
     log:
@@ -520,10 +520,10 @@ rule BeadsToLammps:
         '--zlo {params.zlo} --zhi {params.zhi} '
         '--ctcf --coeffOut {output.coeffs} '
         '--groupOut {output.groups} '
-        '--monomer {params.nmonomers},T '
+        '--nMonomer {params.nMonomers} '
         '--pairCoeffs {params.coeffs} '
         '--basesPerBead {params.basesPerBead} '
-        '{input} > {output.dat} 2> {log}'
+        '{params.randomWalk} {input} > {output.dat} 2> {log}'
 
 
 rule checkCTCF:
@@ -910,30 +910,9 @@ if config['syntheticSequence'] is None:
             '{input.tsv} {output} {input.chrom_sizes} &> {log}'
 
 
-rule smooth_xyz:
-    input:
-        warm_up = '{name}/{nbases}/reps/1/lammps/warm_up.xyz.gz',
-        simulation = '{name}/{nbases}/reps/1/lammps/simulation.xyz.gz'
-    output:
-        '{name}/{nbases}/reps/1/lammps/complete-smooth.xyz'
-    params:
-        window_size = config['window_size'],
-        overlap = config['overlap']
-    log:
-        'logs/smooth_xyz/{name}-{nbases}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/smooth_xyz.py '
-        '--size {params.window_size} '
-        '--overlap {params.overlap} '
-        '<(zcat {input.warm_up} {input.simulation}) '
-        '> {output} 2> {log}'
-
-
 checkpoint vmd:
     input:
-        rules.smooth_xyz.output
+        '{name}/{nbases}/reps/1/lammps/simulation.xyz.gz'
     output:
         directory('{name}/{nbases}/vmd/sequence')
     log:
@@ -941,7 +920,7 @@ checkpoint vmd:
     conda:
         f'{ENVS}/vmd.yaml'
     shell:
-        'vmd -eofexit -nt -dispdev text -args {input} {output} '
+        'vmd -eofexit -nt -dispdev text -args <(zcat {input}) {output} '
         '< {SCRIPTS}/vmd.tcl &> {log}'
 
 
