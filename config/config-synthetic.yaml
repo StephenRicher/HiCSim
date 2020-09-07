@@ -3,10 +3,10 @@ workdir: /home/u/sr467/scratch/projects/MolecularDynamics/analysis
 tmpdir: /home/u/sr467/scratch/projects/MolecularDynamics/analysis
 cluster: False
 
-reps: 100
+reps: 1000
 threads: 6
 bases_per_bead: 3000
-monomers: 20
+monomers: 10
 
 coeffs: /home/u/sr467/scratch/projects/MolecularDynamics/config/pair_coeffs.txt
 
@@ -16,7 +16,7 @@ name : synthetic
 # If synthetic is provided all genome and track configuration is ignored.
 syntheticSequence : /home/u/sr467/scratch/projects/MolecularDynamics/config/syntheticSequence.txt
 
-# Set True to exclude timepoints where both TU pairs are inactive when '
+# Set True to exclude ti+mepoints where both TU pairs are inactive when '
 # computing correlation.
 ignoreZeroPair : False
 
