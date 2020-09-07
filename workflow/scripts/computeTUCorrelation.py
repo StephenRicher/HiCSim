@@ -21,7 +21,8 @@ def main(dnaXYZ: str, monomerXYZ: str, atomGroups: str, out: str, distance: floa
         while True:
             try:
                 dna = read_XYZ(dna_fh)
-                monomer = read_XYZ(monomer_fh)
+                # Exclude type 1 to exclude 'inactive' monomers
+                monomer = read_XYZ(monomer_fh, exclude='1')
                 # Compute distance of monomers to each DNA bead
                 result = cdist(dna['atoms'], monomer['atoms'], 'euclidean')
                 # Find closest monomer to each bead
