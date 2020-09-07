@@ -1,5 +1,5 @@
 __default__:
-  account:       "free"
+  account:       "eb-bb1271"
   partition:     "batch"
   ntasks:        1
   cpus-per-task: 16
@@ -8,20 +8,18 @@ __default__:
   mail-user:     "sr467@bath.ac.uk"
   output:        "{rule}-%j-%x.out"
   error:         "{rule}-%j-%x.err"
-  account :      "free"
-  partition :    "batch"
-  time :         60
+  time :         2
 
-generate_polymer:
-  time : 10
+mask:
+  time : 15
 
 lammps:
-  time : 360
+  time : 30
   ntasks : 16
-  cpus_per_task : 1
+  cpus-per-task : 1
 
-create_contact_matrix:
-  time : 240
+mergeReplicates:
+  time : 15
 
 sum_matrices:
   time : 60
