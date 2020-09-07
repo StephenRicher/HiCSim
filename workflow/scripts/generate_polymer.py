@@ -61,15 +61,15 @@ class Sequence:
 
 class lammps:
 
-    def __init__(self):
+    def __init__(self, randomWalk=False, TU_types=[]):
         self.sequences = []
         self.monomers = []
-        self.TU_types = [] # Beads to be considered transcriptional units
+        self.TU_types = TU_types # Beads to be considered transcriptional units
         self._beadID = 1
         self._typeID = 1
         self._bondID = 1
         self.typeIDs = {}
-        self.random = False
+        self.randomWalk = randomWalk
         self._seed = random.randint(1, 1e100)
 
     def loadSequence(self, sequence_file, basesPerBead, ctcf):
@@ -80,10 +80,10 @@ class lammps:
         for type in sequence.types:
             self.addType(type)
 
-    def loadMonomer(self, type, nbeads):
+    def loadMonomer(self, type, nBeads):
         monomer = {}
         self.addType(type)
-        for bead in range(nbeads):
+        for bead in range(int(nBeads)):
             monomer[self._beadID] = type
             self._beadID += 1
         self.monomers.append(monomer)
@@ -170,7 +170,7 @@ class lammps:
         sys.stdout.write('\n')
 
 
-    def randomWalk(self, length, r=1.1):
+    def makeRandomWalk(self, length, r=1.1):
         x = []
         y = []
         z = []
@@ -191,8 +191,8 @@ class lammps:
     def writePolymers(self):
         for sequence in self.sequences:
 
-            if self.random:
-                x, y, z = self.randomWalk(sequence.nBeads)
+            if self.randomWalk:
+                x, y, z = self.makeRandomWalk(sequence.nBeads)
             else:
                 # Randomly select rosette length between 30kbp - 100kbp
                 rosette_length = random.randint(30,100) * 1000
@@ -311,17 +311,14 @@ class lammps:
 
 
 
-def main(file, seed, monomers, ctcf, basesPerBead,
+def main(file, seed, monomers, ctcf, basesPerBead, randomWalk,
         pairCoeffs, coeffOut, groupOut, xlo, xhi, ylo, yhi, zlo, zhi, **kwargs):
 
     random.seed(seed)
-    dat = lammps()
+    # TO DO - the tye list needs to be input by user
+    dat = lammps(randomWalk=randomWalk, TU_types=['1', '7', '3'])
     dat.loadBox(xlo, xhi, ylo, yhi, zlo, zhi)
     dat.loadSequence(file, basesPerBead, ctcf)
-    # TO DO - the tye list needs to be input by user
-    dat.TU_types = ['1', '7', '3']
-    # TO DO - random walk action to be input by user
-    dat.random = True
     for monomer in monomers:
         nbeads = int(monomer[0])
         type = monomer[1]
@@ -338,51 +335,6 @@ def main(file, seed, monomers, ctcf, basesPerBead,
                 dat.writeCoeffs(atom1, atom2, coeff, fh=out)
     with open(groupOut, 'w') as out:
         dat.writeGroup(fh=out)
-
-
-def random_linear_polymer(
-        n_molecules, n_types, n_clusters, seed, xlo, xhi, ylo, yhi, zlo, zhi):
-
-    """ Generate a random linear polymer as an input file for LAMMPS """
-
-    random.seed(seed)
-
-    write_header(n_molecules, n_types, xlo, xhi, ylo, yhi, zlo, zhi)
-    type_list = list(range(1, n_types + 1))
-    write_masses(type_list)
-
-    sys.stdout.write('\nAtoms\n\n')
-    r = 1.1
-    cluster_size = int(n_molecules / n_clusters)
-    type = random.choice(type_list)
-    type_boundary_idx = 0  # Set initial index of type boundary change
-    for n in range(1, n_molecules+1):
-
-        if n > type_boundary_idx + cluster_size:
-            type_boundary_idx = n
-            # Generate list of types excluding the previous type used
-            type_choices = [n for n in type_list if n != type]
-            type = random.choice(type_choices)
-
-        if n == 1:
-            x = random.random()
-            y = random.random()
-            z = random.random()
-        else:
-            phi = random.random() * 2 * math.pi
-            theta = random.random() * math.pi
-            x = prev_x + (r * math.sin(theta) * math.cos(phi))
-            y = prev_y + (r * math.sin(theta) * math.sin(phi))
-            z = prev_z + (r * math.cos(theta))
-
-        sys.stdout.write(f'{n} 1 {type} {x} {y} {z} 0 0 0\n')
-        prev_x = x
-        prev_y = y
-        prev_z = z
-    sys.stdout.write('\n')
-    write_bonds(n_molecules)
-
-    write_angles(n_molecules)
 
 
 class ParseDict(argparse.Action):
@@ -403,19 +355,6 @@ class ParseDict(argparse.Action):
 
 
 def parse_arguments():
-
-
-    random_subparser = argparse.ArgumentParser(add_help=False)
-    random_subparser.add_argument(
-        '--n_molecules', default=1000, type=int,
-        help='Number of molecules in polymer.')
-    random_subparser.add_argument(
-        '--n_types', default=4, type=int,
-        help='Number of atom types in polymer.')
-    random_subparser.add_argument(
-        '--n_clusters', default=10, type=int,
-        help='Number of clusters in poymers.')
-    random_subparser.set_defaults(function=random_linear_polymer)
 
     box_sizes = argparse.ArgumentParser(add_help=False)
     box_sizes.add_argument(
@@ -450,7 +389,7 @@ def parse_arguments():
         '--monomers', metavar='NBEADS,TYPE', type=commaPair,
         action='append', default=[],
         help='Add NBEADS number of monomers of TYPE.'
-        'Call multiple times to add multiple monomer types.')
+             'Call multiple times to add multiple monomer types.')
     custom.add_argument(
         '--ctcf', default=False, action='store_true',
         help='Process beads labelled F and R as CTCF sites. Each '
@@ -468,6 +407,10 @@ def parse_arguments():
     custom.add_argument(
         '--basesPerBead', required=True, type=int,
         help='Number of bases used to represent 1 bead.')
+    custom.add_argument(
+        '--randomWalk', default=False, action='store_true',
+        help='Initialise polymer conformation using a random walk rather than '
+             'a helicoidal conoformation  (default: %(default)s)')
     epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
 
     base = argparse.ArgumentParser(add_help=False)
