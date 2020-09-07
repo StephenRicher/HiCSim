@@ -73,7 +73,7 @@ def load_XYZ(XYZ_path: str):
     return xyz
 
 
-def read_XYZ(XYZ_fobj):
+def read_XYZ(XYZ_fobj, exclude=''):
     """ Read a timepoint of XYZ coordinates each time called. """
 
     line = XYZ_fobj.readline()
@@ -85,8 +85,10 @@ def read_XYZ(XYZ_fobj):
            'comment' : comment,
            'atoms'   : []}
     for n in range(n_atoms):
-        atom = Atom(next(XYZ_fobj))
-        xyz['atoms'].append([atom.x, atom.y, atom.z])
+        type, x, y , z = next(XYZ_fobj).strip().split()
+        if type not in exclude:
+            xyz['atoms'].append([x, y, z])
+
 
     return xyz
 
