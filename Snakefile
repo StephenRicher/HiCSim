@@ -717,8 +717,6 @@ rule create_contact_matrix:
         '{name}/{nbases}/reps/{rep}/matrices/contacts.npz'
     params:
         distance =  3
-    group:
-        'lammps'
     log:
         'logs/create_contact_matrix/{name}-{nbases}-{rep}.log'
     conda:
