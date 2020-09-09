@@ -69,7 +69,7 @@ default_config = {
                        'vMax':       None    ,},
     'plotRG':         {'dpi':        300     ,
                        'confidence': 0.95    ,},
-    'plotTU':         {'pvalue':     1.0     ,
+    'plotTU':         {'pvalue':     0.1     ,
                        'vMin':      -0.1     ,
                        'vMax':       0.1     ,},
     'delay':          10,
