@@ -11,6 +11,8 @@ import numpy as np
 import pandas as pd
 from utilities import read_XYZ
 from scipy.spatial.distance import cdist
+from scipy.stats import pearsonr
+
 
 __version__ = '1.0.0'
 
@@ -56,27 +58,25 @@ def main(dnaXYZ: str, monomerXYZ: str, atomGroups: str, out: str, distance: floa
     else:
         # Convert to pandas so we can label columns with TU atom indexes
         allDistances = pd.DataFrame(data=allDistances, columns=TU_indexes)
-        correlations = allDistances.corr() # Pearson correlation
-        # Convert to long format
+
+        # Compute Pearson correlation coefficient and convert to long format
+        correlations = allDistances.corr(method='pearson')
         correlations = correlations.stack().reset_index()
-        correlations.columns = ['row', 'column', 'score']
+        correlations.columns = ['row', 'column', 'r']
 
-    # Fill matrix with non-TU indexes to visualise scale
-    #correlation = createAllPairWise(correlation, len(atomGroupsDict['DNA']))
+        # Combpute corresponding p-values and convert to seperate dataframe
+        pvalues = allDistances.corr(method=pearsonr_pval)
+        pvalues = pvalues.stack().reset_index()
+        pvalues.columns = ['row', 'column', 'p-value']
 
-    correlations.to_csv(out, index=False)
+        # Combine to include p-values
+        pearson = pd.merge(correlations, pvalues)
+
+    pearson.to_csv(out, index=False)
 
 
-def createAllPairWise(correlation, nAtoms):
-    """ Fill dataframe with missing DNA atoms as whitespace
-        Helps visualise scale on the heatmap. """
-
-    # Creat empty DF with matching column names and all atomID combinations
-    df = pd.DataFrame(
-        columns=['row', 'column'],
-        data=list(itertools.product(*[range(1,nAtoms+1), range(1,nAtoms+1)])))
-
-    return df.merge(correlation.reset_index(), how='left').fillna(0)
+def pearsonr_pval(x,y):
+    return pearsonr(x,y)[1]
 
 
 def readJSON(file):

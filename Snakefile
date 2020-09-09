@@ -148,8 +148,9 @@ rule all:
             nbases=config['bases_per_bead'], name=NAME),
          expand('{name}/{nbases}/merged/simulation-{binsize}.png',
             nbases=config['bases_per_bead'], name=NAME, binsize=BINSIZE),
-         expand('{name}/{nbases}/merged/TUCorrelation.png',
-            nbases=config['bases_per_bead'], name=NAME),
+         expand('{name}/{nbases}/merged/TU-{plot}.png',
+            nbases=config['bases_per_bead'], name=NAME,
+            plot=['Correlation','CircosPlot']),
          f'{NAME}/{config["bases_per_bead"]}/merged/radius_of_gyration.png']
 
 
@@ -701,13 +702,17 @@ rule plotTUCorrelation:
     input:
         expand('{{name}}/{{nbases}}/reps/{rep}/TUcorrelation.csv', rep=REPS),
     output:
-        '{name}/{nbases}/merged/TUCorrelation.png'
+        heatmap = '{name}/{nbases}/merged/TU-Correlation.png',
+        circos = '{name}/{nbases}/merged/TU-CircosPlot.png'
+    params:
+        pvalue = 10**-6
     log:
         'logs/plotTUCorrelation/{name}-{nbases}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/plotTUCorrelation.py {input} --out {output} &> {log}'
+        '{SCRIPTS}/plotTUCorrelation.py {input} --heatmap {output.heatmap} '
+        '--circos {output.circos} --pvalue {params.pvalue} &> {log}'
 
 
 rule create_contact_matrix:
