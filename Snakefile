@@ -71,7 +71,7 @@ default_config = {
                        'confidence': 0.95    ,},
     'plotTU':         {'pvalue':     1.0     ,
                        'vMin':      -0.1     ,
-                       'vMax':       0.1,    ,},
+                       'vMax':       0.1     ,},
     'delay':          10,
     'loop':           0,
     'tmpdir':         tempfile.gettempdir(),
