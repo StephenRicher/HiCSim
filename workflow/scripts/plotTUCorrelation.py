@@ -31,7 +31,7 @@ def main(files: List, heatmap: str, circos: str, pvalue: float, vmin: float, vma
     G.add_nodes_from(nodeNames)
     colours = []
     for row, column in correlation.index:
-        if row > column:
+        if row >= column:
             continue
         info = correlation.loc[row, column]
         if info['p-value'] >= pvalue:
