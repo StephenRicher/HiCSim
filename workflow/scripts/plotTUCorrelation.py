@@ -28,7 +28,7 @@ def main(files: List, heatmap: str, circos: str, pvalue: float, vmin: float, vma
     correlation = correlation.groupby(['row', 'column']).mean()
 
     G = nx.Graph()
-    G.add_nodes_from(nodeNames)
+    G.add_nodes_from(sorted(nodeNames))
     colours = []
     for row, column in correlation.index:
         if row >= column:
