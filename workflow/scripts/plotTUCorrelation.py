@@ -34,7 +34,7 @@ def main(files: List, heatmap: str, circos: str, pvalue: float, vmin: float, vma
         if row > column:
             continue
         info = correlation.loc[row, column]
-        if info['p-value'] > pvalue:
+        if info['p-value'] >= pvalue:
             continue
         colours.append(info['r'])
         G.add_edge(row, column)
