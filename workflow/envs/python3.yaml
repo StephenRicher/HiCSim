@@ -8,5 +8,6 @@ dependencies :
     - pandas
     - seaborn
     - matplotlib
-    - pyCommonTools==2.3.0
     - requests
+    - networkx
+    - nxviz
