@@ -2,7 +2,6 @@
 
 import re
 import argparse
-import pyCommonTools as pct
 from timeit import default_timer as timer
 
 
@@ -53,8 +52,6 @@ class Atom:
 def load_XYZ(XYZ_path: str):
     """ Read XYZ file and parse into list of dictionaries. """
 
-    log = pct.create_logger()
-    log.debug(f'Reading {XYZ_path} into memory.')
     start = timer()
     xyz = []
     with open(XYZ_path) as f:
@@ -68,7 +65,6 @@ def load_XYZ(XYZ_path: str):
             for n in range(n_atoms):
                 xyz[id]['atoms'].append(Atom(next(f)))
     end = timer()
-    log.debug(f'Parsed {XYZ_path} in {end - start} seconds.')
 
     return xyz
 
