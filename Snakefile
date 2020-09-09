@@ -705,7 +705,7 @@ rule plotTUCorrelation:
         heatmap = '{name}/{nbases}/merged/TU-Correlation.png',
         circos = '{name}/{nbases}/merged/TU-CircosPlot.png'
     params:
-        pvalue = 10**-6,
+        pvalue = 10**-2,
         vmin = -0.1,
         vmax = 0.1
     log:
