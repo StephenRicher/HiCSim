@@ -705,14 +705,17 @@ rule plotTUCorrelation:
         heatmap = '{name}/{nbases}/merged/TU-Correlation.png',
         circos = '{name}/{nbases}/merged/TU-CircosPlot.png'
     params:
-        pvalue = 10**-6
+        pvalue = 10**-6,
+        vmin = -0.1,
+        vmax = 0.1
     log:
         'logs/plotTUCorrelation/{name}-{nbases}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
         '{SCRIPTS}/plotTUCorrelation.py {input} --heatmap {output.heatmap} '
-        '--circos {output.circos} --pvalue {params.pvalue} &> {log}'
+        '--circos {output.circos} --pvalue {params.pvalue} '
+        '--vmin {params.vmin} --vmax {params.vmax} &> {log}'
 
 
 rule create_contact_matrix:
