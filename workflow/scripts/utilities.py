@@ -175,3 +175,10 @@ def commaPair(value):
             f'Masking character {v2} shoud be single character.')
     else:
         return (v1, v2)
+
+
+def coeff(value):
+    ivalue = float(value)
+    if not -1 <= ivalue <= 1:
+        raise argparse.ArgumentTypeError(f'{value} must be between -1 and 1.')
+    return ivalue
