@@ -69,6 +69,9 @@ default_config = {
                        'vMax':       None    ,},
     'plotRG':         {'dpi':        300     ,
                        'confidence': 0.95    ,},
+    'plotTU':         {'pvalue':     1.0     ,
+                       'vMin':      -0.1     ,
+                       'vMax':       0.1,    ,},
     'delay':          10,
     'loop':           0,
     'tmpdir':         tempfile.gettempdir(),
@@ -705,9 +708,9 @@ rule plotTUCorrelation:
         heatmap = '{name}/{nbases}/merged/TU-Correlation.png',
         circos = '{name}/{nbases}/merged/TU-CircosPlot.png'
     params:
-        pvalue = 0,
-        vmin = -0.1,
-        vmax = 0.1
+        pvalue = config['plotTU']['pvalue'],
+        vMin = config['plotTU']['vMin'],
+        vMax = config['plotTU']['vMax']
     log:
         'logs/plotTUCorrelation/{name}-{nbases}.log'
     conda:
@@ -715,7 +718,7 @@ rule plotTUCorrelation:
     shell:
         '{SCRIPTS}/plotTUCorrelation.py {input} --heatmap {output.heatmap} '
         '--circos {output.circos} --pvalue {params.pvalue} '
-        '--vmin {params.vmin} --vmax {params.vmax} &> {log}'
+        '--vmin {params.vMin} --vmax {params.vMax} &> {log}'
 
 
 rule create_contact_matrix:
