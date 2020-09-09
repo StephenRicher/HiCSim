@@ -10,14 +10,14 @@ import pandas as pd
 import seaborn as sns
 import networkx as nx
 from typing import List
+from utilities import coeff
 import matplotlib.pyplot as plt
-from nxviz.plots import CircosPlot
-#from matplotlib import pyplot as plt
+
 
 __version__ = '1.0.0'
 
 
-def main(files: List, heatmap: str, circos: str, pvalue: float, **kwargs) -> None:
+def main(files: List, heatmap: str, circos: str, pvalue: float, vmin: float, vmax: float, **kwargs) -> None:
 
     # Read all per-replicates correlation dataframes into 1 dataframe
     correlation = pd.concat((pd.read_csv(file) for file in files))
@@ -27,19 +27,24 @@ def main(files: List, heatmap: str, circos: str, pvalue: float, **kwargs) -> Non
     # Get pairwise mean correlation across replicates
     correlation = correlation.groupby(['row', 'column']).mean()
 
-    filtered = correlation[correlation['p-value'] < pvalue].reset_index()
-    filtered['direction'] = np.where(filtered['r'] > 0, 'Up', 'Down')
-    filtered['width'] = 3
-    G = nx.from_pandas_edgelist(
-        filtered.reset_index(), "row", "column", ['direction', 'width'])
-    nx.set_node_attributes(G, pd.Series(nodeNames, index=nodeNames), 'name')
-    c = CircosPlot(G,
-               edge_color="direction",
-               edge_width="width",
-               node_labels=True,
-               node_order='name',
-               edgeprops = {"facecolor": "none", "alpha": 1})
-    c.draw()
+    G = nx.Graph()
+    G.add_nodes_from(nodeNames)
+    colours = []
+    for row, column in correlation.index:
+        if row > column:
+            continue
+        info = correlation.loc[row, column]
+        if info['p-value'] > pvalue:
+            continue
+        colours.append(info['r'])
+        G.add_edge(row, column)
+    nx.draw_circular(G,node_color='White',
+                 node_size=0,
+                 font_size=14,
+                 edge_color=colours,
+                 edge_cmap=plt.cm.RdBu_r,
+                 edge_vmin=vmin, edge_vmax=vmax,
+                 with_labels=True)
     plt.tight_layout()
     plt.savefig(circos)
 
@@ -51,7 +56,7 @@ def main(files: List, heatmap: str, circos: str, pvalue: float, **kwargs) -> Non
     # Flip vertically to ensure diagonal goes from bottom left to top right
     correlation = correlation.iloc[::-1]
     fig, ax = plt.subplots()
-    ax = sns.heatmap(correlation, cmap='bwr', center=0, vmin=-0.3, vmax=0.3)
+    ax = sns.heatmap(correlation, cmap='bwr', center=0, vmin=vmin, vmax=vmax)
     fig.tight_layout()
     fig.savefig(heatmap)
 
@@ -73,6 +78,12 @@ def parse_arguments():
         '--pvalue', type=float, default=10**-6,
         help='P-value threshold for filtering TU correlations before '
              'plotting on circos plot (default: %(default)s)')
+    custom.add_argument(
+        '--vmin', type=coeff, default=-0.3,
+        help='Minimum value of colour scale. (default: %(default)s)')
+    custom.add_argument(
+        '--vmax', type=coeff, default=0.3,
+        help='Maximum value of colour scale. (default: %(default)s)')
     epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
 
     base = argparse.ArgumentParser(add_help=False)
