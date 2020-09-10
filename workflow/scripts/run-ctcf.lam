@@ -87,7 +87,7 @@ undump 1 # Close warm_up dump
 ######################################
 pair_style  lj/cut 1.12246
 pair_modify     shift yes
-pair_coeff * *  1.0 1.0 1.12246 ##REPULSIVE ANY TWO BEADS
+pair_coeff * *  1.0 1.0 1.12246 # Repulsive - everything with everything
 #PAIR_COEFF
 
 ####################################
