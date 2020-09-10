@@ -66,8 +66,8 @@ class lammps:
         self.TU_types = TU_types # Beads to be considered transcriptional units
         self._beadID = 1
         # typeID 1 reserved for 'N' beads
-        # typeID 2 reserved for active monomers
-        # typeID 3 for inactive monomers
+        # typeID 2 reserved for active TFs
+        # typeID 3 for inactive TFs
         self._typeID = 4
         self._bondID = 1
         self.typeIDs = {}
@@ -80,15 +80,15 @@ class lammps:
         self.sequences.append(sequence)
         self._beadID += sequence.nBeads
         for type in sequence.types:
-            if type in ['M', 'Mi']:
-                sys.exit('Bead types "M" and "Mi" reserved for monomer beads.')
+            if type in ['TFa', 'TFi']:
+                sys.exit('Beads "TFa" and "TFi" reserved for monomer beads.')
             self.addType(type)
 
     def loadMonomer(self, nMonomers, prop=0.5):
-        # Prop is propotion of active monomers
+        # Prop is proportion of active monomers
         # List of active monomers ('M') and inactive monomers ('Mi')
-        monomers = (int(nMonomers * prop) * ['M']
-                   + int(nMonomers * (1 - prop)) * ['Mi'])
+        monomers = (int(nMonomers * prop) * ['TFa']
+                   + int(nMonomers * (1 - prop)) * ['TFi'])
         for monomer in monomers:
             self.addType(monomer)
             self.monomers[self._beadID] = monomer
@@ -104,10 +104,10 @@ class lammps:
         if type == 'N':
             self.typeIDs[type] = 1
         # Bead 'M' is reserved for active monomers - type 2
-        elif type == 'M':
+        elif type == 'TFa':
             self.typeIDs[type] = 2
         # Bead 'Mi' is reserved for inactive monomrs - type 3
-        elif type == 'Mi':
+        elif type == 'TFi':
             self.typeIDs[type] = 3
         elif type not in self.typeIDs:
             self.typeIDs[type] = self._typeID
@@ -226,8 +226,8 @@ class lammps:
 
             for i, (beadID, type) in enumerate(sequence.sequence.items()):
                 typeID = self.typeIDs[type]
-                comment = 'TU' if type in self.TU_types else ''
-                sys.stdout.write(f'{beadID} 1 {typeID} {x[i]} {y[i]} {z[i]} 0 0 0 # DNA {comment}\n')
+                TU = 'TU' if type in self.TU_types else ''
+                sys.stdout.write(f'{beadID} 1 {typeID} {x[i]} {y[i]} {z[i]} 0 0 0 # DNA {type} {TU}\n')
 
 
     def writeMonomers(self):
@@ -236,7 +236,7 @@ class lammps:
             y = random.uniform(self.box.y.lo, self.box.y.hi)
             z = random.uniform(self.box.z.lo, self.box.z.hi)
             typeID = self.typeIDs[type]
-            sys.stdout.write(f'{beadID} 1 {typeID} {x} {y} {z} 0 0 0 # MONOMER\n')
+            sys.stdout.write(f'{beadID} 1 {typeID} {x} {y} {z} 0 0 0 # TF\n')
 
 
     def writeBonds(self):
@@ -304,16 +304,20 @@ class lammps:
 
     def writeCoeffs(self, type1, type2, coeff, fh=sys.stderr):
         try:
-            type1ID = self.typeIDs[type1]
-            type2ID = self.typeIDs[type2]
+            type1ID = '*' if type1 == '*' else self.typeIDs[type1]
+            type2ID = '*' if type2 == '*' else self.typeIDs[type2]
+        except KeyError:
+            logging.error(
+                f'Atleast one of {type1} or {type2} does not exist. Skipping.')
+            return 1
+        if (type1ID != "*") and (type2ID != "*"):
             # Ensure the smaller typeID is written first
             if type1ID > type2ID:
                 temp = type1ID
                 type1ID = type2ID
                 type2ID = temp
-            fh.write(f'pair_coeff {type1ID} {type2ID} {coeff}\n')
-        except KeyError:
-            pass
+        fh.write(f'pair_coeff {type1ID} {type2ID} {coeff}\n')
+
 
     def writeGroup(self, fh=sys.stderr):
         for sequence in self.sequences:
