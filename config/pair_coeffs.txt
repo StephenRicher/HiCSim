@@ -1,4 +1,8 @@
-M 1 8 1.0 1.8
-M 3 8 1.0 1.8
-M 7 8 1.0 1.8
-M N 3 1.0 1.8
+TFa * 3 1.0 1.8          # Weak attraction - active TF and everything
+TFi * 3 1.0 1.8          # Weak attraction - inactive TF and everything
+TFa 1 8 1.0 1.8
+TFa 3 8 1.0 1.8
+TFa 7 8 1.0 1.8
+TFa TFi 1.0 1.0 1.12246  # Repulsive - active TF and inactive TF
+TFa TFa 1.0 1.0 1.12246  # Repulsive - active TF with each other
+TFi TFi 1.0 1.0 1.12246  # Repulsive - inactive TF with each other
