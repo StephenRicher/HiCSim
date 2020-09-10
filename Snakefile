@@ -682,7 +682,7 @@ rule filterXYZ:
 
 rule computeTUCorrelation:
     input:
-        monomers = '{name}/{nbases}/reps/{rep}/lammps/simulation-MONOMER.xyz.gz',
+        monomers = '{name}/{nbases}/reps/{rep}/lammps/simulation-TF.xyz.gz',
         dna = '{name}/{nbases}/reps/{rep}/lammps/simulation-TU.xyz.gz',
         groups = rules.getAtomGroups.output
     output:
