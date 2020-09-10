@@ -16,17 +16,17 @@ from scipy.stats import pearsonr
 
 __version__ = '1.0.0'
 
-def main(dnaXYZ: str, monomerXYZ: str, atomGroups: str, out: str, distance: float, ignoreZeroPair: bool, **kwargs) -> None:
+def main(TuXYZ: str, TfXYZ: str, atomGroups: str, out: str, distance: float, ignoreZeroPair: bool, **kwargs) -> None:
 
-    with open(dnaXYZ) as dna_fh, open(monomerXYZ) as monomer_fh:
+    with open(TuXYZ) as TU_fh, open(TfXYZ) as TF_fh:
         allDistances = []
         while True:
             try:
-                dna = read_XYZ(dna_fh)
-                # Exclude type 3 to exclude 'inactive' TFs
-                monomer = read_XYZ(monomer_fh, exclude='3')
-                # Compute distance of monomers to each DNA bead
-                result = cdist(dna['atoms'], monomer['atoms'], 'euclidean')
+                TUs = read_XYZ(TU_fh)
+                # Read TFs and exclude type 3 (inactive TF)
+                TFas = read_XYZ(TF_fh, exclude='3')
+                # Compute distance of active TFs to each TU bead
+                result = cdist(TUs['atoms'], TFas['atoms'], 'euclidean')
                 # Find closest monomer to each bead
                 minDistance = np.amin(result, axis=1) < distance
                 allDistances.append(minDistance)
@@ -90,11 +90,11 @@ def parse_arguments():
     custom = argparse.ArgumentParser(add_help=False)
     custom.set_defaults(function=main)
     custom.add_argument(
-        'dnaXYZ', metavar='DNA',
-        help='DNA coordinates in XYZ format')
+        'TuXYZ',
+        help='Transcriptional unit coordinates in XYZ format')
     custom.add_argument(
-        'monomerXYZ', metavar='MONOMER',
-        help='Monomer coordinates in XYZ format')
+        'TfXYZ',
+        help='Active transcription factor coordinates in XYZ format')
     custom.add_argument(
         'atomGroups',
         help='Atom group assignments in JSON format.')
