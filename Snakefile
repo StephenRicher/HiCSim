@@ -576,7 +576,8 @@ lmp_cmd = ('-var infile {input.data} '
            '-in {input.script} '
            '-log /dev/null &> {log}')
 if config['cluster']:
-    lmp_cmd = 'mpirun -n {threads} -x OMP_NUM_THREADS=1 lmp_mpi ' + lmp_cmd
+    #lmp_cmd = 'mpirun -n {threads} -x OMP_NUM_THREADS=1 lmp_mpi ' + lmp_cmd
+    lmp_cmd = 'mpirun -np {threads} lmp_mpi ' + lmp_cmd
 else:
     lmp_cmd = 'lmp_serial ' + lmp_cmd
 
