@@ -11,10 +11,10 @@ monomers: 10
 coeffs: /home/u/sr467/scratch/projects/MolecularDynamics/config/pair_coeffs.txt
 
 # Set name for simulation
-name : synthetic
+name : synthetic-39even
 
 # If synthetic is provided all genome and track configuration is ignored.
-syntheticSequence : /home/u/sr467/scratch/projects/MolecularDynamics/config/syntheticSequence.txt
+syntheticSequence : /home/u/sr467/scratch/projects/MolecularDynamics/config/syntheticSequence-39even.txt
 
 # Set True to exclude ti+mepoints where both TU pairs are inactive when '
 # computing correlation.
@@ -41,8 +41,8 @@ box :
 lammps :
     restart:  0       # Set restart to 0 to turn off
     timestep: 500
-    warm_up:  200000
-    sim_time: 1000000
+    warm_up:  1000000
+    sim_time: 10000000
 
 HiC :
     colourMap : 'Purples'
@@ -53,3 +53,8 @@ HiC :
 plotRG :
     dpi : 300
     confidence : 0.95
+
+plotTU:
+    pvalue : 0.05
+    vMin : -0.2
+    vMax : 0.2

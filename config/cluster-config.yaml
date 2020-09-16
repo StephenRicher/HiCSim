@@ -8,24 +8,28 @@ __default__:
   mail-user:     "sr467@bath.ac.uk"
   output:        "{rule}-%j-%x.out"
   error:         "{rule}-%j-%x.err"
-  time :         2
-
-mask:
-  time : 15
+  time :         3
 
 lammps:
-  time : 30
-  ntasks : 16
-  cpus-per-task : 1
+  account: "free"
+  time : 60
+  cpus-per-task : 4
+  ntasks : 4
 
 mergeReplicates:
   time : 15
 
-sum_matrices:
-  time : 60
-
-mean_xyz:
-  time : 360
-
 create_gif:
   time : 60
+
+filterXYZ:
+  time : 20
+
+plotTUCorrelation:
+  time : 10
+
+create_contact_matrix:
+  time : 10
+
+plotRG:
+  time : 15
