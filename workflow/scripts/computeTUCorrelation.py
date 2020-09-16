@@ -16,7 +16,7 @@ from scipy.stats import pearsonr
 
 __version__ = '1.0.0'
 
-def main(TuXYZ: str, TfXYZ: str, atomGroups: str, out: str, distance: float, ignoreZeroPair: bool, **kwargs) -> None:
+def main(TuXYZ: str, TfXYZ: str, atomGroups: str, out: str, distance: float, **kwargs) -> None:
 
     with open(TuXYZ) as TU_fh, open(TfXYZ) as TF_fh:
         allDistances = []
