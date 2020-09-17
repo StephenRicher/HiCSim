@@ -11,10 +11,10 @@ monomers: 10
 coeffs: /home/u/sr467/scratch/projects/MolecularDynamics/config/pair_coeffs.txt
 
 # Set name for simulation
-name : synthetic-39even
+name : synthetic-cluster
 
 # If synthetic is provided all genome and track configuration is ignored.
-syntheticSequence : /home/u/sr467/scratch/projects/MolecularDynamics/config/syntheticSequence-39even.txt
+syntheticSequence : /home/u/sr467/scratch/projects/MolecularDynamics/config/syntheticSequence-cluster.txt
 
 # Set True to exclude ti+mepoints where both TU pairs are inactive when '
 # computing correlation.
