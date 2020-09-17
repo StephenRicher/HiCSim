@@ -543,7 +543,7 @@ rule checkCTCF:
     shell:
         "(awk '/Bonds/,/Angles/{{print $2}}' {input.dat} "
         "| grep -q 2 && cat {input.script} > {output} "
-        "|| sed -e '/bond_coeff 2/d' {input.script} "
+        "|| sed -e '/# CTCF/d' {input.script} "
         "> {output}) 2> {log}"
 
 
@@ -642,7 +642,7 @@ rule custom2XYZ:
     input:
         '{name}/{nbases}/reps/{rep}/lammps/{mode}.custom.gz'
     output:
-        '{name}/{nbases}/reps/{rep}/lammps/{mode}.xyz.gz'
+        temp('{name}/{nbases}/reps/{rep}/lammps/{mode}.xyz.gz')
     log:
         'logs/custom2XYZ/{name}-{nbases}-{rep}-{mode}.log'
     conda:
