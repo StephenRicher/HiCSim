@@ -99,35 +99,35 @@ bond_coeff 1 fene 30.0 1.5 1.0 1.0
 ####################################
 ####    Progressive -- EQUIL #######
 ####################################
-bond_coeff 2 harmonic 0.0 1.0
-run 25000
+bond_coeff 2 harmonic 0.0 1.0 # CTCF
+run 25000                     # CTCF
 
-bond_coeff 2 harmonic 0.5 1.0
-run 25000
+bond_coeff 2 harmonic 0.5 1.0 # CTCF
+run 25000                     # CTCF
 
-bond_coeff 2 harmonic 1.0 1.0
-run 25000
+bond_coeff 2 harmonic 1.0 1.0 # CTCF
+run 25000                     # CTCF
 
-bond_coeff 2 harmonic 1.5 1.0
-run 25000
+bond_coeff 2 harmonic 1.5 1.0 # CTCF
+run 25000                     # CTCF
 
-bond_coeff 2 harmonic 2.0 1.0
-run 25000
+bond_coeff 2 harmonic 2.0 1.0 # CTCF
+run 25000                     # CTCF
 
-bond_coeff 2 harmonic 2.5 1.0
-run 25000
+bond_coeff 2 harmonic 2.5 1.0 # CTCF
+run 25000                     # CTCF
 
-bond_coeff 2 harmonic 3.0 1.0
-run 25000
+bond_coeff 2 harmonic 3.0 1.0 # CTCF
+run 25000                     # CTCF
 
-bond_coeff 2 harmonic 3.5 1.0
-run 25000
+bond_coeff 2 harmonic 3.5 1.0 # CTCF
+run 25000                     # CTCF
 
 ####################################
 ####    RUN -- EQUIL         #######
 ####################################
 
-bond_coeff 2 harmonic 4.0 1.0
+bond_coeff 2 harmonic 4.0 1.0 # CTCF
 
 unfix RG
 fix RG DNA print ${timestep} "$(step) ${RG}" append ${radius_gyration}
