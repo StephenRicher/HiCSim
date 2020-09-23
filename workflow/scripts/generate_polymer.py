@@ -60,7 +60,8 @@ class Sequence:
 
 class lammps:
 
-    def __init__(self, randomWalk=False, TU_types=[]):
+    def __init__(self, polymerSeed=random.randint(1, 1e100),
+            monomerSeed=random.randint(1, 1e100), randomWalk=False, TU_types=[]):
         self.sequences = []
         self.monomers = {}
         self.TU_types = TU_types # Beads to be considered transcriptional units
@@ -72,7 +73,8 @@ class lammps:
         self._bondID = 1
         self.typeIDs = {}
         self.randomWalk = randomWalk
-        self._seed = random.randint(1, 1e100)
+        self._monomerSeed = monomerSeed
+        self._polymerSeed = polymerSeed
 
     def loadSequence(self, sequence_file, basesPerBead, ctcf):
         sequence = Sequence(sequence_file, basesPerBead=basesPerBead,
@@ -204,8 +206,8 @@ class lammps:
 
 
     def writePolymers(self):
+        random.seed(self._polymerSeed)
         for sequence in self.sequences:
-
             if self.randomWalk:
                 x, y, z = self.makeRandomWalk(sequence.nBeads)
             else:
@@ -231,6 +233,7 @@ class lammps:
 
 
     def writeMonomers(self):
+        random.seed(self._monomerSeed)
         for beadID, type in self.monomers.items():
             x = random.uniform(self.box.x.lo, self.box.x.hi)
             y = random.uniform(self.box.y.lo, self.box.y.hi)
@@ -274,7 +277,7 @@ class lammps:
         typeList = sequence.types
         typeIdxs = list(range(len(typeList) - 1))
         # Ensure shuffle is same for each call within object
-        random.seed(self._seed)
+        random.seed(self._polymerSeed)
         # Shuffle to initiate loop extrusion differently per replicate
         random.shuffle(typeIdxs)
         usedSites = []
@@ -330,13 +333,13 @@ class lammps:
 
 
 
-def main(file, seed, nMonomers, ctcf, basesPerBead, randomWalk,
+def main(file, monomerSeed, polymerSeed, nMonomers, ctcf, basesPerBead, randomWalk,
         pairCoeffs, coeffOut, groupOut, xlo, xhi, ylo, yhi, zlo, zhi, **kwargs):
 
-    random.seed(seed)
     # TO DO - the tye list needs to be input by user
     TU_types=['1', '7', '3']
-    dat = lammps(randomWalk=randomWalk, TU_types=TU_types)
+    dat = lammps(monomerSeed=monomerSeed, polymerSeed=polymerSeed,
+        randomWalk=randomWalk, TU_types=TU_types)
     dat.loadBox(xlo, xhi, ylo, yhi, zlo, zhi)
     dat.loadSequence(file, basesPerBead, ctcf)
     dat.loadMonomer(nMonomers)
@@ -394,8 +397,12 @@ def parse_arguments():
 
     seed_arg = argparse.ArgumentParser(add_help=False)
     seed_arg.add_argument(
-        '--seed', default=None, type=float,
-        help='Seed for random number generator.')
+        '--polymerSeed', default=None, type=float,
+        help='Seed for polymer structure.')
+    seed_arg.add_argument(
+        '--monomerSeed', default=None, type=float,
+        help='Seed for monomer positions.')
+
 
     custom = argparse.ArgumentParser(add_help=False)
     custom.set_defaults(function=main)

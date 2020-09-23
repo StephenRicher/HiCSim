@@ -46,10 +46,11 @@ default_config = {
     'method':         'mean',
     'n_molecules':    1000,
     'reps':           5,
-    'random':         {'seed':          42,
-                       'sequence':      True ,
-                       'intialConform': True ,
-                       'simulation':    True ,},
+    'random':         {'seed':             42,
+                       'sequence':         True ,
+                       'initialConform':   True ,
+                       'monomerPositions': True,
+                       'simulation':       True ,},
     'box':            {'xlo':        -50,
                        'xhi':         50,
                        'ylo':        -50,
@@ -116,10 +117,15 @@ if config['random']['sequence']:
 else:
     sequenceSeeds = [random.randint(1, (2**16) - 1)] * config['reps']
 # Set seeds for generating bead sequence
-if config['random']['intialConform']:
-    intialConformSeeds = [random.randint(1, (2**16) - 1) for rep in REPS]
+if config['random']['initialConform']:
+    initialConformSeeds = [random.randint(1, (2**16) - 1) for rep in REPS]
 else:
-    intialConformSeeds = [random.randint(1, (2**16) - 1)] * config['reps']
+    initialConformSeeds = [random.randint(1, (2**16) - 1)] * config['reps']
+# Set seeds for generating monomer positions
+if config['random']['monomerPositions']:
+    monomerSeeds = [random.randint(1, (2**16) - 1) for rep in REPS]
+else:
+    monomerSeeds = [random.randint(1, (2**16) - 1)] * config['reps']
 # Set seeds for running lammps simulation
 if config['random']['simulation']:
     simulationSeeds = [random.randint(1, (2**16) - 1) for rep in REPS]
@@ -503,7 +509,8 @@ rule BeadsToLammps:
         nMonomers = config['monomers'],
         coeffs = config['coeffs'],
         basesPerBead = config['bases_per_bead'],
-        seed = lambda wc: intialConformSeeds[int(wc.rep) - 1],
+        polymerSeed = lambda wc: initialConformSeeds[int(wc.rep) - 1],
+        monomerSeed = lambda wc: monomerSeeds[int(wc.rep) - 1],
         xlo = config['box']['xlo'],
         xhi = config['box']['xhi'],
         ylo = config['box']['ylo'],
@@ -518,7 +525,9 @@ rule BeadsToLammps:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/generate_polymer.py --seed {params.seed} '
+        '{SCRIPTS}/generate_polymer.py '
+        '--polymerSeed {params.polymerSeed} '
+        '--monomerSeed {params.monomerSeed} '
         '--xlo {params.xlo} --xhi {params.xhi} '
         '--ylo {params.ylo} --yhi {params.yhi} '
         '--zlo {params.zlo} --zhi {params.zhi} '
