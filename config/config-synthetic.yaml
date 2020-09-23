@@ -3,7 +3,7 @@ workdir: /home/u/sr467/scratch/projects/MolecularDynamics/analysis
 tmpdir: /home/u/sr467/scratch/projects/MolecularDynamics/analysis
 cluster: False
 
-reps: 1000
+reps: 100
 threads: 6
 bases_per_bead: 3000
 monomers: 10
@@ -11,10 +11,10 @@ monomers: 10
 coeffs: /home/u/sr467/scratch/projects/MolecularDynamics/config/pair_coeffs.txt
 
 # Set name for simulation
-name : synthetic-cluster
+name : synthetic-cluster-sep50
 
 # If synthetic is provided all genome and track configuration is ignored.
-syntheticSequence : /home/u/sr467/scratch/projects/MolecularDynamics/config/syntheticSequence-cluster.txt
+syntheticSequence : /home/u/sr467/scratch/projects/MolecularDynamics/config/syntheticSequence-cluster-sep50.txt
 
 # Set True to exclude ti+mepoints where both TU pairs are inactive when '
 # computing correlation.
@@ -25,7 +25,8 @@ ignoreZeroPair : False
 random :
     seed : 42
     sequence : False      # Set True to generate new bead sequence per rep
-    intialConform : True  # Set True to generate new initial conformation per rep
+    initialConform : True  # Set True to generate new initial conformation per rep
+    monomerPositions : True # Set True to randomise monomer positions per rep
     simulation : True     # Set True to vary simulation conditions per rep
 
 # Define simulation box dimensions
