@@ -40,7 +40,7 @@ fix pushapart all adapt 1 pair soft a * * v_prefactor
 ##################################
 bond_style harmonic
 bond_coeff 1 100.0 1.1
-bond_coeff 2 0.0 1.1
+bond_coeff 2 0.0 1.1 # CTCF
 
 ##################################
 ####    ANGLES                ####
@@ -65,7 +65,8 @@ reset_timestep 0
 #GROUPS
 compute RG DNA gyration
 variable RG equal c_RG
-variable time equal -(${warm_up_time}+200000+${timestep}-step)
+variable time equal -(${warm_up_time}+${timestep}-step)
+variable time equal -(${warm_up_time}+200000+${timestep}-step) # CTCF
 fix RG DNA print ${timestep} "${time} ${RG}" file ${radius_gyration}
 
 ####################################
