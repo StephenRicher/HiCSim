@@ -14,7 +14,7 @@ coeffs: /home/u/sr467/scratch/projects/MolecularDynamics/config/pair_coeffs.txt
 name : synthetic-cluster-sep50
 
 # If synthetic is provided all genome and track configuration is ignored.
-syntheticSequence : /home/u/sr467/scratch/projects/MolecularDynamics/config/synthetic/Sequence-cluster-sep50.txt
+syntheticSequence : /home/u/sr467/scratch/projects/MolecularDynamics/config/synthetic/syntheticSequence-cluster-sep50.txt
 
 # Set True to exclude ti+mepoints where both TU pairs are inactive when '
 # computing correlation.

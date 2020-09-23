@@ -29,7 +29,7 @@ genome :
     genes : /media/stephen/Data/genomes/hg19/tracks/UCSC-genes-hg19.bed
 
 # If synthetic is provided all genome and track configuration is ignored.
-syntheticSequence : /home/stephen/phd/modelling/pipeline/config/syntheticSequence-cluster.txt
+syntheticSequence : /home/stephen/phd/modelling/pipeline/config/synthetic/syntheticSequence-cluster-sep50.txt
 
 # Set True to exclude timepoints where both TU pairs are inactive when '
 # computing correlation.
