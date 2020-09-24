@@ -25,9 +25,6 @@ def main(group, atomGroups, file, **kwargs):
     nAtoms = len(groupIdxs)
     with fileinput.input(file) as fh:
         for line in fh:
-            line = line.strip()
-            if not line:
-                continue
             if coordinateLine(line):
                 if counter in groupIdxs:
                     print(line)
