@@ -28,15 +28,15 @@ def main(group, atomGroups, file, **kwargs):
             line = line.strip()
             if not line:
                 continue
-            if nAtomLine(line):
+            if coordinateLine(line):
+                if counter in groupIdxs:
+                    print(line)
+                counter += 1
+            elif nAtomLine(line):
                 print(nAtoms)
             elif commentLine(line):
                 counter = 1
                 print(line)
-            elif coordinateLine(line):
-                if counter in groupIdxs:
-                    print(line)
-                counter += 1
 
 
 def commentLine(line):
