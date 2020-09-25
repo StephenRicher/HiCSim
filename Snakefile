@@ -76,7 +76,8 @@ default_config = {
     'delay':          10,
     'loop':           0,
     'tmpdir':         tempfile.gettempdir(),
-    'coeffs':         ''
+    'coeffs':         '',
+    'groupJobs':      False,
 }
 config = set_config(config, default_config)
 
@@ -638,6 +639,8 @@ rule plotRG:
     params:
         confidence = config['plotRG']['confidence'],
         dpi = config['plotRG']['dpi']
+    group:
+        'lammps' if config['groupJobs'] else 'plotRG'
     log:
         'logs/plotRG/{name}-{nbases}.log'
     conda:
@@ -652,6 +655,8 @@ rule custom2XYZ:
         '{name}/{nbases}/reps/{rep}/lammps/{mode}.custom.gz'
     output:
         temp('{name}/{nbases}/reps/{rep}/lammps/{mode}.xyz.gz')
+    group:
+        'processAllLammps' if config['groupJobs'] else 'custom2XYZ'
     log:
         'logs/custom2XYZ/{name}-{nbases}-{rep}-{mode}.log'
     conda:
@@ -665,6 +670,8 @@ rule getAtomGroups:
         rules.BeadsToLammps.output.dat
     output:
         '{name}/{nbases}/reps/{rep}/lammps/config/atomGroups.json'
+    group:
+        'processAllLammps' if config['groupJobs'] else 'getAtomGroups'
     log:
         'logs/getAtomGroups/{name}-{nbases}-{rep}.log'
     conda:
@@ -679,6 +686,8 @@ rule filterXYZ:
         groups = rules.getAtomGroups.output
     output:
         '{name}/{nbases}/reps/{rep}/lammps/simulation-{bead}.xyz.gz'
+    group:
+        'processAllLammps' if config['groupJobs'] else 'filterXYZ'
     log:
         'logs/filterXYZ/{name}-{nbases}-{rep}-{bead}.log'
     conda:
@@ -687,7 +696,6 @@ rule filterXYZ:
         '{SCRIPTS}/filterXYZ.py {wildcards.bead} '
         '{input.groups} <(zcat -f {input.simulation}) '
         '| gzip > {output} 2> {log}'
-
 
 
 rule computeTUCorrelation:
@@ -700,6 +708,8 @@ rule computeTUCorrelation:
     params:
         distance = 1.8,
         ignoreZeroPair = '--ignoreZeroPair' if config['ignoreZeroPair'] else ''
+    group:
+        'processAllLammps' if config['groupJobs'] else 'computeTUCorrelation'
     log:
         'logs/computeTUCorrelation/{name}-{nbases}-{rep}.log'
     conda:
@@ -721,6 +731,8 @@ rule plotTUCorrelation:
         pvalue = config['plotTU']['pvalue'],
         vMin = config['plotTU']['vMin'],
         vMax = config['plotTU']['vMax']
+    group:
+        'processAllLammps' if config['groupJobs'] else 'plotTUCorrelation'
     log:
         'logs/plotTUCorrelation/{name}-{nbases}.log'
     conda:
@@ -731,15 +743,17 @@ rule plotTUCorrelation:
         '--vmin {params.vMin} --vmax {params.vMax} &> {log}'
 
 
-rule create_contact_matrix:
+rule createContactMatrix:
     input:
         '{name}/{nbases}/reps/{rep}/lammps/simulation-DNA.xyz.gz'
     output:
         '{name}/{nbases}/reps/{rep}/matrices/contacts.npz'
     params:
         distance =  3
+    group:
+        'processAllLammps' if config['groupJobs'] else 'createContactMatrix'
     log:
-        'logs/create_contact_matrix/{name}-{nbases}-{rep}.log'
+        'logs/createContactMatrix/{name}-{nbases}-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -756,6 +770,8 @@ rule mergeReplicates:
         '{name}/{nbases}/merged/contacts.npz'
     params:
         method = config['method']
+    group:
+        'processAllLammps' if config['groupJobs'] else 'createContactMatrix'
     log:
         'logs/mergeReplicates/{name}-{nbases}.log'
     conda:
@@ -849,14 +865,16 @@ rule createConfig:
         ctcfOrient = getCTCFOrient
     output:
         '{name}/{nbases}/merged/configs-{binsize}.ini'
-    conda:
-        f'{ENVS}/python3.yaml'
     params:
         depth = END - START + 1,
         hicConfig = getHiCconfig,
-        colourMap = config['HiC']['colourMap'],
+        colourMap = config['HiC']['colourMap']
+    group:
+        'plotHiC'
     log:
         'logs/createConfig/{name}-{nbases}-{binsize}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
     shell:
         '{SCRIPTS}/generate_config.py --matrix {input.matrix} '
         '--colourMap {params.colourMap} --depth {params.depth} '
@@ -872,6 +890,8 @@ rule plotHiC:
         region = f'{CHR}:{START}-{END}',
         title = f'"{NAME} : {CHR}:{START}-{END}"',
         dpi = config['HiC']['dpi']
+    group:
+        'plotHiC'
     log:
         'logs/plotHiC/{name}-{nbases}-{binsize}.log'
     conda:

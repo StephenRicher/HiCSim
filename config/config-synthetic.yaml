@@ -59,3 +59,9 @@ plotTU:
     pvalue : 0.05
     vMin : -0.2
     vMax : 0.2
+
+# Cluster only - group certain jobs (e.g. lammps simulations / post-processing)
+# into a single job submission. Some clusters be default assign a job all
+# threads even for single-thread operation. Therefore it may by quicker to
+# run all replicates in parallel in one job rather than have wasted threads.
+groupJobs: True
