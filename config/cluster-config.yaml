@@ -11,10 +11,11 @@ __default__:
   time :         3
 
 lammps:
-  account: "free"
-  time : 60
-  cpus-per-task : 4
-  ntasks : 4
+  account: "eb-bb1271"
+  time : 360
+
+processAllLammps:
+  time : 360
 
 mergeReplicates:
   time : 15
@@ -28,8 +29,14 @@ filterXYZ:
 plotTUCorrelation:
   time : 10
 
-create_contact_matrix:
+createContactMatrix:
   time : 10
 
 plotRG:
   time : 15
+
+homer2H5:
+  time : 15
+
+plotHiC:
+  time : 30
