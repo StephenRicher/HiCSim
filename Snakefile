@@ -154,14 +154,14 @@ for file, character in config['masking'].items():
 
 rule all:
     input:
-        [expand('{name}/{nbases}/vmd/simulation.gif',
+        [expand('{name}/{nbases}/vmd/{name}-rep1-simulation.gif',
             nbases=config['bases_per_bead'], name=NAME),
-         expand('{name}/{nbases}/merged/simulation-{binsize}.png',
+         expand('{name}/{nbases}/merged/{name}-contactMatrix-{binsize}.png',
             nbases=config['bases_per_bead'], name=NAME, binsize=BINSIZE),
-         expand('{name}/{nbases}/merged/TU-{plot}.png',
+         expand('{name}/{nbases}/merged/{name}-TU-{plot}.png',
             nbases=config['bases_per_bead'], name=NAME,
             plot=['Correlation','CircosPlot']),
-         f'{NAME}/{config["bases_per_bead"]}/merged/radius_of_gyration.png']
+         f'{NAME}/{config["bases_per_bead"]}/merged/{NAME}-radius_of_gyration.png']
 
 
 rule unzipGenome:
@@ -635,7 +635,7 @@ rule plotRG:
         expand('{{name}}/{{nbases}}/reps/{rep}/lammps/radius_of_gyration.txt',
             rep=REPS)
     output:
-        '{name}/{nbases}/merged/radius_of_gyration.png'
+        '{name}/{nbases}/merged/{name}-radius_of_gyration.png'
     params:
         confidence = config['plotRG']['confidence'],
         dpi = config['plotRG']['dpi']
@@ -725,8 +725,8 @@ rule plotTUCorrelation:
     input:
         expand('{{name}}/{{nbases}}/reps/{rep}/TUcorrelation.csv', rep=REPS),
     output:
-        heatmap = '{name}/{nbases}/merged/TU-Correlation.png',
-        circos = '{name}/{nbases}/merged/TU-CircosPlot.png'
+        heatmap = '{name}/{nbases}/merged/{name}-TU-Correlation.png',
+        circos = '{name}/{nbases}/merged/{name}-TU-CircosPlot.png'
     params:
         pvalue = config['plotTU']['pvalue'],
         vMin = config['plotTU']['vMin'],
@@ -885,7 +885,7 @@ rule plotHiC:
     input:
         rules.createConfig.output
     output:
-        '{name}/{nbases}/merged/simulation-{binsize}.png'
+        '{name}/{nbases}/merged/{name}-contactMatrix-{binsize}.png'
     params:
         region = f'{CHR}:{START}-{END}',
         title = f'"{NAME} : {CHR}:{START}-{END}"',
@@ -978,7 +978,7 @@ rule create_gif:
         rules.vmd.output,
         images = aggregateVMD
     output:
-        '{name}/{nbases}/vmd/simulation.gif'
+        '{name}/{nbases}/vmd/{name}-rep1-simulation.gif'
     params:
         delay = config['delay'],
         loop = config['loop']
