@@ -520,7 +520,7 @@ rule BeadsToLammps:
         zhi = config['box']['zhi'],
         randomWalk = '--randomWalk' if config['randomWalk'] else ''
     group:
-        'convert2Lammps'
+        'lammps'
     log:
         'logs/BeadsToLammps/{name}-{nbases}-{rep}.log'
     conda:
