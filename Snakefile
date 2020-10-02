@@ -595,7 +595,7 @@ lmp_cmd = ('-var infile {input.data} '
            '-var seed {params.seed} '
            '-in {input.script} '
            '-log /dev/null &> {log}')
-if config['cluster']:
+if config['cluster'] and not config['groupJobs']:
     lmp_cmd = 'mpirun -np {threads} lmp_mpi ' + lmp_cmd
 else:
     lmp_cmd = 'lmp_serial ' + lmp_cmd
