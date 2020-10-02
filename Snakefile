@@ -23,30 +23,28 @@ if not config:
 # Defaults configuration file - use empty string to represent no default value.
 # Note does not currently correctly deal with special case config['masking'] in set_config
 default_config = {
-    'cluster':        False,
     'workdir':        workflow.basedir,
-    'threads':        1,
-    'ctcf':           None,
-    'computeDirection': True,
+    'ctcf':           {'data':             None,
+                       'computeDirection': True},
     'masking':        {},
-    'name' :          '',
     'genome' :        {'build':    'genome',
                        'sequence':  None,
+                       'name':      None,
                        'genes':     None,
                        'chr':       None,
                        'start':     None,
                        'end':       None,},
-    'syntheticSequence' : None,
-    'randomWalk':     False,
+    'syntheticSequence' : {}              ,
     'ignoreZeroPair': True,
     'min_rep':        1,
     'logScore':       True,
     'bases_per_bead': 1000,
     'monomers':       100,
     'method':         'mean',
-    'n_molecules':    1000,
+    'coeffs':         '',
     'reps':           5,
     'random':         {'seed':             42,
+                       'walk':             False,
                        'sequence':         True ,
                        'initialConform':   True ,
                        'monomerPositions': True,
@@ -75,18 +73,18 @@ default_config = {
                        'vMax':       0.1     ,},
     'delay':          10,
     'loop':           0,
-    'tmpdir':         tempfile.gettempdir(),
-    'coeffs':         '',
     'groupJobs':      False,
+    'cluster':        False,
 }
 config = set_config(config, default_config)
 
 workdir : config['workdir']
 
-if config['syntheticSequence'] is None:
+details = {}
+if not config['syntheticSequence']:
     # If no synthetic sequence ensure genome information is provided.
     invalid = False
-    for key in ['sequence', 'chr', 'start', 'end']:
+    for key in ['sequence', 'name', 'chr', 'start', 'end']:
         if config['genome'][key] is None:
             sys.stderr.write(
                 f'\033[31mNo synthetic sequence provided and '
@@ -94,18 +92,26 @@ if config['syntheticSequence'] is None:
             invalid = True
     if invalid:
         sys.exit('\033[31mInvalid configuration setting.\033[m\n')
+    NAMES = [config['genome']['name']]
+    config['genome']['sequence'] = []
+    for name in NAMES:
+        details[name] = {'chr':   config['genome']['chr'],
+                         'start': config['genome']['start'],
+                         'end':   config['genome']['end'],}
 else:
     config['genome']['sequence'] = []
     config['genome']['chr'] = 'synthetic'
     config['genome']['start'] = 1
-    config['genome']['end'] = nBeads(config['syntheticSequence']) * config['bases_per_bead']
+    config['genome']['end'] = 2 #nBeads(config['syntheticSequence']) * config['bases_per_bead']
+    NAMES = list(config['syntheticSequence'].keys())
+    for name in NAMES:
+        end = (nBeads(config['syntheticSequence'][name])
+               * config['bases_per_bead'])
+        details[name] = {'chr':   name,
+                         'start': 1,
+                         'end':   end}
 
 BUILD = config['genome']['build']
-NAME = config['name']
-CHR = config['genome']['chr']
-START = config['genome']['start']
-END = config['genome']['end']
-
 
 # Define list of N reps from 1 to N
 REPS = list(range(1, config['reps'] + 1))
@@ -155,13 +161,14 @@ for file, character in config['masking'].items():
 rule all:
     input:
         [expand('{name}/{nbases}/vmd/{name}-rep1-simulation.gif',
-            nbases=config['bases_per_bead'], name=NAME),
+            nbases=config['bases_per_bead'], name=NAMES),
          expand('{name}/{nbases}/merged/{name}-contactMatrix-{binsize}.png',
-            nbases=config['bases_per_bead'], name=NAME, binsize=BINSIZE),
+            nbases=config['bases_per_bead'], name=NAMES, binsize=BINSIZE),
          expand('{name}/{nbases}/merged/{name}-TU-{plot}.png',
-            nbases=config['bases_per_bead'], name=NAME,
+            nbases=config['bases_per_bead'], name=NAMES,
             plot=['Correlation','CircosPlot']),
-         f'{NAME}/{config["bases_per_bead"]}/merged/{NAME}-radius_of_gyration.png']
+         expand('{name}/{nbases}/merged/{name}-radius_of_gyration.png',
+            nbases=config['bases_per_bead'], name=NAMES)]
 
 
 rule unzipGenome:
@@ -199,13 +206,13 @@ rule getChromSizes:
         'cut -f 1,2 {input} > {output} 2> {log}'
 
 
-if config['ctcf'] is not None:
+if config['ctcf']['data'] is not None:
 
-    if config['computeDirection']:
+    if config['ctcf']['computeDirection']:
 
         rule modifyBedName:
             input:
-                config['ctcf']
+                config['ctcf']['data']
             output:
                 'genome/tracks/CTCF-modifyName.bed'
             log:
@@ -261,10 +268,10 @@ if config['ctcf'] is not None:
                 '{input} > {output} 2> {log}'
 
     def CTCFinput(wildcards):
-        if config['computeDirection']:
+        if config['ctcf']['computeDirection']:
             return rules.processCTCFprediction.output
         else:
-            return config['ctcf']
+            return config['ctcf']['data']
 
     rule sortBed:
         input:
@@ -391,7 +398,7 @@ def getMasking(wc):
     for track in track_data:
         character = track_data[track]['character']
         command += f'--bed genome/replicates/{wc.rep}/tracks/scaled/{track},{character} '
-    if config['ctcf']:
+    if config['ctcf']['data']:
         command += (f'--bed genome/replicates/{wc.rep}/tracks/CTCF-forward-{wc.rep}.bed,F '
                     f'--bed genome/replicates/{wc.rep}/tracks/CTCF-reverse-{wc.rep}.bed,R ')
     return command
@@ -399,7 +406,7 @@ def getMasking(wc):
 
 def getSplitOrient(wc):
     """ Return rule output only if used. """
-    if config['ctcf']:
+    if config['ctcf']['data']:
         return rules.splitOrientation.output
     else:
         return []
@@ -456,6 +463,13 @@ rule indexMasked:
         'samtools faidx {input} &> {log}'
 
 
+def getRegion(wc):
+    chr = details[wc.name]['chr']
+    start = details[wc.name]['start']
+    end = details[wc.name]['end']
+    return f'{chr}:{start}-{end}'
+
+
 rule extractRegion:
     input:
         fasta = rules.bgzipMasked.output,
@@ -465,7 +479,7 @@ rule extractRegion:
     group:
         'convert2Lammps'
     params:
-        region = f'{CHR}:{START}-{END}'
+        region = getRegion
     log:
         'logs/extractRegion/{name}-{rep}.log'
     conda:
@@ -494,8 +508,8 @@ rule FastaToBeads:
 
 
 def beadsInput(wc):
-    if config['syntheticSequence'] is not None:
-        return config['syntheticSequence']
+    if config['syntheticSequence']:
+        return config['syntheticSequence'][wc.name]
     else:
         return rules.FastaToBeads.output
 
@@ -518,7 +532,7 @@ rule BeadsToLammps:
         yhi = config['box']['yhi'],
         zlo = config['box']['zlo'],
         zhi = config['box']['zhi'],
-        randomWalk = '--randomWalk' if config['randomWalk'] else ''
+        randomWalk = '--randomWalk' if config['random']['walk'] else ''
     group:
         'lammps'
     log:
@@ -586,7 +600,6 @@ lmp_cmd = ('-var infile {input.data} '
            '-in {input.script} '
            '-log /dev/null &> {log}')
 if config['cluster']:
-    #lmp_cmd = 'mpirun -n {threads} -x OMP_NUM_THREADS=1 lmp_mpi ' + lmp_cmd
     lmp_cmd = 'mpirun -np {threads} lmp_mpi ' + lmp_cmd
 else:
     lmp_cmd = 'lmp_serial ' + lmp_cmd
@@ -620,8 +633,6 @@ rule lammps:
         seed = lambda wc: simulationSeeds[int(wc.rep) - 1],
     group:
         'lammps'
-    threads:
-        config['threads'] if config['cluster'] else 1
     log:
         'logs/lammps/{name}-{nbases}-{rep}.log'
     conda:
@@ -787,8 +798,8 @@ rule matrix2homer:
     output:
         '{name}/{nbases}/merged/contacts.homer'
     params:
-        chr = CHR,
-        start = START,
+        chr = lambda wc: details[wc.name]['chr'],
+        start = lambda wc: details[wc.name]['start'],
         binsize = config['bases_per_bead']
     log:
         'logs/matrix2homer/{name}-{nbases}.log'
@@ -810,7 +821,7 @@ rule homer2H5:
     conda:
         f'{ENVS}/hicexplorer.yaml'
     threads:
-        12
+        workflow.cores
     shell:
         'hicConvertFormat --matrices {input} --outFileName {output} '
         '--inputFormat homer --outputFormat h5 &> {log}'
@@ -840,14 +851,14 @@ def getHiCconfig(wc):
             command += f'--flip --matrix2 {config["HiC"]["matrix"]} '
         if config['genome']['genes']:
             command += f' --genes {config["genome"]["genes"]}'
+        if config['ctcf']['data'] is not None:
+            command += f'--ctcfOrient {rules.scaleBed.output}'
     if config['HiC']['vMin'] is not None:
         command += f' --vMin {config["plot"]["vMin"]} '
     if config['HiC']['vMax'] is not None:
         command += f' --vMax {config["plot"]["vMax"]} '
     if config['HiC']['log']:
         command += ' --log '
-    if config['syntheticSequence'] is not None and config['ctcf'] is not None:
-        command += f'--ctcfOrient {rules.scaleBed.output}'
 
     return command
 
@@ -859,6 +870,9 @@ def getCTCFOrient(wc):
     else:
         return []
 
+def getDepth(wc):
+    return details[wc.name]['end'] - details[wc.name]['start'] + 1
+
 rule createConfig:
     input:
         matrix = rules.mergeBins.output,
@@ -866,7 +880,7 @@ rule createConfig:
     output:
         '{name}/{nbases}/merged/configs-{binsize}.ini'
     params:
-        depth = END - START + 1,
+        depth = getDepth,
         hicConfig = getHiCconfig,
         colourMap = config['HiC']['colourMap']
     group:
@@ -880,6 +894,8 @@ rule createConfig:
         '--colourMap {params.colourMap} --depth {params.depth} '
         '{params.hicConfig} > {output} 2> {log}'
 
+def getTitle(wc):
+    return f'"{wc.name} : {getRegion(wc)}"'
 
 rule plotHiC:
     input:
@@ -887,8 +903,8 @@ rule plotHiC:
     output:
         '{name}/{nbases}/merged/{name}-contactMatrix-{binsize}.png'
     params:
-        region = f'{CHR}:{START}-{END}',
-        title = f'"{NAME} : {CHR}:{START}-{END}"',
+        region = getRegion,
+        title = getTitle,
         dpi = config['HiC']['dpi']
     group:
         'plotHiC'
@@ -912,8 +928,8 @@ if config['syntheticSequence'] is None:
         output:
             '{name}/{nbases}/merged/contacts.pre.tsv'
         params:
-            chr = CHR,
-            start = START,
+            chr = lambda wc: details[wc.name]['chr'],
+            start = lambda wc: details[wc.name]['start'],
             binsize = config['bases_per_bead']
         log:
             'logs/matrix2pre/{name}-{nbases}.log'
@@ -934,12 +950,12 @@ if config['syntheticSequence'] is None:
         log:
             'logs/juicerPre/{name}-{nbases}.log'
         params:
-            chr = CHR,
+            chr = lambda wc: details[wc.name]['chr'],
             resolutions = '1000'
         resources:
              mem_mb = 16000
         threads:
-            12
+            workflow.cores
         conda:
             f'{ENVS}/openjdk.yaml'
         shell:
