@@ -70,7 +70,9 @@ default_config = {
                        'confidence': 0.95    ,},
     'plotTU':         {'pvalue':     0.1     ,
                        'vMin':      -0.1     ,
-                       'vMax':       0.1     ,},
+                       'vMax':       0.1     ,
+                       'minRep':     1       ,
+                       'fontSize':   14      ,},
     'GIF':            {'create':     True    ,
                        'delay':      10      ,
                        'loop':       0       ,},
@@ -164,7 +166,7 @@ rule all:
             nbases=config['bases_per_bead'], name=NAMES, binsize=BINSIZE),
          expand('{name}/{nbases}/merged/{name}-TU-{plot}.png',
             nbases=config['bases_per_bead'], name=NAMES,
-            plot=['Correlation','CircosPlot']),
+            plot=['correlation','circosPlot', 'replicateCount']),
          expand('{name}/{nbases}/merged/{name}-radius_of_gyration.png',
             nbases=config['bases_per_bead'], name=NAMES)]
 
@@ -734,12 +736,15 @@ rule plotTUCorrelation:
     input:
         expand('{{name}}/{{nbases}}/reps/{rep}/TUcorrelation.csv', rep=REPS),
     output:
-        heatmap = '{name}/{nbases}/merged/{name}-TU-Correlation.png',
-        circos = '{name}/{nbases}/merged/{name}-TU-CircosPlot.png'
+        meanHeatmap = '{name}/{nbases}/merged/{name}-TU-correlation.png',
+        sumHeatmap = '{name}/{nbases}/merged/{name}-TU-replicateCount.png',
+        circos = '{name}/{nbases}/merged/{name}-TU-circosPlot.png'
     params:
         pvalue = config['plotTU']['pvalue'],
         vMin = config['plotTU']['vMin'],
-        vMax = config['plotTU']['vMax']
+        vMax = config['plotTU']['vMax'],
+        minRep = config['plotTU']['minRep'],
+        fontSize = config['plotTU']['fontSize']
     group:
         'processAllLammps' if config['groupJobs'] else 'plotTUCorrelation'
     log:
@@ -747,9 +752,11 @@ rule plotTUCorrelation:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/plotTUCorrelation.py {input} --heatmap {output.heatmap} '
-        '--circos {output.circos} --pvalue {params.pvalue} '
-        '--vmin {params.vMin} --vmax {params.vMax} &> {log}'
+        '{SCRIPTS}/plotTUCorrelation.py {input} --circos {output.circos} '
+        '--sumHeatmap {output.sumHeatmap} --meanHeatmap {output.meanHeatmap} '
+        '--fontSize {params.fontSize} --pvalue {params.pvalue} '
+        '--minRep {params.minRep} --vmin {params.vMin} '
+        '--vmax {params.vMax} &> {log}'
 
 
 rule createContactMatrix:
@@ -848,9 +855,9 @@ def getHiCconfig(wc):
         if config['HiC']['matrix']:
             command += f'--flip --matrix2 {config["HiC"]["matrix"]} '
         if config['genome']['genes']:
-            command += f' --genes {config["genome"]["genes"]}'
+            command += f' --genes {config["genome"]["genes"]} '
         if config['ctcf']['data'] is not None:
-            command += f'--ctcfOrient {rules.scaleBed.output}'
+            command += f'--ctcfOrient {rules.scaleBed.output} '
     if config['HiC']['vMin'] is not None:
         command += f' --vMin {config["plot"]["vMin"]} '
     if config['HiC']['vMax'] is not None:

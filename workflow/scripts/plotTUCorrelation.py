@@ -17,7 +17,8 @@ import matplotlib.pyplot as plt
 __version__ = '1.0.0'
 
 
-def main(files: List, heatmap: str, circos: str, pvalue: float, vmin: float, vmax: float, **kwargs) -> None:
+def main(files: List, meanHeatmap: str, sumHeatmap: str, circos: str, minRep: int,
+        pvalue: float, vmin: float, vmax: float, fontSize: float, **kwargs) -> None:
 
     # Read all per-replicates correlation dataframes into 1 dataframe
     correlation = pd.concat((pd.read_csv(file) for file in files))
@@ -25,40 +26,56 @@ def main(files: List, heatmap: str, circos: str, pvalue: float, vmin: float, vma
     nodeNames = correlation['row'].unique()
 
     # Get pairwise mean correlation across replicates
-    correlation = correlation.groupby(['row', 'column']).mean()
+    correlation = correlation.groupby(['row', 'column']).agg(['mean', 'count'])
+    for method in ['mean', 'count']:
+        transform = correlation
+        if method == 'mean':
+            # Set mean values to 0 if replicate count less than threshold
+            if minRep:
+                transform.loc[transform[('r','count')] < minRep, [('r', 'mean'), ('p-value','mean')]] = np.nan
 
-    G = nx.Graph()
-    G.add_nodes_from(sorted(nodeNames))
-    colours = []
-    for row, column in correlation.index:
-        if row >= column:
-            continue
-        info = correlation.loc[row, column]
-        if info['p-value'] >= pvalue:
-            continue
-        colours.append(info['r'])
-        G.add_edge(row, column)
-    nx.draw_circular(G,node_color='White',
-                 node_size=0,
-                 font_size=14,
-                 edge_color=colours,
-                 edge_cmap=plt.cm.RdBu_r,
-                 edge_vmin=vmin, edge_vmax=vmax,
-                 with_labels=True)
-    plt.tight_layout()
-    plt.savefig(circos)
+            G = nx.Graph()
+            G.add_nodes_from(sorted(nodeNames))
+            colours = []
+            for row, column in transform.index:
+                if row >= column:
+                    continue
+                info = transform.loc[row, column]
+                if info['p-value']['mean'] >= pvalue:
+                    continue
+                colours.append(info['r']['mean'])
+                G.add_edge(row, column)
+            nx.draw_circular(G,node_color='White',
+                         node_size=0,
+                         font_size=fontSize,
+                         edge_color=colours,
+                         edge_cmap=plt.cm.RdBu_r,
+                         edge_vmin=vmin, edge_vmax=vmax,
+                         with_labels=True)
+            plt.savefig(circos, bbox_inches='tight')
 
-    correlation = correlation.reset_index()
-    # Set diagonal to 0 to hide trivial auto-correlation
-    correlation.loc[correlation.row == correlation.column, 'r'] = 0
-    correlation = correlation.pivot(index='row', columns='column', values='r')
+        # Extract the 'r' and 'p-value' columns corresponding to method
+        transform = transform.iloc[:, transform.columns.get_level_values(1)==method]
+        # Remove redundant 'method' multi-level index
+        transform.columns = transform.columns.droplevel(1)
 
-    # Flip vertically to ensure diagonal goes from bottom left to top right
-    correlation = correlation.iloc[::-1]
-    fig, ax = plt.subplots()
-    ax = sns.heatmap(correlation, cmap='bwr', center=0, vmin=vmin, vmax=vmax)
-    fig.tight_layout()
-    fig.savefig(heatmap)
+        transform = transform.reset_index()
+        # Set diagonal to 0 to hide trivial auto-correlation
+        transform.loc[transform.row == transform.column, 'r'] = np.nan
+        transform = transform.pivot(index='row', columns='column', values='r')
+
+        # Flip vertically to ensure diagonal goes from bottom left to top right
+        transform = transform.iloc[::-1]
+        fig, ax = plt.subplots()
+
+        if method == 'mean':
+            ax = sns.heatmap(
+                transform, cmap='bwr', center=0, vmin=vmin, vmax=vmax)
+            ax.set_facecolor('xkcd:light grey')
+            fig.savefig(meanHeatmap, bbox_inches='tight')
+        else:
+            ax = sns.heatmap(transform, cmap='Reds', vmin=0)
+            fig.savefig(sumHeatmap, bbox_inches='tight')
 
 
 def parse_arguments():
@@ -69,15 +86,25 @@ def parse_arguments():
         'files', nargs='+',
         help='Input TF distance tables.')
     custom.add_argument(
-        '--heatmap', default='TF-Correlation.png',
-        help='TF contact correlation heatmap (default: %(default)s)')
+        '--meanHeatmap', default='TF-meanCorrelation.png',
+        help='TF mean contact correlation heatmap (default: %(default)s)')
+    custom.add_argument(
+        '--sumHeatmap', default='TF-replicateCount.png',
+        help='Replicate count heatmap for each pairwise correlation (default: %(default)s)')
     custom.add_argument(
         '--circos', default='TU-CircosPlot.png',
-        help='TF circos plot for signicant correlations (default: %(default)s)')#
+        help='TF circos plot for signicant correlations (default: %(default)s)')
+    custom.add_argument(
+        '--fontSize', type=float, default=14,
+        help='Font size for node name on circos plot (default: %(default)s)')
     custom.add_argument(
         '--pvalue', type=float, default=10**-6,
         help='P-value threshold for filtering TU correlations before '
              'plotting on circos plot (default: %(default)s)')
+    custom.add_argument(
+        '--minRep', type=int,
+        help='Minimum replicates required for TU-TU interaction to be given '
+             'included in the correlation/circos plots (default: %(default)s)')
     custom.add_argument(
         '--vmin', type=coeff, default=-0.3,
         help='Minimum value of colour scale. (default: %(default)s)')
