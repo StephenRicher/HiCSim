@@ -93,16 +93,12 @@ if not config['syntheticSequence']:
     if invalid:
         sys.exit('\033[31mInvalid configuration setting.\033[m\n')
     NAMES = [config['genome']['name']]
-    config['genome']['sequence'] = []
     for name in NAMES:
         details[name] = {'chr':   config['genome']['chr'],
                          'start': config['genome']['start'],
                          'end':   config['genome']['end'],}
 else:
     config['genome']['sequence'] = []
-    config['genome']['chr'] = 'synthetic'
-    config['genome']['start'] = 1
-    config['genome']['end'] = 2 #nBeads(config['syntheticSequence']) * config['bases_per_bead']
     NAMES = list(config['syntheticSequence'].keys())
     for name in NAMES:
         end = (nBeads(config['syntheticSequence'][name])
