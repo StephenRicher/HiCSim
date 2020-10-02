@@ -71,8 +71,9 @@ default_config = {
     'plotTU':         {'pvalue':     0.1     ,
                        'vMin':      -0.1     ,
                        'vMax':       0.1     ,},
-    'delay':          10,
-    'loop':           0,
+    'GIF':            {'create':     True    ,
+                       'delay':      10      ,
+                       'loop':       0       ,},
     'groupJobs':      False,
     'cluster':        False,
 }
@@ -154,8 +155,11 @@ for file, character in config['masking'].items():
     track_file = f'{os.path.basename(file)}'
     track_data[track_file] = {'source' : file, 'character' : character}
 
+
 rule all:
     input:
+        expand('{name}/{nbases}/vmd/{name}-rep1-simulation.gif',
+            nbases=config['bases_per_bead'], name=NAMES) if config['GIF']['create'] else []
         [expand('{name}/{nbases}/vmd/{name}-rep1-simulation.gif',
             nbases=config['bases_per_bead'], name=NAMES),
          expand('{name}/{nbases}/merged/{name}-contactMatrix-{binsize}.png',
@@ -985,17 +989,17 @@ def aggregateVMD(wildcards):
     return sorted(images)
 
 
-rule create_gif:
+rule createGIF:
     input:
         rules.vmd.output,
         images = aggregateVMD
     output:
         '{name}/{nbases}/vmd/{name}-rep1-simulation.gif'
     params:
-        delay = config['delay'],
-        loop = config['loop']
+        delay = config['GIF']['delay'],
+        loop = config['GIF']['loop']
     log:
-        'logs/create_gif/{name}-{nbases}.log'
+        'logs/createGIF/{name}-{nbases}.log'
     conda:
         f'{ENVS}/imagemagick.yaml'
     shell:
