@@ -158,10 +158,8 @@ for file, character in config['masking'].items():
 
 rule all:
     input:
-        expand('{name}/{nbases}/vmd/{name}-rep1-simulation.gif',
-            nbases=config['bases_per_bead'], name=NAMES) if config['GIF']['create'] else []
         [expand('{name}/{nbases}/vmd/{name}-rep1-simulation.gif',
-            nbases=config['bases_per_bead'], name=NAMES),
+            nbases=config['bases_per_bead'], name=NAMES) if config['GIF']['create'] else [],
          expand('{name}/{nbases}/merged/{name}-contactMatrix-{binsize}.png',
             nbases=config['bases_per_bead'], name=NAMES, binsize=BINSIZE),
          expand('{name}/{nbases}/merged/{name}-TU-{plot}.png',
