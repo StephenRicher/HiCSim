@@ -69,7 +69,7 @@ def load_XYZ(XYZ_path: str):
     return xyz
 
 
-def read_XYZ(XYZ_fobj, exclude=''):
+def read_XYZ(XYZ_fobj, includeID=[], excludeTypes=[]):
     """ Read a timepoint of XYZ coordinates each time called. """
 
     line = XYZ_fobj.readline()
@@ -80,11 +80,40 @@ def read_XYZ(XYZ_fobj, exclude=''):
     xyz = {'n_atoms' : n_atoms,
            'comment' : comment,
            'atoms'   : []}
-    for n in range(n_atoms):
+    excluded = 0
+    for n in range(1, n_atoms + 1):
         type, x, y , z = next(XYZ_fobj).strip().split()
-        if type not in exclude:
+        if (n not in includeID) or (type in excludeTypes):
+            excluded += 1
+        else:
             xyz['atoms'].append([x, y, z])
+    xyz['n_atoms'] -= excluded
 
+    return xyz
+
+
+def readCustom(fobj, includeIDs=[], excludeTypes=[]):
+    """ Read a timepoint of XYZ coordinates each time called. """
+
+    # Convert user input to str to ensure match between file
+    includeIDs = [str(id_) for id_ in includeIDs]
+    excludeTypes = [str(type_) for type_ in excludeTypes]
+
+    try:
+        header = [next(fobj).strip() for line in range(9)]
+    except StopIteration:
+        raise EOFError
+    xyz = {'timestep': int(header[1]),
+           'nAtoms'  : int(header[3]),
+           'atoms'   : []}
+    excluded = 0
+    for n in range(xyz['nAtoms']):
+        id_, type_, x, y, z, ix, iy, iz = next(fobj).strip().split()
+        if (includeIDs and id_ not in includeIDs) or (type_ in excludeTypes):
+            excluded += 1
+        else:
+            xyz['atoms'].append([x, y, z])
+    xyz['nAtoms'] -= excluded
 
     return xyz
 

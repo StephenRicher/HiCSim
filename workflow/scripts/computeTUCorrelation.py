@@ -6,25 +6,29 @@ import sys
 import json
 import logging
 import argparse
+import fileinput
 import itertools
 import numpy as np
 import pandas as pd
-from utilities import read_XYZ
+from utilities import readCustom
 from scipy.spatial.distance import cdist
 from scipy.stats import pearsonr
 
 
 __version__ = '1.0.0'
 
-def main(TuXYZ: str, TfXYZ: str, atomGroups: str, out: str, distance: float, **kwargs) -> None:
+def main(file: str, atomGroups: str, out: str, distance: float, **kwargs) -> None:
 
-    with open(TuXYZ) as TU_fh, open(TfXYZ) as TF_fh:
+    # Read atomGroup and retrieve TU atom indexes
+    atomGroupsDict = readJSON(atomGroups)
+
+    with fileinput.input(file) as fh:
         allDistances = []
         while True:
             try:
-                TUs = read_XYZ(TU_fh)
+                TUs = readCustom(fh, includeIDs=atomGroupsDict['TU'])
                 # Read TFs and exclude type 3 (inactive TF)
-                TFas = read_XYZ(TF_fh, exclude='3')
+                TFas = readCustom(fh, includeIDs=atomGroupsDict['TF'], excludeTypes=['3'])
                 # Compute distance of active TFs to each TU bead
                 result = cdist(TUs['atoms'], TFas['atoms'], 'euclidean')
                 # Find closest monomer to each bead
@@ -35,8 +39,7 @@ def main(TuXYZ: str, TfXYZ: str, atomGroups: str, out: str, distance: float, **k
         # Convert list of distance arrays to 2D numpy matrix
         allDistances = np.vstack(tuple(allDistances))
 
-    # Read atomGroup and retrieve TU atom indexes
-    atomGroupsDict = readJSON(atomGroups)
+
     TU_indexes = atomGroupsDict['TU']
 
     # Convert to pandas so we can label columns with TU atom indexes
@@ -73,14 +76,11 @@ def parse_arguments():
     custom = argparse.ArgumentParser(add_help=False)
     custom.set_defaults(function=main)
     custom.add_argument(
-        'TuXYZ',
-        help='Transcriptional unit coordinates in XYZ format')
-    custom.add_argument(
-        'TfXYZ',
-        help='Active transcription factor coordinates in XYZ format')
-    custom.add_argument(
         'atomGroups',
         help='Atom group assignments in JSON format.')
+    custom.add_argument(
+        'file', nargs='?', default=[],
+        help='Input custom lammps simulation file (default: stdin)')
     custom.add_argument(
         '--distance', default=1.8, type=float,
         help='Distance threshold for active transcription (default: %(default)s)')

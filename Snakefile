@@ -615,6 +615,7 @@ def restartCommand(wc):
         interval = step * int(config['lammps']['timestep'])
         return f'"{interval} {prefix}"'
 
+
 rule lammps:
     input:
         data = rules.BeadsToLammps.output.dat,
@@ -661,21 +662,6 @@ rule plotRG:
         '--confidence {params.confidence} {input} 2> {log}'
 
 
-rule custom2XYZ:
-    input:
-        '{name}/{nbases}/reps/{rep}/lammps/{mode}.custom.gz'
-    output:
-        temp('{name}/{nbases}/reps/{rep}/lammps/{mode}.xyz.gz')
-    group:
-        'processAllLammps' if config['groupJobs'] else 'custom2XYZ'
-    log:
-        'logs/custom2XYZ/{name}-{nbases}-{rep}-{mode}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '(zcat {input} | {SCRIPTS}/custom2XYZ.py | gzip > {output}) 2> {log}'
-
-
 rule getAtomGroups:
     input:
         rules.BeadsToLammps.output.dat
@@ -691,28 +677,9 @@ rule getAtomGroups:
         '{SCRIPTS}/getAtomGroups.py {input} > {output} 2> {log}'
 
 
-rule filterXYZ:
-    input:
-        simulation = '{name}/{nbases}/reps/{rep}/lammps/simulation.xyz.gz',
-        groups = rules.getAtomGroups.output
-    output:
-        '{name}/{nbases}/reps/{rep}/lammps/simulation-{bead}.xyz.gz'
-    group:
-        'processAllLammps' if config['groupJobs'] else 'filterXYZ'
-    log:
-        'logs/filterXYZ/{name}-{nbases}-{rep}-{bead}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/filterXYZ.py {wildcards.bead} '
-        '{input.groups} <(zcat -f {input.simulation}) '
-        '| gzip > {output} 2> {log}'
-
-
 rule computeTUCorrelation:
     input:
-        monomers = '{name}/{nbases}/reps/{rep}/lammps/simulation-TF.xyz.gz',
-        dna = '{name}/{nbases}/reps/{rep}/lammps/simulation-TU.xyz.gz',
+        xyz = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
         groups = rules.getAtomGroups.output
     output:
         '{name}/{nbases}/reps/{rep}/TUcorrelation.csv'
@@ -726,10 +693,9 @@ rule computeTUCorrelation:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/computeTUCorrelation.py '
-        '<(zcat -f {input.dna}) <(zcat -f {input.monomers}) {input.groups} '
-        '--distance {params.distance} {params.ignoreZeroPair} '
-        '--out {output} &> {log}'
+        '{SCRIPTS}/computeTUCorrelation.py --distance {params.distance} '
+        '{params.ignoreZeroPair} --out {output} '
+        '{input.groups} <(zcat -f {input.xyz}) &> {log}'
 
 
 rule plotTUCorrelation:
@@ -761,7 +727,8 @@ rule plotTUCorrelation:
 
 rule createContactMatrix:
     input:
-        '{name}/{nbases}/reps/{rep}/lammps/simulation-DNA.xyz.gz'
+        xyz = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
+        groups = rules.getAtomGroups.output
     output:
         '{name}/{nbases}/reps/{rep}/matrices/contacts.npz'
     params:
@@ -775,7 +742,7 @@ rule createContactMatrix:
     shell:
         '{SCRIPTS}/create_contact_matrix.py '
         '--outdata {output} --distance {params.distance} '
-        '<(zcat -f {input}) &> {log}'
+        '{input.groups} <(zcat -f {input.xyz}) &> {log}'
 
 
 rule mergeReplicates:
@@ -878,6 +845,7 @@ def getCTCFOrient(wc):
 def getDepth(wc):
     return details[wc.name]['end'] - details[wc.name]['start'] + 1
 
+
 rule createConfig:
     input:
         matrix = rules.mergeBins.output,
@@ -899,8 +867,10 @@ rule createConfig:
         '--colourMap {params.colourMap} --depth {params.depth} '
         '{params.hicConfig} > {output} 2> {log}'
 
+
 def getTitle(wc):
     return f'"{wc.name} : {getRegion(wc)}"'
+
 
 rule plotHiC:
     input:
@@ -970,11 +940,28 @@ if config['syntheticSequence'] is None:
             '{input.tsv} {output} {input.chrom_sizes} &> {log}'
 
 
+rule custom2XYZ:
+    input:
+        '{name}/{nbases}/reps/{rep}/lammps/{mode}.custom.gz'
+    output:
+        temp('{name}/{nbases}/reps/{rep}/lammps/{mode}.xyz.gz')
+    group:
+        'vmd'
+    log:
+        'logs/custom2XYZ/{name}-{nbases}-{rep}-{mode}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '(zcat {input} | {SCRIPTS}/custom2XYZ.py | gzip > {output}) 2> {log}'
+
+
 checkpoint vmd:
     input:
         '{name}/{nbases}/reps/1/lammps/simulation.xyz.gz'
     output:
         directory('{name}/{nbases}/vmd/sequence')
+    group:
+        'vmd'
     log:
         'logs/vmd/{name}-{nbases}.log'
     conda:
@@ -1003,6 +990,8 @@ rule createGIF:
     params:
         delay = config['GIF']['delay'],
         loop = config['GIF']['loop']
+    group:
+        'vmd'
     log:
         'logs/createGIF/{name}-{nbases}.log'
     conda:

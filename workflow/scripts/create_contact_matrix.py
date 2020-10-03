@@ -3,25 +3,29 @@
 """ Script to read LAMMPS output and generate contact frequency matrix """
 
 import sys
+import json
 import logging
 import argparse
 import fileinput
 import numpy as np
-from utilities import read_XYZ
+from utilities import readCustom
 from timeit import default_timer as timer
 from scipy.sparse import save_npz, csc_matrix
 from scipy.spatial.distance import pdist, squareform
 
 __version__ = '1.0.0'
 
-def main(file: str, outdata: str, distance: float, **kwargs) -> None:
+def main(file: str,  atomGroups: str, outdata: str, distance: float, **kwargs) -> None:
+
+    # Read atomGroup and retrieve TU atom indexes
+    atomGroupsDict = readJSON(atomGroups)
 
     sqdistance = distance**2
     contacts = 0
     with fileinput.input(file) as fh:
         while True:
             try:
-                xyz = read_XYZ(fh)
+                xyz = readCustom(fh, includeIDs=atomGroupsDict['DNA'])
                 contacts += pdist(xyz['atoms'], 'sqeuclidean') < sqdistance
             except EOFError:
                 break
@@ -29,13 +33,22 @@ def main(file: str, outdata: str, distance: float, **kwargs) -> None:
     save_npz(outdata, csc_matrix(squareform(contacts)))
 
 
+def readJSON(file):
+    """ Read JSON encoded data to dictionary """
+    with open(file) as fh:
+        return json.load(fh)
+
+
 def parse_arguments():
 
     custom = argparse.ArgumentParser(add_help=False)
     custom.set_defaults(function=main)
     custom.add_argument(
-        'file', metavar='XYZ', nargs='?', default=[],
-        help='Input XYZ file (default: stdin)')
+        'atomGroups',
+        help='Atom group assignments in JSON format.')
+    custom.add_argument(
+        'file', nargs='?', default=[],
+        help='Input custom lammps simulation file (default: stdin)')
     custom.add_argument(
         '--distance', default=3, type=float,
         help='Max contact distance between particles (default: %(default)s)')
