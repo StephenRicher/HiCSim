@@ -30,7 +30,7 @@ def main(files: List, meanHeatmap: str, sumHeatmap: str, circos: str, minRep: in
     for method in ['mean', 'count']:
         transform = correlation
         if method == 'mean':
-            # Set mean values to 0 if replicate count less than threshold
+            # Set mean values to NaN if replicate count less than threshold
             if minRep:
                 transform.loc[transform[('r','count')] < minRep, [('r', 'mean'), ('p-value','mean')]] = np.nan
 
