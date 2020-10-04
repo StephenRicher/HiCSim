@@ -5,6 +5,7 @@
 import sys
 import logging
 import argparse
+import itertools
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -24,9 +25,7 @@ def main(files: List, meanHeatmap: str, sumHeatmap: str, circos: str, minRep: in
     correlation = pd.concat((pd.read_csv(file) for file in files))
 
     # Auto-correlation always occurs when TU present so use as proxy for count
-    TUcount = correlation[correlation.row == correlation.column].groupby('row').count()
-    # Compute TU frequency for alpha values to heatmap
-    TUcount = (TUcount.column / len(files))
+    TUcount = correlation[correlation.row == correlation.column].groupby('row').count().column
 
     # Get bead indexes that are NOT TUS
     polymerLength = 880
@@ -39,6 +38,7 @@ def main(files: List, meanHeatmap: str, sumHeatmap: str, circos: str, minRep: in
 
     # Get pairwise mean correlation across replicates
     correlation = correlation.groupby(['row', 'column']).agg(['mean', 'count'])
+
     for method in ['mean', 'count']:
         transform = correlation
         if method == 'mean':
@@ -72,28 +72,43 @@ def main(files: List, meanHeatmap: str, sumHeatmap: str, circos: str, minRep: in
         transform.columns = transform.columns.droplevel(1)
 
         transform = transform.reset_index()
+
         # Set diagonal to 0 to hide trivial auto-correlation
         transform.loc[transform.row == transform.column, 'r'] = np.nan
         transform = transform.pivot(index='row', columns='column', values='r')
 
         # Flip vertically to ensure diagonal goes from bottom left to top right
         transform = transform.iloc[::-1]
-        fig, (ax1, ax2) = plt.subplots(2, gridspec_kw={'height_ratios': [6, 1]})
+        fig, (ax1, ax2) = plt.subplots(2, gridspec_kw={'height_ratios': [6, 1]}, figsize=(8, 8))
 
         if method == 'mean':
-            ax1 = sns.heatmap(
-                transform, cmap='bwr', center=0, vmin=vmin, vmax=vmax, ax=ax1)
+            ax1 = sns.heatmap(transform, square=True,
+                cmap='bwr', center=0, vmin=vmin, vmax=vmax, ax=ax1)
+            # Ensure masked cells are not within 'bwr' colour map.
             ax1.set_facecolor('xkcd:light grey')
             out = meanHeatmap
         else:
-            ax1 = sns.heatmap(transform, cmap='Reds', vmin=0, ax=ax1)
+            ax1 = sns.heatmap(transform, square=True,
+                cmap='binary', vmin=0, vmax=len(files), ax=ax1)
             out = sumHeatmap
-        ax2 = sns.heatmap(
-            [allBeadDistribution], cmap='binary', vmin=0, vmax=1,
-            yticklabels=[TUcount.size], ax=ax2)
-        ax2.set_xlim(1, polymerLength)
+
+        ax1.xaxis.set_label_text('')
+        ax1.yaxis.set_label_text('')
+
+        # Create 'n' xtick labels from start to end of polymer
+        xticks = np.linspace(1, polymerLength, 10).astype(int)
+        xticklabels = [i if i in xticks else '' for i in range(1, polymerLength + 1)]
+        ax2 = sns.heatmap(allBeadDistribution.to_frame().T,
+            cmap='binary', vmin=0, vmax=len(files), ax=ax2,
+            yticklabels=[''], xticklabels=xticklabels)
+
+        # Unset xtick markers for empty string xlabels
+        for index, xtick in enumerate(ax2.xaxis.get_major_ticks()):
+            if xticklabels[index] == '':
+                xtick.set_visible(False)
+
         fig.tight_layout()
-        fig.savefig(out, bbox_inches='tight')
+        fig.savefig(out, dpi=300, bbox_inches='tight')
 
 
 def parse_arguments():
