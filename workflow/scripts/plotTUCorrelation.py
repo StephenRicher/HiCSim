@@ -23,6 +23,18 @@ def main(files: List, meanHeatmap: str, sumHeatmap: str, circos: str, minRep: in
     # Read all per-replicates correlation dataframes into 1 dataframe
     correlation = pd.concat((pd.read_csv(file) for file in files))
 
+    # Auto-correlation always occurs when TU present so use as proxy for count
+    TUcount = correlation[correlation.row == correlation.column].groupby('row').count()
+    # Compute TU frequency for alpha values to heatmap
+    TUcount = (TUcount.column / len(files))
+
+    # Get bead indexes that are NOT TUS
+    polymerLength = 880
+    nonTUs = set(range(1, polymerLength+1)) - set(TUcount.index)
+    nonTUdistribution = pd.Series(data=np.zeros(len(nonTUs)), index=nonTUs)
+    # Build series with nonTU indexes and TU indexes
+    allBeadDistribution = pd.concat([nonTUdistribution, TUcount]).sort_index()
+
     nodeNames = correlation['row'].unique()
 
     # Get pairwise mean correlation across replicates
@@ -66,16 +78,22 @@ def main(files: List, meanHeatmap: str, sumHeatmap: str, circos: str, minRep: in
 
         # Flip vertically to ensure diagonal goes from bottom left to top right
         transform = transform.iloc[::-1]
-        fig, ax = plt.subplots()
+        fig, (ax1, ax2) = plt.subplots(2, gridspec_kw={'height_ratios': [6, 1]})
 
         if method == 'mean':
-            ax = sns.heatmap(
-                transform, cmap='bwr', center=0, vmin=vmin, vmax=vmax)
-            ax.set_facecolor('xkcd:light grey')
-            fig.savefig(meanHeatmap, bbox_inches='tight')
+            ax1 = sns.heatmap(
+                transform, cmap='bwr', center=0, vmin=vmin, vmax=vmax, ax=ax1)
+            ax1.set_facecolor('xkcd:light grey')
+            out = meanHeatmap
         else:
-            ax = sns.heatmap(transform, cmap='Reds', vmin=0)
-            fig.savefig(sumHeatmap, bbox_inches='tight')
+            ax1 = sns.heatmap(transform, cmap='Reds', vmin=0, ax=ax1)
+            out = sumHeatmap
+        ax2 = sns.heatmap(
+            [allBeadDistribution], cmap='binary', vmin=0, vmax=1,
+            yticklabels=[TUcount.size], ax=ax2)
+        ax2.set_xlim(1, polymerLength)
+        fig.tight_layout()
+        fig.savefig(out, bbox_inches='tight')
 
 
 def parse_arguments():
