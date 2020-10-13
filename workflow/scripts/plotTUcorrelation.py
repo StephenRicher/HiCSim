@@ -18,21 +18,15 @@ import matplotlib.pyplot as plt
 __version__ = '1.0.0'
 
 
-def main(files: List, meanHeatmap: str, sumHeatmap: str, circos: str, minRep: int,
-        pvalue: float, vmin: float, vmax: float, fontSize: float, **kwargs) -> None:
+def main(files: List, beadDistribution: str, meanHeatmap: str, sumHeatmap: str,
+        circos: str, minRep: int, pvalue: float, vmin: float, vmax: float,
+        fontSize: float, **kwargs) -> None:
 
     # Read all per-replicates correlation dataframes into 1 dataframe
     correlation = pd.concat((pd.read_csv(file) for file in files))
 
-    # Auto-correlation always occurs when TU present so use as proxy for count
-    TUcount = correlation[correlation.row == correlation.column].groupby('row').count().column
-
-    # Get bead indexes that are NOT TUS
-    polymerLength = 880
-    nonTUs = set(range(1, polymerLength+1)) - set(TUcount.index)
-    nonTUdistribution = pd.Series(data=np.zeros(len(nonTUs)), index=nonTUs)
-    # Build series with nonTU indexes and TU indexes
-    allBeadDistribution = pd.concat([nonTUdistribution, TUcount]).sort_index()
+    allBeadDistribution = pd.read_csv(beadDistribution)
+    polymerLength = len(allBeadDistribution.columns)
 
     nodeNames = correlation['row'].unique()
 
@@ -98,7 +92,7 @@ def main(files: List, meanHeatmap: str, sumHeatmap: str, circos: str, minRep: in
         # Create 'n' xtick labels from start to end of polymer
         xticks = np.linspace(1, polymerLength, 10).astype(int)
         xticklabels = [i if i in xticks else '' for i in range(1, polymerLength + 1)]
-        ax2 = sns.heatmap(allBeadDistribution.to_frame().T,
+        ax2 = sns.heatmap(allBeadDistribution,
             cmap='binary', vmin=0, vmax=len(files), ax=ax2,
             yticklabels=[''], xticklabels=xticklabels)
 
@@ -116,8 +110,9 @@ def parse_arguments():
     custom = argparse.ArgumentParser(add_help=False)
     custom.set_defaults(function=main)
     custom.add_argument(
-        'files', nargs='+',
-        help='Input TF distance tables.')
+        'beadDistribution', help='Bead distribution output of writeTUdistribution.')
+    custom.add_argument(
+        'files', nargs='+', help='Input TF distance tables.')
     custom.add_argument(
         '--meanHeatmap', default='TF-meanCorrelation.png',
         help='TF mean contact correlation heatmap (default: %(default)s)')

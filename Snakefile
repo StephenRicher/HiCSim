@@ -164,7 +164,7 @@ rule all:
             nbases=config['bases_per_bead'], name=details.keys(), binsize=BINSIZE),
          expand('{name}/{nbases}/merged/{name}-TU-{plot}.png',
             nbases=config['bases_per_bead'], name=details.keys(),
-            plot=['correlation','circosPlot', 'replicateCount']),
+            plot=['correlation', 'activation', 'circosPlot', 'replicateCount']),
          expand('{name}/{nbases}/merged/{name}-radius_of_gyration.png',
             nbases=config['bases_per_bead'], name=details.keys())]
 
@@ -675,6 +675,21 @@ rule getAtomGroups:
         '{SCRIPTS}/getAtomGroups.py {input} > {output} 2> {log}'
 
 
+rule writeTUdistribution:
+    input:
+        expand('{{name}}/{{nbases}}/reps/{rep}/lammps/config/atomGroups.json', rep=REPS)
+    output:
+        '{name}/{nbases}/merged/{name}-TU-distribution.csv.gz'
+    group:
+        'processAllLammps' if config['groupJobs'] else 'writeTUdistribution'
+    log:
+        'logs/writeTUdistribution/{name}-{nbases}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '({SCRIPTS}/writeTUdistribution.py {input} | gzip > {output}) &> {log}'
+
+
 rule computeTUactivation:
     input:
         xyz = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
@@ -696,6 +711,22 @@ rule computeTUactivation:
         '{input.xyz} | gzip > {output}) &> {log}'
 
 
+rule plotTUactivation:
+    input:
+        expand(
+            '{{name}}/{{nbases}}/reps/{rep}/TUactivation.csv.gz', rep=REPS),
+    output:
+        '{name}/{nbases}/merged/{name}-TU-activation.png'
+    group:
+        'processAllLammps' if config['groupJobs'] else 'plotTUactivation'
+    log:
+        'logs/plotTUactivation/{name}-{nbases}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/plotTUactivation.py {input} --out {output} &> {log}'
+
+
 rule computeTUcorrelation:
     input:
         rules.computeTUactivation.output
@@ -714,7 +745,9 @@ rule computeTUcorrelation:
 
 rule plotTUcorrelation:
     input:
-        expand('{{name}}/{{nbases}}/reps/{rep}/TUcorrelation.csv.gz', rep=REPS),
+        correlations = expand(
+            '{{name}}/{{nbases}}/reps/{rep}/TUcorrelation.csv.gz', rep=REPS),
+        beadDistribution = rules.writeTUdistribution.output
     output:
         meanHeatmap = '{name}/{nbases}/merged/{name}-TU-correlation.png',
         sumHeatmap = '{name}/{nbases}/merged/{name}-TU-replicateCount.png',
@@ -732,7 +765,8 @@ rule plotTUcorrelation:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/plotTUcorrelation.py {input} --circos {output.circos} '
+        '{SCRIPTS}/plotTUcorrelation.py {input.beadDistribution} '
+        '{input.correlations} --circos {output.circos} '
         '--sumHeatmap {output.sumHeatmap} --meanHeatmap {output.meanHeatmap} '
         '--fontSize {params.fontSize} --pvalue {params.pvalue} '
         '--minRep {params.minRep} --vmin {params.vMin} '

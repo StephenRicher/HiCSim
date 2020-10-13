@@ -1,45 +1,45 @@
 #!/usr/bin/env python3
 
-""" Plot and cluster TU activation over time. """
+""" Average contact frequency matrices and plot heatmap """
 
 import sys
+import json
 import logging
-import argparse
 import pandas as pd
-import seaborn as sns
+import argparse
 from typing import List
-import matplotlib.pyplot as plt
+
 
 __version__ = '1.0.0'
 
 
-def main(files: List, out: str, **kwargs) -> None:
+def main(files: List, **kwargs) -> None:
 
-    activations = pd.concat((pd.read_csv(file) for file in files))
-    activations = activations.groupby(['timepoint', 'TU']).sum().reset_index()
-    activations = activations.pivot(
-        index='TU', columns='timepoint', values='activated')
+    allBeadDistribution = {}
+    for i, file in enumerate(files):
+        beads = readJSON(file)
+        # Set all beads in first iteration.
+        if i == 0:
+            for atom in beads['DNA']:
+                allBeadDistribution[atom] = 0
+        for TU in beads['TU']:
+            allBeadDistribution[TU] += 1
 
-    #plot = sns.clustermap(activations, cmap='binary', col_cluster=False, vmin=0, vmax=len(files))
-    #plot.savefig(out, dpi=300, bbox_inches='tight')
+    allBeadDistribution = pd.DataFrame(allBeadDistribution, index=[0])
+    allBeadDistribution.to_csv(sys.stdout, index=False)
 
-    fig, ax = plt.subplots()
-    ax = sns.heatmap(activations, cmap='binary', vmin=0, vmax=len(files), ax=ax)
-    fig.tight_layout()
-    fig.savefig(out, dpi=300, bbox_inches='tight')
+
+def readJSON(file):
+    """ Read JSON encoded data to dictionary """
+    with open(file) as fh:
+        return json.load(fh)
 
 
 def parse_arguments():
 
     custom = argparse.ArgumentParser(add_help=False)
     custom.set_defaults(function=main)
-    custom.add_argument(
-        'files', nargs='+',
-        help='Input TF activation tables.')
-    custom.add_argument(
-        '--out', default='TU-activation.png',
-        help='TF mean contact correlation heatmap (default: %(default)s)')
-
+    custom.add_argument('files', nargs='+', help='Atom JSON file.')
     epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
 
     base = argparse.ArgumentParser(add_help=False)
