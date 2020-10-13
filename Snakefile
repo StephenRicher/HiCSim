@@ -35,7 +35,6 @@ default_config = {
                        'start':     None,
                        'end':       None,},
     'syntheticSequence' : {}              ,
-    'ignoreZeroPair': True,
     'min_rep':        1,
     'logScore':       True,
     'bases_per_bead': 1000,
@@ -95,15 +94,13 @@ if not config['syntheticSequence']:
             invalid = True
     if invalid:
         sys.exit('\033[31mInvalid configuration setting.\033[m\n')
-    NAMES = [config['genome']['name']]
-    for name in NAMES:
+    for name in [config['genome']['name']]:
         details[name] = {'chr':   config['genome']['chr'],
                          'start': config['genome']['start'],
                          'end':   config['genome']['end'],}
 else:
     config['genome']['sequence'] = []
-    NAMES = list(config['syntheticSequence'].keys())
-    for name in NAMES:
+    for name in config['syntheticSequence'].keys():
         end = (nBeads(config['syntheticSequence'][name])
                * config['bases_per_bead'])
         details[name] = {'chr':   name,
@@ -161,14 +158,15 @@ for file, character in config['masking'].items():
 rule all:
     input:
         [expand('{name}/{nbases}/vmd/{name}-rep1-simulation.gif',
-            nbases=config['bases_per_bead'], name=NAMES) if config['GIF']['create'] else [],
+            nbases=config['bases_per_bead'],
+            name=details.keys()) if config['GIF']['create'] else [],
          expand('{name}/{nbases}/merged/{name}-contactMatrix-{binsize}.png',
-            nbases=config['bases_per_bead'], name=NAMES, binsize=BINSIZE),
+            nbases=config['bases_per_bead'], name=details.keys(), binsize=BINSIZE),
          expand('{name}/{nbases}/merged/{name}-TU-{plot}.png',
-            nbases=config['bases_per_bead'], name=NAMES,
+            nbases=config['bases_per_bead'], name=details.keys(),
             plot=['correlation','circosPlot', 'replicateCount']),
          expand('{name}/{nbases}/merged/{name}-radius_of_gyration.png',
-            nbases=config['bases_per_bead'], name=NAMES)]
+            nbases=config['bases_per_bead'], name=details.keys())]
 
 
 rule unzipGenome:
@@ -677,30 +675,46 @@ rule getAtomGroups:
         '{SCRIPTS}/getAtomGroups.py {input} > {output} 2> {log}'
 
 
-rule computeTUCorrelation:
+rule computeTUactivation:
     input:
         xyz = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
         groups = rules.getAtomGroups.output
     output:
-        '{name}/{nbases}/reps/{rep}/TUcorrelation.csv'
+        '{name}/{nbases}/reps/{rep}/TUactivation.csv.gz'
     params:
         distance = 1.8,
-        ignoreZeroPair = '--ignoreZeroPair' if config['ignoreZeroPair'] else ''
+        timestep = config['lammps']['timestep']
     group:
-        'processAllLammps' if config['groupJobs'] else 'computeTUCorrelation'
+        'processAllLammps' if config['groupJobs'] else 'computeTUactivation'
     log:
-        'logs/computeTUCorrelation/{name}-{nbases}-{rep}.log'
+        'logs/computeTUactivation/{name}-{nbases}-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/computeTUCorrelation.py --distance {params.distance} '
-        '{params.ignoreZeroPair} --out {output} '
-        '{input.groups} <(zcat -f {input.xyz}) &> {log}'
+        '({SCRIPTS}/computeTUactivation.py --distance {params.distance} '
+        '--timestep {params.timestep} {input.groups} '
+        '{input.xyz} | gzip > {output}) &> {log}'
 
 
-rule plotTUCorrelation:
+rule computeTUcorrelation:
     input:
-        expand('{{name}}/{{nbases}}/reps/{rep}/TUcorrelation.csv', rep=REPS),
+        rules.computeTUactivation.output
+    output:
+        '{name}/{nbases}/reps/{rep}/TUcorrelation.csv.gz'
+    group:
+        'processAllLammps' if config['groupJobs'] else 'computeTUcorrelation'
+    log:
+        'logs/computeTUcorrelation/{name}-{nbases}-{rep}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '({SCRIPTS}/computeTUcorrelation.py '
+        '{input} | gzip > {output}) &> {log}'
+
+
+rule plotTUcorrelation:
+    input:
+        expand('{{name}}/{{nbases}}/reps/{rep}/TUcorrelation.csv.gz', rep=REPS),
     output:
         meanHeatmap = '{name}/{nbases}/merged/{name}-TU-correlation.png',
         sumHeatmap = '{name}/{nbases}/merged/{name}-TU-replicateCount.png',
@@ -712,13 +726,13 @@ rule plotTUCorrelation:
         minRep = config['plotTU']['minRep'],
         fontSize = config['plotTU']['fontSize']
     group:
-        'processAllLammps' if config['groupJobs'] else 'plotTUCorrelation'
+        'processAllLammps' if config['groupJobs'] else 'plotTUcorrelation'
     log:
-        'logs/plotTUCorrelation/{name}-{nbases}.log'
+        'logs/plotTUcorrelation/{name}-{nbases}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/plotTUCorrelation.py {input} --circos {output.circos} '
+        '{SCRIPTS}/plotTUcorrelation.py {input} --circos {output.circos} '
         '--sumHeatmap {output.sumHeatmap} --meanHeatmap {output.meanHeatmap} '
         '--fontSize {params.fontSize} --pvalue {params.pvalue} '
         '--minRep {params.minRep} --vmin {params.vMin} '

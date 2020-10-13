@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import sys
 import re
 import argparse
 from timeit import default_timer as timer
@@ -112,7 +113,7 @@ def readCustom(fobj, includeIDs=[], excludeTypes=[]):
         if (includeIDs and id_ not in includeIDs) or (type_ in excludeTypes):
             excluded += 1
         else:
-            xyz['atoms'].append([x, y, z])
+            xyz['atoms'].append([float(x), float(y), float(z)])
     xyz['nAtoms'] -= excluded
 
     return xyz
