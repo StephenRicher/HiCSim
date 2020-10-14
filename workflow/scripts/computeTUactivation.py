@@ -28,12 +28,10 @@ def main(file: str, atomGroups: str, distance: float, timestep: float, **kwargs)
                 TUs = readCustom(fh1, includeIDs=atomGroupsDict['TU'])
                 # Read TFs and exclude type 3 (inactive TF)
                 TFas = readCustom(fh2, includeIDs=atomGroupsDict['TF'], excludeTypes=['3'])
-                sys.stderr.write(f'{time}\n')
                 # Compute distance of active TFs to each TU bead
                 result = cdist(TUs['atoms'], TFas['atoms'], 'euclidean')
                 # Find closest monomer to each bead
                 minDistance = np.amin(result, axis=1) < distance
-                time += 1
                 allDistances.append(minDistance)
             except EOFError:
                 break
