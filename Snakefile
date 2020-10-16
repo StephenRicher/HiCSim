@@ -695,7 +695,8 @@ rule computeTUactivation:
         xyz = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
         groups = rules.getAtomGroups.output
     output:
-        '{name}/{nbases}/reps/{rep}/TUactivation.csv.gz'
+        TUactivation = '{name}/{nbases}/reps/{rep}/TU-activation.csv.gz',
+        pairDistance = '{name}/{nbases}/reps/{rep}/TU-pairDistance.csv.gz'
     params:
         distance = 1.8,
         timestep = config['lammps']['timestep']
@@ -707,8 +708,8 @@ rule computeTUactivation:
         f'{ENVS}/python3.yaml'
     shell:
         '({SCRIPTS}/computeTUactivation.py --distance {params.distance} '
-        '--timestep {params.timestep} {input.groups} '
-        '{input.xyz} | gzip > {output}) &> {log}'
+        '--timestep {params.timestep} --outDistances {output.pairDistance} '
+        '{input.groups} {input.xyz} | gzip > {output.TUactivation}) &> {log}'
 
 
 rule plotTUactivation:
@@ -729,7 +730,7 @@ rule plotTUactivation:
 
 rule computeTUcorrelation:
     input:
-        rules.computeTUactivation.output
+        rules.computeTUactivation.output.TUactivation
     output:
         '{name}/{nbases}/reps/{rep}/TUcorrelation.csv.gz'
     group:
