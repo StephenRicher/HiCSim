@@ -22,6 +22,9 @@ def main(files: List, beadDistribution: str, meanHeatmap: str, sumHeatmap: str,
         circos: str, minRep: int, pvalue: float, vmin: float, vmax: float,
         fontSize: float, **kwargs) -> None:
 
+    # Set global matplotlib fontisze
+    plt.rcParams.update({'font.size': fontSize})
+
     # Read all per-replicates correlation dataframes into 1 dataframe
     correlation = pd.concat((pd.read_csv(file) for file in files))
 
