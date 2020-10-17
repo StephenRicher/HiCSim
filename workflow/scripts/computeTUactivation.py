@@ -43,18 +43,19 @@ def main(file: str, atomGroups: str, outDistances: str, distance: float, timeste
                                for i, TU in enumerate(TUs['atoms'])]
 
                 TUpairs = pd.DataFrame(
-                    {'row'      : names1                       ,
-                     'columns'  : names2                       ,
-                     'time'     : TUs['timestep']              ,
+                    {'TU1'      : names1                       ,
+                     'TU2'      : names2                       ,
                      'distance' : pdist(activeTUpos, 'euclidean')})
                 # Append pairs with valid TU
-                allTUpairs.append(TUpairs[TUpairs['distance'].notna()])
-
+                #allTUpairs.append(TUpairs[TUpairs['distance'].notna()])
+                allTUpairs.append(TUpairs)
             except EOFError:
                 break
 
-    # Combine dataframes across timepoints and write to file
-    pd.concat(allTUpairs).to_csv(outDistances, index=False)
+    # Average active TU-TU pair distances across timepoints and save
+    allTUpairs = pd.concat(allTUpairs)
+    allTUpairs = allTUpairs.groupby(['TU1', 'TU2']).mean().reset_index()
+    allTUpairs.to_csv(outDistances, index=False)
 
     # Convert to pandas so we can label columns with TU atom indexes
     allActiveTUs = pd.DataFrame(
