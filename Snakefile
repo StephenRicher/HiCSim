@@ -162,11 +162,10 @@ rule all:
             name=details.keys()) if config['GIF']['create'] else [],
          expand('{name}/{nbases}/merged/{name}-contactMatrix-{binsize}.png',
             nbases=config['bases_per_bead'], name=details.keys(), binsize=BINSIZE),
-         expand('{name}/{nbases}/merged/{name}-TU-{plot}.png',
+         expand('{name}/{nbases}/merged/{name}-{plot}.png',
             nbases=config['bases_per_bead'], name=details.keys(),
-            plot=['correlation', 'activation', 'circosPlot', 'replicateCount']),
-         expand('{name}/{nbases}/merged/{name}-radius_of_gyration.png',
-            nbases=config['bases_per_bead'], name=details.keys())]
+            plot=['TU-correlation', 'TU-activation', 'TU-circosPlot',
+                  'TU-replicateCount', 'TU-pairDistance', 'radiusGyration'])]
 
 
 rule unzipGenome:
@@ -645,7 +644,7 @@ rule plotRG:
         expand('{{name}}/{{nbases}}/reps/{rep}/lammps/radius_of_gyration.txt',
             rep=REPS)
     output:
-        '{name}/{nbases}/merged/{name}-radius_of_gyration.png'
+        '{name}/{nbases}/merged/{name}-radiusGyration.png'
     params:
         confidence = config['plotRG']['confidence'],
         dpi = config['plotRG']['dpi']
@@ -728,11 +727,33 @@ rule plotTUactivation:
         '{SCRIPTS}/plotTUactivation.py {input} --out {output} &> {log}'
 
 
+rule plotTUdistances:
+    input:
+        distances = expand(
+            '{{name}}/{{nbases}}/reps/{rep}/TU-pairDistance.csv.gz', rep=REPS),
+        beadDistribution = rules.writeTUdistribution.output
+    output:
+        '{name}/{nbases}/merged/{name}-TU-pairDistance.png',
+    params:
+        minRep = config['plotTU']['minRep'],
+        fontSize = config['plotTU']['fontSize']
+    group:
+        'processAllLammps' if config['groupJobs'] else 'plotTUdistances'
+    log:
+        'logs/plotTUdistances/{name}-{nbases}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/plotTUdistances.py {input.beadDistribution} '
+        '{input.distances} --out {output} --fontSize {params.fontSize} '
+        '--minRep {params.minRep} &> {log}'
+
+
 rule computeTUcorrelation:
     input:
         rules.computeTUactivation.output.TUactivation
     output:
-        '{name}/{nbases}/reps/{rep}/TUcorrelation.csv.gz'
+        '{name}/{nbases}/reps/{rep}/TU-correlation.csv.gz'
     group:
         'processAllLammps' if config['groupJobs'] else 'computeTUcorrelation'
     log:
@@ -747,7 +768,7 @@ rule computeTUcorrelation:
 rule plotTUcorrelation:
     input:
         correlations = expand(
-            '{{name}}/{{nbases}}/reps/{rep}/TUcorrelation.csv.gz', rep=REPS),
+            '{{name}}/{{nbases}}/reps/{rep}/TU-correlation.csv.gz', rep=REPS),
         beadDistribution = rules.writeTUdistribution.output
     output:
         meanHeatmap = '{name}/{nbases}/merged/{name}-TU-correlation.png',
