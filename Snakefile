@@ -714,7 +714,7 @@ rule computeTUactivation:
 rule plotTUactivation:
     input:
         expand(
-            '{{name}}/{{nbases}}/reps/{rep}/TUactivation.csv.gz', rep=REPS),
+            '{{name}}/{{nbases}}/reps/{rep}/TU-activation.csv.gz', rep=REPS),
     output:
         '{name}/{nbases}/merged/{name}-TU-activation.png'
     group:
