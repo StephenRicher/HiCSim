@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from typing import List
+from utilities import coeff
 import matplotlib.pyplot as plt
 
 
@@ -24,30 +25,24 @@ def main(files: List, beadDistribution: str, out: str, minRep: int,
     allBeadDistribution = pd.read_csv(beadDistribution)
     polymerLength = len(allBeadDistribution.columns)
 
-    pairDistances = pd.concat((pd.read_csv(file) for file in files))
-
-    # Create copy, swap TU1 & TU2 and merge to plot full matrix
-    pairDistances_r = pairDistances.copy()
-    pairDistances_r.columns = ['TU2', 'TU1', 'active', 'inactive']
-    pairDistances = pd.concat([pairDistances, pairDistances_r], sort=True)
+    TUdtw = pd.concat((pd.read_csv(file) for file in files))
 
     # Average across TU pairs
-    pairDistances = pairDistances.groupby(
+    TUdtw = TUdtw.groupby(
         ['TU1', 'TU2']).agg(['mean', 'count']).reset_index()
 
     # Set distance to np.nan for TU pairs with fewer than minRep samples
-    pairDistances.loc[pairDistances[('active','count')] < minRep, [('active', 'mean')]] = np.nan
-
-    pairDistances['diff'] = pairDistances[('inactive', 'mean')] - pairDistances[('active', 'mean')]
+    TUdtw.loc[TUdtw[('distance', 'count')] < minRep, [('distance', 'mean')]] = np.nan
 
     # Convert to wide format
-    pairDistances = pairDistances.pivot(index='TU1', columns='TU2', values='diff')
+    TUdtw = TUdtw.pivot(index='TU1', columns='TU2', values=('distance', 'mean'))
 
     # Flip so diagonal is left to right
-    pairDistances = pairDistances.iloc[::-1]
+    TUdtw = TUdtw.iloc[::-1]
 
-    fig, (ax1, ax2) = plt.subplots(2, gridspec_kw={'height_ratios': [6, 1]}, figsize=(8, 8))
-    ax1 = sns.heatmap(pairDistances, square=True, center=0, cmap='bwr', ax=ax1)
+    fig, (ax1, ax2) = plt.subplots(
+        2, gridspec_kw={'height_ratios': [6, 1]}, figsize=(8, 8))
+    ax1 = sns.heatmap(TUdtw, square=True, vmin=0, cmap='viridis', ax=ax1)
     ax1.set_facecolor('xkcd:light grey')
     ax1.xaxis.set_label_text('')
     ax1.yaxis.set_label_text('')

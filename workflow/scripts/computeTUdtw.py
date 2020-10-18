@@ -1,39 +1,36 @@
 #!/usr/bin/env python3
 
-""" Calculate TU-TU correlation """
+""" Calculate Euclidean distance between aligned time series using DTW. """
 
 import sys
 import logging
 import argparse
 import pandas as pd
-from scipy.stats import pearsonr
-
+from tslearn.metrics import cdist_dtw
 
 __version__ = '1.0.0'
 
-def main(file: str, **kwargs) -> None:
+def main(file: str, out: str, **kwargs) -> None:
 
-    allTUinfo = pd.read_csv(file)
-    allTUinfo = allTUinfo.pivot(index='time', columns='TU', values='active')
+    # Read input and sort by TU then by time and group by TU
+    TUinfo = pd.read_csv(file, converters={'pos': eval})
+    TUnames = TUinfo['TU'].unique()
+    TUinfo = TUinfo.sort_values(['TU', 'time']).groupby(['TU'])
 
-    # Compute Pearson correlation coefficient and convert to long format
-    correlations = allTUinfo.corr(method='pearson').stack()
-    correlations.index.names = ['row', 'column']
-    correlations = correlations.reset_index()
-    correlations.columns = ['row', 'column', 'r']
+    # Loop through TUs and add to timeseries data structure
+    allPositions = []
+    for name, TUtimeseries in TUinfo['pos']:
+        allPositions.append(TUtimeseries.to_list())
 
-    # Combpute corresponding p-values and convert to seperate dataframe
-    pvalues = allTUinfo.corr(method=pearsonr_pval).stack()
-    pvalues.index.names = ['row', 'column']
-    pvalues = pvalues.reset_index()
-    pvalues.columns = ['row', 'column', 'p-value']
+    # Compute time aligned Euclidean distance
 
-    # Combine to include p-values
-    pd.merge(correlations, pvalues).to_csv(sys.stdout, index=False)
+    dtwEuclidean = pd.DataFrame(
+        cdist_dtw(allPositions), columns=TUnames, index=TUnames)
 
-
-def pearsonr_pval(x,y):
-    return pearsonr(x,y)[1]
+    # If not out file set, write to stdout
+    out = sys.stdout if not out else out
+    dtwEuclidean.stack().reset_index().to_csv(
+        out, header=['TU1', 'TU2', 'distance'], index=False)
 
 
 def parse_arguments():
@@ -41,6 +38,8 @@ def parse_arguments():
     custom = argparse.ArgumentParser(add_help=False)
     custom.set_defaults(function=main)
     custom.add_argument('file', help='TU dataset - output of processTUinfo.py')
+    custom.add_argument('--out',
+        help='File to write Euclidean distances (default: stdout)')
     epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
 
     base = argparse.ArgumentParser(add_help=False)

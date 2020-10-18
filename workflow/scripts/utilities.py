@@ -119,6 +119,36 @@ def readCustom(fobj, includeIDs=[], excludeTypes=[]):
     return xyz
 
 
+def readCustom2(fobj):
+    """ Read a timepoint of XYZ coordinates into pandas. """
+
+    try:
+        header = [next(fobj).strip() for line in range(9)]
+    except StopIteration:
+        raise EOFError
+
+    nAtoms = int(header[3])
+    time = int(header[1])
+    atomId, atomType, xPos, yPos, zPos = [], [], [], [], []
+    for n in range(nAtoms):
+        id_, type_, x, y, z, ix, iy, iz = next(fobj).strip().split()
+        atomId.append(int(id_))
+        atomType.append(type_)
+        xPos.append(x)
+        yPos.append(y)
+        zPos.append(z)
+
+    data = pd.DataFrame(
+        {'id'   : atomId  ,
+         'type' : atomType,
+         'time' : time    ,
+         'xPos' : xPos    ,
+         'yPos' : yPos    ,
+         'zPos' : zPos    })
+
+    return data, time
+    
+
 def print_XYZ(xyz) -> None:
     """ Write XYZ object to stdout. """
 

@@ -17,14 +17,14 @@ from scipy.spatial.distance import cdist, pdist
 
 __version__ = '1.0.0'
 
-def main(file: str, atomGroups: str, outDistances: str, distance: float, timestep: float, **kwargs) -> None:
+def main(file: str, atomGroups: str, distance: float, outInfo: str, outPairDistance: str, **kwargs) -> None:
 
     # Read atomGroup and retrieve TU atom indexes
     atomGroupsDict = readJSON(atomGroups)
     names1, names2 = generatePairwiseNames(atomGroupsDict['TU'])
 
     with gzip.open(file, 'rt') as fh1, gzip.open(file, 'rt') as fh2:
-        allActiveTUs = []
+        allTUinfo = []
         allTUpairs = []
         while True:
             try:
@@ -33,9 +33,15 @@ def main(file: str, atomGroups: str, outDistances: str, distance: float, timeste
                 TFas = readCustom(fh2, includeIDs=atomGroupsDict['TF'], excludeTypes=['3'])
                 # Compute distance of active TFs to each TU bead
                 result = cdist(TUs['atoms'], TFas['atoms'], 'euclidean')
-                # Find closest monomer to each bead
-                activeTUs = np.amin(result, axis=1) < distance
-                allActiveTUs.append(activeTUs)
+
+                nearestTF = np.amin(result, axis=1)
+                activeTUs = nearestTF < distance
+                allTUinfo.append(pd.DataFrame(
+                    {'TU'       : atomGroupsDict['TU']       ,
+                     'time'     : TUs['timestep']            ,
+                     'TFnear'   : nearestTF                  ,
+                     'active'   : activeTUs                  ,
+                     'pos'      : TUs['atoms']               }))
 
                 activeTUpos = []
                 inactiveTUpos = []
@@ -47,26 +53,20 @@ def main(file: str, atomGroups: str, outDistances: str, distance: float, timeste
                         activeTUpos.append([np.nan, np.nan, np.nan])
                         inactiveTUpos.append(TU)
 
-                TUpairs = pd.DataFrame(
+                allTUpairs.append(pd.DataFrame(
                     {'TU1'      : names1                         ,
                      'TU2'      : names2                         ,
                      'active'   : pdist(activeTUpos,   'euclidean'),
-                     'inactive' : pdist(inactiveTUpos, 'euclidean')})
-                allTUpairs.append(TUpairs)
+                     'inactive' : pdist(inactiveTUpos, 'euclidean')}))
             except EOFError:
                 break
 
     # Average active TU-TU pair distances across timepoints and save
     allTUpairs = pd.concat(allTUpairs)
     allTUpairs = allTUpairs.groupby(['TU1', 'TU2']).mean().reset_index()
-    allTUpairs.to_csv(outDistances, index=False)
+    allTUpairs.to_csv(outPairDistance, index=False)
 
-    # Convert to pandas so we can label columns with TU atom indexes
-    allActiveTUs = pd.DataFrame(
-        allActiveTUs, columns=atomGroupsDict['TU']).stack().reset_index()
-    allActiveTUs.columns = ['timepoint', 'TU', 'activated']
-    allActiveTUs['timepoint'] *= timestep
-    allActiveTUs.to_csv(sys.stdout, index=False)
+    pd.concat(allTUinfo).to_csv(outInfo, index=False)
 
 
 def readJSON(file):
@@ -96,14 +96,14 @@ def parse_arguments():
         'file',
         help='Input gzipped custom lammps simulation file.')
     custom.add_argument(
-        '--outDistances', default='TU-activePairDistance.csv',
-        help='File to write active TU pair distances.')
-    custom.add_argument(
         '--distance', default=1.8, type=float,
         help='Distance threshold for active transcription (default: %(default)s)')
     custom.add_argument(
-        '--timestep', default=1, type=int,
-        help='Number of timesteps per sampling (default: %(default)s)')
+        '--outPairDistance', default='TU-pairDistance.csv.gz',
+        help='File to write active TU pair distances (default: %(default)s)')
+    custom.add_argument(
+        '--outInfo', default='TU-info.csv.gz',
+        help='File to TU info.')
     epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
 
     base = argparse.ArgumentParser(add_help=False)

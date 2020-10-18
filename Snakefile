@@ -165,7 +165,8 @@ rule all:
          expand('{name}/{nbases}/merged/{name}-{plot}.png',
             nbases=config['bases_per_bead'], name=details.keys(),
             plot=['TU-correlation', 'TU-activation', 'TU-circosPlot',
-                  'TU-replicateCount', 'TU-pairDistance', 'radiusGyration'])]
+                  'TU-replicateCount', 'TU-pairDistance', 'TU-dtwEuclidean',
+                  'radiusGyration'])]
 
 
 rule unzipGenome:
@@ -689,32 +690,31 @@ rule writeTUdistribution:
         '({SCRIPTS}/writeTUdistribution.py {input} | gzip > {output}) &> {log}'
 
 
-rule computeTUactivation:
+rule processTUinfo:
     input:
         xyz = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
         groups = rules.getAtomGroups.output
     output:
-        TUactivation = '{name}/{nbases}/reps/{rep}/TU-activation.csv.gz',
+        TUinfo = '{name}/{nbases}/reps/{rep}/TU-info.csv.gz',
         pairDistance = '{name}/{nbases}/reps/{rep}/TU-pairDistance.csv.gz'
     params:
-        distance = 1.8,
-        timestep = config['lammps']['timestep']
+        distance = 1.8
     group:
-        'processAllLammps' if config['groupJobs'] else 'computeTUactivation'
+        'processAllLammps' if config['groupJobs'] else 'processTUinfo'
     log:
-        'logs/computeTUactivation/{name}-{nbases}-{rep}.log'
+        'logs/processTUinfo/{name}-{nbases}-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '({SCRIPTS}/computeTUactivation.py --distance {params.distance} '
-        '--timestep {params.timestep} --outDistances {output.pairDistance} '
-        '{input.groups} {input.xyz} | gzip > {output.TUactivation}) &> {log}'
+        '{SCRIPTS}/processTUinfo.py --outPairDistance {output.pairDistance} '
+        '--outInfo {output.TUinfo} --distance {params.distance} '
+        '{input.groups} {input.xyz} &> {log}'
 
 
 rule plotTUactivation:
     input:
         expand(
-            '{{name}}/{{nbases}}/reps/{rep}/TU-activation.csv.gz', rep=REPS),
+            '{{name}}/{{nbases}}/reps/{rep}/TU-info.csv.gz', rep=REPS),
     output:
         '{name}/{nbases}/merged/{name}-TU-activation.png'
     group:
@@ -749,9 +749,46 @@ rule plotTUdistances:
         '--minRep {params.minRep} &> {log}'
 
 
+rule computeTUdtw:
+    input:
+        rules.processTUinfo.output.TUinfo
+    output:
+        '{name}/{nbases}/reps/{rep}/TU-euclideanDTW.csv.gz'
+    group:
+        'computeDTWeuclidean' if config['groupJobs'] else 'computeTUdtw'
+    log:
+        'logs/computeTUdtw/{name}-{nbases}-{rep}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/computeTUdtw.py --out {output} {input} &> {log}'
+
+
+rule plotTUdtw:
+    input:
+        dtw = expand(
+            '{{name}}/{{nbases}}/reps/{rep}/TU-euclideanDTW.csv.gz', rep=REPS),
+        beadDistribution = rules.writeTUdistribution.output
+    output:
+        '{name}/{nbases}/merged/{name}-TU-dtwEuclidean.png'
+    params:
+        minRep = config['plotTU']['minRep'],
+        fontSize = config['plotTU']['fontSize']
+    group:
+        'computeDTWeuclidean' if config['groupJobs'] else 'plotTUdtw'
+    log:
+        'logs/plotTUdtw/{name}-{nbases}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/plotTUdtwEuclidean.py {input.beadDistribution} '
+        '{input.dtw} --out {output} --fontSize {params.fontSize} '
+        '--minRep {params.minRep} &> {log}'
+
+
 rule computeTUcorrelation:
     input:
-        rules.computeTUactivation.output.TUactivation
+        rules.processTUinfo.output.TUinfo
     output:
         '{name}/{nbases}/reps/{rep}/TU-correlation.csv.gz'
     group:
@@ -761,8 +798,7 @@ rule computeTUcorrelation:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '({SCRIPTS}/computeTUcorrelation.py '
-        '{input} | gzip > {output}) &> {log}'
+        '({SCRIPTS}/computeTUcorrelation.py {input} | gzip > {output}) &> {log}'
 
 
 rule plotTUcorrelation:
