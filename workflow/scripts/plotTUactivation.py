@@ -16,9 +16,9 @@ __version__ = '1.0.0'
 def main(files: List, out: str, **kwargs) -> None:
 
     activations = pd.concat((pd.read_csv(file) for file in files))
-    activations = activations.groupby(['time', 'TU']).sum().reset_index()
+    activations = activations.groupby(['time', 'id']).sum().reset_index()
     activations = activations.pivot(
-        index='TU', columns='time', values='active')
+        index='id', columns='time', values='active')
 
     #plot = sns.clustermap(activations, cmap='binary', col_cluster=False, vmin=0, vmax=len(files))
     #plot.savefig(out, dpi=300, bbox_inches='tight')

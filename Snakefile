@@ -166,7 +166,7 @@ rule all:
             nbases=config['bases_per_bead'], name=details.keys(),
             plot=['TU-correlation', 'TU-activation', 'TU-circosPlot',
                   'TU-replicateCount', 'TU-pairDistance', 'TU-dtwEuclidean',
-                  'radiusGyration'])]
+                  'DNA-dtwEuclidean', 'radiusGyration'])]
 
 
 rule unzipGenome:
@@ -696,6 +696,7 @@ rule processTUinfo:
         groups = rules.getAtomGroups.output
     output:
         TUinfo = '{name}/{nbases}/reps/{rep}/TU-info.csv.gz',
+        PoylmerInfo = '{name}/{nbases}/reps/{rep}/DNA-info.csv.gz',
         pairDistance = '{name}/{nbases}/reps/{rep}/TU-pairDistance.csv.gz'
     params:
         distance = 1.8
@@ -707,8 +708,8 @@ rule processTUinfo:
         f'{ENVS}/python3.yaml'
     shell:
         '{SCRIPTS}/processTUinfo.py --outPairDistance {output.pairDistance} '
-        '--outInfo {output.TUinfo} --distance {params.distance} '
-        '{input.groups} {input.xyz} &> {log}'
+        '--outTU {output.TUinfo} --outPolymer {output.PoylmerInfo} '
+        '--distance {params.distance} {input.groups} <(zcat -f {input.xyz}) &> {log}'
 
 
 rule plotTUactivation:
@@ -749,35 +750,38 @@ rule plotTUdistances:
         '--minRep {params.minRep} &> {log}'
 
 
-rule computeTUdtw:
+rule computeEuclideanDTW:
     input:
-        rules.processTUinfo.output.TUinfo
+        '{name}/{nbases}/reps/{rep}/{type}-info.csv.gz'
     output:
-        '{name}/{nbases}/reps/{rep}/TU-euclideanDTW.csv.gz'
+        '{name}/{nbases}/reps/{rep}/{type}-euclideanDTW.csv.gz'
+    params:
+        downsample = 2000
     group:
-        'computeDTWeuclidean' if config['groupJobs'] else 'computeTUdtw'
+        'computeEuclideanDTW' if config['groupJobs'] else 'computeEuclideanDTW'
     log:
-        'logs/computeTUdtw/{name}-{nbases}-{rep}.log'
+        'logs/computeEuclideanDTW/{name}-{nbases}-{rep}-{type}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/computeTUdtw.py --out {output} {input} &> {log}'
+        '{SCRIPTS}/computeTUdtw.py --downsample {params.downsample} '
+        '--out {output} {input} &> {log}'
 
 
-rule plotTUdtw:
+rule plotEuclideanDTW:
     input:
         dtw = expand(
-            '{{name}}/{{nbases}}/reps/{rep}/TU-euclideanDTW.csv.gz', rep=REPS),
+            '{{name}}/{{nbases}}/reps/{rep}/{{type}}-euclideanDTW.csv.gz', rep=REPS),
         beadDistribution = rules.writeTUdistribution.output
     output:
-        '{name}/{nbases}/merged/{name}-TU-dtwEuclidean.png'
+        '{name}/{nbases}/merged/{name}-{type}-dtwEuclidean.png'
     params:
         minRep = config['plotTU']['minRep'],
         fontSize = config['plotTU']['fontSize']
     group:
-        'computeDTWeuclidean' if config['groupJobs'] else 'plotTUdtw'
+        'computeEuclideanDTW' if config['groupJobs'] else 'plotEuclideanDTW'
     log:
-        'logs/plotTUdtw/{name}-{nbases}.log'
+        'logs/plotEuclideanDTW/{name}-{nbases}-{type}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:

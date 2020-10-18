@@ -29,13 +29,20 @@ def main(files: List, beadDistribution: str, out: str, minRep: int,
 
     # Average across TU pairs
     TUdtw = TUdtw.groupby(
-        ['TU1', 'TU2']).agg(['mean', 'count']).reset_index()
+        ['id1', 'id2']).agg(['mean', 'count']).reset_index()
+
+    # Create copy, swap id1 & id2 and merge to plot full matrix
+    TUdtw_r = TUdtw.copy()
+    print(TUdtw_r.columns, file=sys.stderr)
+    TUdtw_r.columns = [('id2', ''), ('id1', ''),
+                       ('distance', 'mean'), ('distance', 'count')]
+    TUdtw = pd.concat([TUdtw, TUdtw_r], sort=True)
 
     # Set distance to np.nan for TU pairs with fewer than minRep samples
     TUdtw.loc[TUdtw[('distance', 'count')] < minRep, [('distance', 'mean')]] = np.nan
 
     # Convert to wide format
-    TUdtw = TUdtw.pivot(index='TU1', columns='TU2', values=('distance', 'mean'))
+    TUdtw = TUdtw.pivot(index='id1', columns='id2', values=('distance', 'mean'))
 
     # Flip so diagonal is left to right
     TUdtw = TUdtw.iloc[::-1]

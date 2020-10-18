@@ -3,6 +3,7 @@
 import sys
 import re
 import argparse
+import pandas as pd
 from timeit import default_timer as timer
 
 
@@ -119,7 +120,7 @@ def readCustom(fobj, includeIDs=[], excludeTypes=[]):
     return xyz
 
 
-def readCustom2(fobj):
+def readCustom2(fobj, includeIDs=[], excludeTypes=[]):
     """ Read a timepoint of XYZ coordinates into pandas. """
 
     try:
@@ -132,11 +133,13 @@ def readCustom2(fobj):
     atomId, atomType, xPos, yPos, zPos = [], [], [], [], []
     for n in range(nAtoms):
         id_, type_, x, y, z, ix, iy, iz = next(fobj).strip().split()
+        if (includeIDs and id_ not in includeIDs) or (type_ in excludeTypes):
+            continue
         atomId.append(int(id_))
         atomType.append(type_)
-        xPos.append(x)
-        yPos.append(y)
-        zPos.append(z)
+        xPos.append(float(x))
+        yPos.append(float(y))
+        zPos.append(float(z))
 
     data = pd.DataFrame(
         {'id'   : atomId  ,
@@ -145,9 +148,9 @@ def readCustom2(fobj):
          'xPos' : xPos    ,
          'yPos' : yPos    ,
          'zPos' : zPos    })
+    return data
 
-    return data, time
-    
+
 
 def print_XYZ(xyz) -> None:
     """ Write XYZ object to stdout. """

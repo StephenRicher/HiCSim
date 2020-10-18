@@ -1,9 +1,13 @@
 channels :
   - bioconda
   - conda-forge
+  - anaconda
 dependencies :
   - python=3
-  - pip:
+  - libxml2
+  - libxslt
+  - pip :
+    - dtaidistance --global-option=build_ext
     - numpy
     - pandas
     - seaborn
@@ -11,4 +15,3 @@ dependencies :
     - requests
     - networkx
     - lxml
-  - tslearn

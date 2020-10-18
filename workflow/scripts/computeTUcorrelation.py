@@ -14,7 +14,7 @@ __version__ = '1.0.0'
 def main(file: str, **kwargs) -> None:
 
     allTUinfo = pd.read_csv(file)
-    allTUinfo = allTUinfo.pivot(index='time', columns='TU', values='active')
+    allTUinfo = allTUinfo.pivot(index='time', columns='id', values='active')
 
     # Compute Pearson correlation coefficient and convert to long format
     correlations = allTUinfo.corr(method='pearson').stack()
