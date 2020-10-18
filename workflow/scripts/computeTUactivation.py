@@ -37,17 +37,21 @@ def main(file: str, atomGroups: str, outDistances: str, distance: float, timeste
                 activeTUs = np.amin(result, axis=1) < distance
                 allActiveTUs.append(activeTUs)
 
-                activeTUpos = [TU
-                               if activeTUs[i]
-                               else [np.nan, np.nan, np.nan]
-                               for i, TU in enumerate(TUs['atoms'])]
+                activeTUpos = []
+                inactiveTUpos = []
+                for i, TU in enumerate(TUs['atoms']):
+                    if activeTUs[i]:
+                        activeTUpos.append(TU)
+                        inactiveTUpos.append([np.nan, np.nan, np.nan])
+                    else:
+                        activeTUpos.append([np.nan, np.nan, np.nan])
+                        inactiveTUpos.append(TU)
 
                 TUpairs = pd.DataFrame(
-                    {'TU1'      : names1                       ,
-                     'TU2'      : names2                       ,
-                     'distance' : pdist(activeTUpos, 'euclidean')})
-                # Append pairs with valid TU
-                #allTUpairs.append(TUpairs[TUpairs['distance'].notna()])
+                    {'TU1'      : names1                         ,
+                     'TU2'      : names2                         ,
+                     'active'   : pdist(activeTUpos,   'euclidean'),
+                     'inactive' : pdist(inactiveTUpos, 'euclidean')})
                 allTUpairs.append(TUpairs)
             except EOFError:
                 break

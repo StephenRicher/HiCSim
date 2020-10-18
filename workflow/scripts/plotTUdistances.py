@@ -31,7 +31,7 @@ def main(files: List, beadDistribution: str, out: str, minRep: int,
 
     # Create copy, swap TU1 & TU2 and merge to plot full matrix
     pairDistances_r = pairDistances.copy()
-    pairDistances_r.columns = ['TU2', 'TU1', 'distance']
+    pairDistances_r.columns = ['TU2', 'TU1', 'active', 'inactive']
     pairDistances = pd.concat([pairDistances, pairDistances_r], sort=True)
 
     # Average across TU pairs
@@ -39,17 +39,19 @@ def main(files: List, beadDistribution: str, out: str, minRep: int,
         ['TU1', 'TU2']).agg(['mean', 'count']).reset_index()
 
     # Set distance to np.nan for TU pairs with fewer than minRep samples
-    pairDistances.loc[pairDistances[('distance','count')] < minRep, [('distance', 'mean')]] = np.nan
+    pairDistances.loc[pairDistances[('active','count')] < minRep, [('active', 'mean')]] = np.nan
+
+    ## COMPUTE DIFFERENCE BETWEEN ACTIVE INACTIVE HERE
+    pairDistances['diff'] = pairDistances[('inactive', 'mean')] - pairDistances[('active', 'mean')]
 
     # Convert to wide format
-    pairDistances = pairDistances.pivot(
-        index='TU1', columns='TU2', values=('distance', 'mean'))
+    pairDistances = pairDistances.pivot(index='TU1', columns='TU2', values='diff')
 
     # Flip so diagonal is left to right
     pairDistances = pairDistances.iloc[::-1]
 
     fig, (ax1, ax2) = plt.subplots(2, gridspec_kw={'height_ratios': [6, 1]}, figsize=(8, 8))
-    ax1 = sns.heatmap(pairDistances, square=True, vmin=0, cmap='viridis_r', ax=ax1)
+    ax1 = sns.heatmap(pairDistances, square=True, center=0, cmap='bwr', ax=ax1)
     ax1.set_facecolor('xkcd:light grey')
     ax1.xaxis.set_label_text('')
     ax1.yaxis.set_label_text('')
