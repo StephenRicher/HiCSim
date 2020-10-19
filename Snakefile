@@ -65,6 +65,7 @@ default_config = {
                        'dpi':        300 ,
                        'vMin':       None    ,
                        'vMax':       None    ,},
+    'computeDTW':     {'downsample': 1       ,},
     'plotRG':         {'dpi':        300     ,
                        'confidence': 0.95    ,},
     'plotTU':         {'pvalue':     0.1     ,
@@ -696,7 +697,7 @@ rule processTUinfo:
         groups = rules.getAtomGroups.output
     output:
         TUinfo = '{name}/{nbases}/reps/{rep}/TU-info.csv.gz',
-        PoylmerInfo = '{name}/{nbases}/reps/{rep}/DNA-info.csv.gz',
+        PoylmerInfo = temp('{name}/{nbases}/reps/{rep}/DNA-info.csv.gz'),
         pairDistance = '{name}/{nbases}/reps/{rep}/TU-pairDistance.csv.gz'
     params:
         distance = 1.8
@@ -756,7 +757,7 @@ rule computeEuclideanDTW:
     output:
         '{name}/{nbases}/reps/{rep}/{type}-euclideanDTW.csv.gz'
     params:
-        downsample = 1 # Set to 1 to perform no downsample
+        downsample = config['computeDTW'['dowsample']
     group:
         'computeEuclideanDTW' if config['groupJobs'] else 'computeEuclideanDTW'
     log:
