@@ -166,7 +166,7 @@ rule all:
             nbases=config['bases_per_bead'], name=details.keys(),
             plot=['TU-correlation', 'TU-activation', 'TU-circosPlot',
                   'TU-replicateCount', 'TU-pairDistance', 'TU-dtwEuclidean',
-                  'DNA-dtwEuclidean', 'radiusGyration'])]
+                  'radiusGyration'])]
 
 
 rule unzipGenome:
