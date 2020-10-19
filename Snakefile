@@ -757,7 +757,7 @@ rule computeEuclideanDTW:
     output:
         '{name}/{nbases}/reps/{rep}/{type}-euclideanDTW.csv.gz'
     params:
-        downsample = config['computeDTW'['dowsample']
+        downsample = config['computeDTW']['dowsample']
     group:
         'computeEuclideanDTW' if config['groupJobs'] else 'computeEuclideanDTW'
     log:
