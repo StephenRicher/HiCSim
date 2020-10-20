@@ -774,18 +774,17 @@ def computeDTWInput(wc):
     else:
         return rules.processTUinfo.output.TUinfo
 
-def computeDTWsampletime(wc):
-    if wc.type == 'DNA':
-        return config['dtwDNA']['sampletime']
-    else:
-        return config['dtwTU']['sampletime']
 
+def computeDTWparams(wc):
+    """ Build paramters for computeDTW """
 
-def computeDTWmaxtime(wc):
+    sampletime = config[f'dtw{wc.type}']['sampletime']
+    maxtime = config[f'dtw{wc.type}']['maxtime']
+    params = f'--sampletime {sampletime} --maxtime {maxtime} '
     if wc.type == 'DNA':
-        return config['dtwDNA']['maxtime']
-    else:
-        return config['dtwTU']['maxtime']
+        params += '--group DNA '
+        
+    return params
 
 
 rule computeDTW:
@@ -795,8 +794,7 @@ rule computeDTW:
     output:
         '{name}/{nbases}/reps/{rep}/{type}-euclideanDTW.csv.gz'
     params:
-        sampletime = computeDTWsampletime,
-        maxtime = computeDTWmaxtime
+        computeDTWparams
     group:
         'computeDTW'
     log:
@@ -804,8 +802,8 @@ rule computeDTW:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/computeTUdtw.py --out {output} --maxtime {params.maxtime} '
-        '--sampletime {params.sampletime} {input.groups} {input.sim} &> {log}'
+        '{SCRIPTS}/computeTUdtw.py --out {output} {params} '
+        '{input.groups} {input.sim} &> {log}'
 
 
 rule computeDTWnormalisation:

@@ -12,7 +12,7 @@ from utilities import getAtomCount, readJSON
 
 __version__ = '1.0.0'
 
-def main(file: str, atomGroups: str, out: str, sampletime: int, maxtime: int, **kwargs) -> None:
+def main(file: str, atomGroups: str, group: str, out: str, sampletime: int, maxtime: int, **kwargs) -> None:
 
     atomGroupsDict = readJSON(atomGroups)
     atomCount = getAtomCount(atomGroupsDict)
@@ -26,6 +26,8 @@ def main(file: str, atomGroups: str, out: str, sampletime: int, maxtime: int, **
             break
         if sampletime:
             timestep = timestep[timestep.time % sampletime == 0]
+        if group:
+            timestep = timestep[timestep['id'].isin(atomGroupsDict[group])]
         allTimesteps.append(timestep[['id', 'time', 'x', 'y', 'z']])
     fullSim = pd.concat(allTimesteps)
 
@@ -63,6 +65,8 @@ def parse_arguments():
         help='Timestep to downsample simulation to (default: %(default)s)')
     custom.add_argument('--maxtime', type=int, default=None,
         help='Maximum simulation time to compute DTW (default: %(default)s)')
+    custom.add_argument('--group', default=None,
+        help='Compute DTW on specific atom group (default: %(default)s)')
 
     epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
 
