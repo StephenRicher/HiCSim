@@ -219,6 +219,8 @@ if config['ctcf']['data'] is not None:
                 config['ctcf']['data']
             output:
                 'genome/tracks/CTCF-modifyName.bed'
+            group:
+                'processCTCF'
             log:
                 'logs/modifyBedName.log'
             conda:
@@ -234,6 +236,8 @@ if config['ctcf']['data'] is not None:
                 genomeIndex = rules.indexGenome.output
             output:
                 'genome/tracks/CTCF-modifyName.fasta'
+            group:
+                'processCTCF'
             log:
                 'logs/bed2Fasta.log'
             conda:
@@ -248,6 +252,8 @@ if config['ctcf']['data'] is not None:
                 rules.bed2Fasta.output
             output:
                 'genome/tracks/CTCF-prediction.tsv'
+            group:
+                'processCTCF'
             log:
                 'logs/runCTCFpredict.log'
             conda:
@@ -261,6 +267,8 @@ if config['ctcf']['data'] is not None:
                 rules.runCTCFpredict.output
             output:
                 'genome/tracks/CTCF-prediction.bed'
+            group:
+                'processCTCF'
             params:
                 threshold = 15
             log:
@@ -283,7 +291,7 @@ if config['ctcf']['data'] is not None:
         output:
             'genome/tracks/CTCF.sort.bed'
         group:
-            'bedtools'
+            'processCTCF'
         log:
             'logs/sortBed.log'
         conda:
@@ -298,7 +306,7 @@ if config['ctcf']['data'] is not None:
         output:
             'genome/tracks/CTCF.merged.bed'
         group:
-            'bedtools'
+            'processCTCF'
         log:
             'logs/mergeBed.log'
         conda:
@@ -316,7 +324,7 @@ if config['ctcf']['data'] is not None:
         params:
             logScore = '--log' if config['logScore'] else ''
         group:
-            'bedtools'
+            'processCTCF'
         log:
             'logs/scaleBed.log'
         conda:
@@ -334,6 +342,8 @@ if config['ctcf']['data'] is not None:
         params:
             rep = REPS,
             seed = lambda wc: sequenceSeeds[int(wc.rep) - 1]
+        group:
+            'processCTCF'
         log:
             'logs/sampleBed/{rep}.log'
         conda:
@@ -352,7 +362,7 @@ if config['ctcf']['data'] is not None:
         params:
             min_rep = config['min_rep']
         group:
-            'mask'
+            'processCTCF'
         log:
             'logs/splitOrientation/{rep}.log'
         conda:
@@ -370,6 +380,8 @@ rule scaleTracks:
         'genome/tracks/scaled/{track}'
     params:
         logScore = '--log' if config['logScore'] else ''
+    group:
+        'lammps'
     log:
         'logs/scaleTracks/{track}.log'
     conda:
@@ -387,6 +399,8 @@ rule filterTracks:
     params:
         rep = REPS,
         seed = lambda wc: sequenceSeeds[int(wc.rep) - 1]
+    group:
+        'lammps'
     log:
         'logs/filterTracks/{track}-{rep}.log'
     conda:
@@ -427,7 +441,7 @@ rule maskFasta:
         masking = getMasking,
         seed = lambda wc: sequenceSeeds[int(wc.rep) - 1]
     group:
-        'mask'
+        'lammps'
     log:
         f'logs/maskFasta/{BUILD}-{{rep}}.log'
     conda:
@@ -443,7 +457,7 @@ rule bgzipMasked:
     output:
         f'{rules.maskFasta.output}.gz'
     group:
-        'mask'
+        'lammps'
     log:
         f'logs/bgzipMasked/{BUILD}-{{rep}}.log'
     conda:
@@ -458,7 +472,7 @@ rule indexMasked:
     output:
         multiext(f'{rules.bgzipMasked.output}', '.fai', '.gzi')
     group:
-        'mask'
+        'lammps'
     log:
         f'logs/indexMasked/{BUILD}-{{rep}}.log'
     conda:
@@ -481,7 +495,7 @@ rule extractRegion:
     output:
         pipe('genome/replicates/{rep}/genome/{name}-masked-{rep}.fa')
     group:
-        'convert2Lammps'
+        'lammps'
     params:
         region = getRegion
     log:
@@ -498,7 +512,7 @@ rule FastaToBeads:
     output:
         '{name}/{nbases}/reps/{rep}/sequence/{name}-beads-{rep}.txt'
     group:
-        'convert2Lammps'
+        'lammps'
     params:
         bases_per_bead = config['bases_per_bead'],
         seed = lambda wc: sequenceSeeds[int(wc.rep) - 1]
