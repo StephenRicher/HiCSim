@@ -6,76 +6,64 @@ import sys
 import json
 import logging
 import argparse
-import fileinput
 import numpy as np
 import pandas as pd
-from utilities import readCustom2
+from utilities import getAtomCount, readJSON
 from itertools import combinations
 from scipy.spatial.distance import cdist, pdist
 
 
 __version__ = '1.0.0'
 
-def main(file: str, atomGroups: str, distance: float, outTU: str, outPolymer: str, outPairDistance: str, **kwargs) -> None:
+def main(file: str, atomGroups: str, distance: float, outTU: str, outPairDistance: str, **kwargs) -> None:
 
     # Read atomGroup and retrieve TU atom indexes
     atomGroupsDict = readJSON(atomGroups)
     names1, names2 = generatePairwiseNames(atomGroupsDict['TU'])
 
-    with fileinput.input(file) as fh:
-        allTUinfo = []
-        allTUpairs = []
-        i = 0
-        while True:
-            try:
-                # Read simulation data for a timepoint
-                sim = readCustom2(fh)
+    atomCount = getAtomCount(atomGroupsDict)
 
-                # Extract data of only TUs
-                TUdata = sim.loc[sim['id'].isin(atomGroupsDict['TU'])]
-                TUs = TUdata[['xPos', 'yPos', 'zPos']].to_numpy()
+    # Read simulation file 1 timestep at a time
+    info = pd.read_csv(file, usecols=['time', 'id', 'type', 'x', 'y', 'z'],
+        chunksize=atomCount)
 
-                # Read TFs and exclude type 3 (inactive TF)
-                TFas = sim.loc[(sim['id'].isin(atomGroupsDict['TF']))
-                    & (sim['type'] != '3'),
-                    ['xPos', 'yPos', 'zPos']].to_numpy()
+    allTUinfo = []
+    allTUpairs = []
 
-                # Compute distance of active TFs to each TU bead
-                result = cdist(TUs, TFas, 'euclidean')
+    for sim in info:
 
-                TUdata = TUdata.copy()
-                TUdata['TFnear'] = np.amin(result, axis=1)
-                TUdata['active'] = TUdata['TFnear'] < distance
-                allTUinfo.append(TUdata)
+        # Extract data of only TUs
+        TUdata = sim.loc[sim['id'].isin(atomGroupsDict['TU'])]
+        TUs = TUdata[['x', 'y', 'z']].to_numpy()
 
-                # Write all DNA position, for each timepoint, to file
-                # Appended to file to save memory
-                if outPolymer:
-                    header = True if i == 0 else False
-                    PolymeInfo = sim.loc[sim['id'].isin(atomGroupsDict['DNA'])]
-                    PolymeInfo.to_csv(
-                        outPolymer, mode='a', header=header, index=False)
+        # Read TFs and exclude type 3 (inactive TF)
+        TFas = sim.loc[(sim['id'].isin(atomGroupsDict['TF']))
+            & (sim['type'] != '3'), ['x', 'y', 'z']].to_numpy()
 
-                activeTUpos = []
-                inactiveTUpos = []
-                activeTUs = TUdata['active'].to_list()
-                for i, TU in enumerate(TUs):
-                    if activeTUs[i]:
-                        activeTUpos.append(TU)
-                        inactiveTUpos.append([np.nan, np.nan, np.nan])
-                    else:
-                        activeTUpos.append([np.nan, np.nan, np.nan])
-                        inactiveTUpos.append(TU)
+        # Compute distance of active TFs to each TU bead
+        result = cdist(TUs, TFas, 'euclidean')
 
-                allTUpairs.append(pd.DataFrame(
-                    {'TU1'      : names1                         ,
-                     'TU2'      : names2                         ,
-                     'active'   : pdist(activeTUpos,   'euclidean'),
-                     'inactive' : pdist(inactiveTUpos, 'euclidean')}))
+        TUdata = TUdata.copy()
+        TUdata['TFnear'] = np.amin(result, axis=1)
+        TUdata['active'] = TUdata['TFnear'] < distance
+        allTUinfo.append(TUdata)
 
-                i += 1
-            except EOFError:
-                break
+        activeTUpos = []
+        inactiveTUpos = []
+        activeTUs = TUdata['active'].to_list()
+        for i, TU in enumerate(TUs):
+            if activeTUs[i]:
+                activeTUpos.append(TU)
+                inactiveTUpos.append([np.nan, np.nan, np.nan])
+            else:
+                activeTUpos.append([np.nan, np.nan, np.nan])
+                inactiveTUpos.append(TU)
+
+        allTUpairs.append(pd.DataFrame(
+            {'TU1'      : names1                         ,
+             'TU2'      : names2                         ,
+             'active'   : pdist(activeTUpos,   'euclidean'),
+             'inactive' : pdist(inactiveTUpos, 'euclidean')}))
 
     # Average active TU-TU pair distances across timepoints and save
     allTUpairs = pd.concat(allTUpairs)
@@ -83,12 +71,6 @@ def main(file: str, atomGroups: str, distance: float, outTU: str, outPolymer: st
     allTUpairs.to_csv(outPairDistance, index=False)
 
     pd.concat(allTUinfo).to_csv(outTU, index=False)
-
-
-def readJSON(file):
-    """ Read JSON encoded data to dictionary """
-    with open(file) as fh:
-        return json.load(fh)
 
 
 def generatePairwiseNames(names):
@@ -119,9 +101,6 @@ def parse_arguments():
         help='File to write active TU pair distances (default: %(default)s)')
     custom.add_argument(
         '--outTU', default='TU-info.csv.gz', help='File to TU info.')
-    custom.add_argument(
-        '--outPolymer', default='Polymer-info.csv.gz',
-        help='File to polymer info.')
     epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
 
     base = argparse.ArgumentParser(add_help=False)

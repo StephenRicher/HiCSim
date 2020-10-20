@@ -65,7 +65,10 @@ default_config = {
                        'dpi':        300 ,
                        'vMin':       None    ,
                        'vMax':       None    ,},
-    'computeDTW':     {'downsample': 1       ,},
+    'dtwDNA':         {'sampletime': 0       ,
+                       'maxtime':    100000 ,},
+    'dtwTU':          {'sampletime': 0       ,
+                       'maxtime':    0       ,},
     'plotRG':         {'dpi':        300     ,
                        'confidence': 0.95    ,},
     'plotTU':         {'pvalue':     0.1     ,
@@ -166,8 +169,10 @@ rule all:
          expand('{name}/{nbases}/merged/{name}-{plot}.png',
             nbases=config['bases_per_bead'], name=details.keys(),
             plot=['TU-correlation', 'TU-activation', 'TU-circosPlot',
-                  'TU-replicateCount', 'TU-pairDistance', 'TU-dtwEuclidean',
-                  'radiusGyration'])]
+                  'TU-replicateCount', 'TU-pairDistance',
+                  'TU-dtwEuclidean', 'DNA-dtwEuclidean', 'radiusGyration']),
+        expand('{name}/{nbases}/reps/{rep}/lammps/simulation.csv.gz',
+            nbases=config['bases_per_bead'], name=details.keys(),rep=REPS)]
 
 
 rule unzipGenome:
@@ -691,13 +696,25 @@ rule writeTUdistribution:
         '({SCRIPTS}/writeTUdistribution.py {input} | gzip > {output}) &> {log}'
 
 
+rule reformatLammps:
+    input:
+        rules.lammps.output.simulation
+    output:
+        '{name}/{nbases}/reps/{rep}/lammps/simulation.csv.gz'
+    group:
+        'processAllLammps' if config['groupJobs'] else 'reformatLammps'
+    log:
+        'logs/reformatLammps/{name}-{nbases}-{rep}.log'
+    shell:
+        '({SCRIPTS}/reformatLammps.awk <(zcat {input}) | gzip > {output}) &> {log}'
+
+
 rule processTUinfo:
     input:
-        xyz = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
+        sim = rules.reformatLammps.output,
         groups = rules.getAtomGroups.output
     output:
         TUinfo = '{name}/{nbases}/reps/{rep}/TU-info.csv.gz',
-        PoylmerInfo = temp('{name}/{nbases}/reps/{rep}/DNA-info.csv.gz'),
         pairDistance = '{name}/{nbases}/reps/{rep}/TU-pairDistance.csv.gz'
     params:
         distance = 1.8
@@ -709,8 +726,8 @@ rule processTUinfo:
         f'{ENVS}/python3.yaml'
     shell:
         '{SCRIPTS}/processTUinfo.py --outPairDistance {output.pairDistance} '
-        '--outTU {output.TUinfo} --outPolymer {output.PoylmerInfo} '
-        '--distance {params.distance} {input.groups} <(zcat -f {input.xyz}) &> {log}'
+        '--outTU {output.TUinfo} --distance {params.distance} '
+        '{input.groups} {input.sim} &> {log}'
 
 
 rule plotTUactivation:
@@ -751,28 +768,78 @@ rule plotTUdistances:
         '--minRep {params.minRep} &> {log}'
 
 
-rule computeEuclideanDTW:
+def computeDTWInput(wc):
+    if wc.type == 'DNA':
+        return rules.reformatLammps.output
+    else:
+        return rules.processTUinfo.output.TUinfo
+
+def computeDTWsampletime(wc):
+    if wc.type == 'DNA':
+        return config['dtwDNA']['sampletime']
+    else:
+        return config['dtwTU']['sampletime']
+
+
+def computeDTWmaxtime(wc):
+    if wc.type == 'DNA':
+        return config['dtwDNA']['maxtime']
+    else:
+        return config['dtwTU']['maxtime']
+
+
+rule computeDTW:
     input:
-        '{name}/{nbases}/reps/{rep}/{type}-info.csv.gz'
+        sim = computeDTWInput,
+        groups = rules.getAtomGroups.output
     output:
         '{name}/{nbases}/reps/{rep}/{type}-euclideanDTW.csv.gz'
     params:
-        downsample = config['computeDTW']['downsample']
+        sampletime = computeDTWsampletime,
+        maxtime = computeDTWmaxtime
     group:
-        'computeEuclideanDTW' if config['groupJobs'] else 'computeEuclideanDTW'
+        'computeDTW'
     log:
-        'logs/computeEuclideanDTW/{name}-{nbases}-{rep}-{type}.log'
+        'logs/computeDTW/{name}-{nbases}-{rep}-{type}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/computeTUdtw.py --downsample {params.downsample} '
-        '--out {output} {input} &> {log}'
+        '{SCRIPTS}/computeTUdtw.py --out {output} --maxtime {params.maxtime} '
+        '--sampletime {params.sampletime} {input.groups} {input.sim} &> {log}'
 
 
-rule plotEuclideanDTW:
+rule computeDTWnormalisation:
+    input:
+         expand('{{name}}/{{nbases}}/reps/{rep}/DNA-euclideanDTW.csv.gz', rep=REPS)
+    output:
+        '{name}/{nbases}/merged/DTW-normalisationFactors.csv.gz'
+    log:
+        'logs/computeDTWnormalisation/{name}-{nbases}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/computeDTWnormalisation.py --out {output} {input} &> {log}'
+
+
+rule normaliseDTW:
+    input:
+        dtw = rules.computeDTW.output,
+        normalisation = rules.computeDTWnormalisation.output
+    output:
+        '{name}/{nbases}/reps/{rep}/{type}-euclideanDTWnormalise.csv.gz'
+    log:
+        'logs/normaliseDTW/{name}-{nbases}-{rep}-{type}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/normaliseDTW.py --out {output} '
+        '{input.normalisation} {input.dtw} &> {log}'
+
+
+rule plotDTW:
     input:
         dtw = expand(
-            '{{name}}/{{nbases}}/reps/{rep}/{{type}}-euclideanDTW.csv.gz', rep=REPS),
+            '{{name}}/{{nbases}}/reps/{rep}/{{type}}-euclideanDTWnormalise.csv.gz', rep=REPS),
         beadDistribution = rules.writeTUdistribution.output
     output:
         '{name}/{nbases}/merged/{name}-{type}-dtwEuclidean.png'
@@ -780,9 +847,9 @@ rule plotEuclideanDTW:
         minRep = config['plotTU']['minRep'],
         fontSize = config['plotTU']['fontSize']
     group:
-        'computeEuclideanDTW' if config['groupJobs'] else 'plotEuclideanDTW'
+        'computeDTW' if config['groupJobs'] else 'plotDTW'
     log:
-        'logs/plotEuclideanDTW/{name}-{nbases}-{type}.log'
+        'logs/plotDTW/{name}-{nbases}-{type}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:

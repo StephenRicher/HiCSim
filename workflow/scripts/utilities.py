@@ -2,6 +2,7 @@
 
 import sys
 import re
+import json
 import argparse
 import pandas as pd
 from timeit import default_timer as timer
@@ -150,6 +151,20 @@ def readCustom2(fobj, includeIDs=[], excludeTypes=[]):
          'zPos' : zPos    })
     return data
 
+
+def getAtomCount(atomGroups):
+    """ Read dictionary of atom groups and return total number of atoms """
+
+    uniqueAtoms = set()
+    for atoms in atomGroups.values():
+        uniqueAtoms.update(atoms)
+    return len(uniqueAtoms)
+
+
+def readJSON(file):
+    """ Read JSON encoded data to dictionary """
+    with open(file) as fh:
+        return json.load(fh)
 
 
 def print_XYZ(xyz) -> None:

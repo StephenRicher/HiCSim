@@ -25,7 +25,8 @@ def main(files: List, beadDistribution: str, out: str, minRep: int,
     allBeadDistribution = pd.read_csv(beadDistribution)
     polymerLength = len(allBeadDistribution.columns)
 
-    TUdtw = pd.concat((pd.read_csv(file) for file in files))
+    TUdtw = pd.concat((
+        pd.read_csv(file, usecols=['id1', 'id2', 'distance']) for file in files))
 
     # Average across TU pairs
     TUdtw = TUdtw.groupby(
@@ -33,7 +34,6 @@ def main(files: List, beadDistribution: str, out: str, minRep: int,
 
     # Create copy, swap id1 & id2 and merge to plot full matrix
     TUdtw_r = TUdtw.copy()
-    print(TUdtw_r.columns, file=sys.stderr)
     TUdtw_r.columns = [('id2', ''), ('id1', ''),
                        ('distance', 'mean'), ('distance', 'count')]
     TUdtw = pd.concat([TUdtw, TUdtw_r], sort=True)
@@ -49,7 +49,7 @@ def main(files: List, beadDistribution: str, out: str, minRep: int,
 
     fig, (ax1, ax2) = plt.subplots(
         2, gridspec_kw={'height_ratios': [6, 1]}, figsize=(8, 8))
-    ax1 = sns.heatmap(TUdtw, square=True, vmin=0, cmap='viridis', ax=ax1)
+    ax1 = sns.heatmap(TUdtw, square=True, cmap='viridis', ax=ax1)
     ax1.set_facecolor('xkcd:light grey')
     ax1.xaxis.set_label_text('')
     ax1.yaxis.set_label_text('')
