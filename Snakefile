@@ -783,7 +783,7 @@ def computeDTWparams(wc):
     params = f'--sampletime {sampletime} --maxtime {maxtime} '
     if wc.type == 'DNA':
         params += '--group DNA '
-        
+
     return params
 
 
@@ -796,7 +796,7 @@ rule computeDTW:
     params:
         computeDTWparams
     group:
-        'computeDTW'
+        'computeAllDTW' if config['groupJobs'] else 'computeDTW'
     log:
         'logs/computeDTW/{name}-{nbases}-{rep}-{type}.log'
     conda:
@@ -813,6 +813,8 @@ rule computeDTWnormalisation:
         '{name}/{nbases}/merged/DTW-normalisationFactors.csv.gz'
     log:
         'logs/computeDTWnormalisation/{name}-{nbases}.log'
+    group:
+        'computeAllDTW' if config['groupJobs'] else 'computeDTWnormalisation'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -827,6 +829,8 @@ rule normaliseDTW:
         '{name}/{nbases}/reps/{rep}/{type}-euclideanDTWnormalise.csv.gz'
     log:
         'logs/normaliseDTW/{name}-{nbases}-{rep}-{type}.log'
+    group:
+        'computeAllDTW' if config['groupJobs'] else 'normaliseDTW'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -845,7 +849,7 @@ rule plotDTW:
         minRep = config['plotTU']['minRep'],
         fontSize = config['plotTU']['fontSize']
     group:
-        'computeDTW' if config['groupJobs'] else 'plotDTW'
+        'computeAllDTW' if config['groupJobs'] else 'plotDTW'
     log:
         'logs/plotDTW/{name}-{nbases}-{type}.log'
     conda:
