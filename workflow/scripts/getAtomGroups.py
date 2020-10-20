@@ -25,8 +25,11 @@ def main(file : str, **kwargs):
                         json.dump(atomGroups, sys.stdout)
                         return 0
                     groups = line[line.index('#') + 1:]
-                    for group in groups:
-                        atomGroups[group].append(atomIdx)
+                    if groups:
+                        for group in groups:
+                            atomGroups[group].append(atomIdx)
+                    else:
+                        atomGroups["None"].append(atomIdx)
                     atomIdx += 1
 
 

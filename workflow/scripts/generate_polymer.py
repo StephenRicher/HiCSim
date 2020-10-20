@@ -84,6 +84,8 @@ class lammps:
         for type in sequence.types:
             if type in ['TFa', 'TFi']:
                 sys.exit('Beads "TFa" and "TFi" reserved for monomer beads.')
+            elif type == 'None':
+                sys.exit('Cannot set Bead type as "None".')
             self.addType(type)
 
     def loadMonomer(self, nMonomers, prop=0.5):
