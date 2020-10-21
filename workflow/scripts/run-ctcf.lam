@@ -66,7 +66,7 @@ reset_timestep 0
 compute RG DNA gyration
 variable RG equal c_RG
 variable time equal -(${warm_up_time}+${timestep}-step)
-variable time equal -(${warm_up_time}+200000+${timestep}-step) # CTCF
+variable time equal -(${warm_up_time}+800000+${timestep}-step) # CTCF
 fix RG DNA print ${timestep} "${time} ${RG}" file ${radius_gyration}
 
 ####################################
@@ -100,35 +100,33 @@ bond_coeff 1 fene 30.0 1.5 1.0 1.0
 ####################################
 ####    Progressive -- EQUIL #######
 ####################################
-bond_coeff 2 harmonic 0.0 1.0 # CTCF
-run 25000                     # CTCF
-
 bond_coeff 2 harmonic 0.5 1.0 # CTCF
-run 25000                     # CTCF
+run 100000                    # CTCF
 
 bond_coeff 2 harmonic 1.0 1.0 # CTCF
-run 25000                     # CTCF
+run 100000                    # CTCF
 
 bond_coeff 2 harmonic 1.5 1.0 # CTCF
-run 25000                     # CTCF
+run 100000                    # CTCF
 
 bond_coeff 2 harmonic 2.0 1.0 # CTCF
-run 25000                     # CTCF
+run 100000                    # CTCF
 
 bond_coeff 2 harmonic 2.5 1.0 # CTCF
-run 25000                     # CTCF
+run 100000                    # CTCF
 
 bond_coeff 2 harmonic 3.0 1.0 # CTCF
-run 25000                     # CTCF
+run 1000000                   # CTCF
 
 bond_coeff 2 harmonic 3.5 1.0 # CTCF
-run 25000                     # CTCF
+run 100000                    # CTCF
+
+bond_coeff 2 harmonic 4.0 1.0 # CTCF
+run 100000
 
 ####################################
 ####    RUN -- EQUIL         #######
 ####################################
-
-bond_coeff 2 harmonic 4.0 1.0 # CTCF
 
 unfix RG
 fix RG DNA print ${timestep} "$(step) ${RG}" append ${radius_gyration}
