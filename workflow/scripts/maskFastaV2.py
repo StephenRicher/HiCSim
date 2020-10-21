@@ -2,46 +2,30 @@
 
 """ Mask a genome with relevant bases """
 
-
 import sys
 import random
-import pyCommonTools as pct
-from utilities import commaPair
+import argparse
+import logging
+import fileinput
+from utilities import commaPair, coordinates
 from collections import defaultdict
+
 
 __version__ = '1.0.0'
 
-def main():
 
-
-    parser = pct.make_parser(verbose=True, version=__version__,)
-    parser.set_defaults(function=mask)
-    parser.add_argument(
-        'chromSizes', help='Chromosome sizes file.')
-    parser.add_argument(
-        '--bed', metavar='BED,CHAR', default=[],
-        type=commaPair, action='append',
-        help='BED file of regions to mask, paired with masking character.'
-        'Call multiple times to add more files.')
-    parser.add_argument(
-        '--seed', default=None, type=float,
-        help='Seed for random number generator.')
-
-    return (pct.execute(parser))
-
-
-def mask(chromSizes, bed, seed):
+def main(chromSizes, bed, region, seed):
 
     random.seed(seed)
-
-    regions = processBed(bed)
+    tracks = processBed(bed)
     chromosomes = readChromosomes(chromSizes)
-    writeMaskedFasta(regions, chromosomes)
+
+    writeMaskedFasta(tracks, chromosomes, region)
 
 
-def readChromosomes(chrom_sizes):
+def readChromosomes(file):
     chromosomes = {}
-    with open(chrom_sizes) as fh:
+    with fileinput.input(file) as fh:
         for line in fh:
             name, length = line.split()
             chromosomes[name] = int(length)
@@ -49,13 +33,13 @@ def readChromosomes(chrom_sizes):
 
 
 def processBed(beds):
-    log = pct.create_logger()
-    regions = defaultdict(lambda: defaultdict(list))
+
+    regions = defaultdict(lambda: defaultdict(str))
     invalid_maskings = ['N', 'B']
     for bed, mask in beds:
         if mask in invalid_maskings:
-            log.error(f'Invalid masking character {mask}. '
-                      f'Character must not be in {invalid_maskings}.')
+            logging.error(f'Invalid masking character {mask}. '
+                          f'Character must not be in {invalid_maskings}.')
             sys.exit(1)
         with open(bed) as fh:
             for line in fh:
@@ -64,21 +48,73 @@ def processBed(beds):
                 start = int(entries[1]) + 1 # convert to 1-based
                 end = int(entries[2])
                 mid = round((start + end)/2)
-                regions[ref][mid].append(mask)
+                regions[ref][mid] += mask
+
     return regions
 
 
-def writeMaskedFasta(regions, chromosomes):
+def writeMaskedFasta(tracks, chromosomes, region=None):
     for chromosome, length in chromosomes.items():
+
+        if not region:
+            indexes = range(1, length + 1)
+        elif region['chr'] == chromosome:
+            indexes = range(region['start'], region['end'] + 1)
+        else:
+            continue
+
         sys.stdout.write(f'>{chromosome}\n')
-        for index in range(1, length + 1):
-            if index in regions[chromosome]:
-                base = random.choice(regions[chromosome][index])
+        for index in indexes:
+            chrTracks = tracks[chromosome]
+            if index in chrTracks:
+                base = chrTracks[index]
+                if len(base) > 1:
+                    base = random.choice(base)
             else:
                 base = 'N'
             sys.stdout.write(base)
         sys.stdout.write('\n')
 
 
+def parse_arguments():
+
+    custom = argparse.ArgumentParser(add_help=False)
+    custom.set_defaults()
+    custom.add_argument('chromSizes', nargs='?', default=[],
+        help='Chromosome sizes file (default: stdin)')
+    custom.add_argument(
+        '--region', metavar='CHR:START-END', default=None, type=coordinates,
+        help='Genomic region to operate on.')
+    custom.add_argument(
+        '--bed', metavar='BED,CHAR', default=[],
+        type=commaPair, action='append',
+        help='BED file of regions to mask, paired with masking character.'
+             'Call multiple times to add more files.')
+    custom.add_argument(
+        '--seed', default=None, type=float,
+        help='Seed for random number generator.')
+
+    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+    base = argparse.ArgumentParser(add_help=False)
+    base.add_argument(
+        '--version', action='version', version=f'%(prog)s {__version__}')
+    base.add_argument(
+        '--verbose', action='store_const', const=logging.DEBUG,
+        default=logging.INFO, help='verbose logging for debugging')
+
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[base, custom])
+    args = parser.parse_args()
+
+    log_format='%(asctime)s - %(levelname)s - %(funcName)s - %(message)s'
+    logging.basicConfig(level=args.verbose, format=log_format)
+    del args.verbose
+
+    return args
+
+
 if __name__ == '__main__':
-    sys.exit(main())
+    args = parse_arguments()
+    return_code = main(**vars(args))
+    logging.shutdown()
+    sys.exit(return_code)
