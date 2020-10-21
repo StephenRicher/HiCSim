@@ -218,7 +218,7 @@ if config['ctcf']['data'] is not None:
             input:
                 config['ctcf']['data']
             output:
-                'genome/tracks/CTCF-modifyName.bed'
+                'tracks/CTCF-modifyName.bed'
             group:
                 'processCTCF'
             log:
@@ -235,7 +235,7 @@ if config['ctcf']['data'] is not None:
                 genome = rules.unzipGenome.output,
                 genomeIndex = rules.indexGenome.output
             output:
-                'genome/tracks/CTCF-modifyName.fasta'
+                'tracks/CTCF-modifyName.fasta'
             group:
                 'processCTCF'
             log:
@@ -251,7 +251,7 @@ if config['ctcf']['data'] is not None:
             input:
                 rules.bed2Fasta.output
             output:
-                'genome/tracks/CTCF-prediction.tsv'
+                'tracks/CTCF-prediction.tsv'
             group:
                 'processCTCF'
             log:
@@ -266,7 +266,7 @@ if config['ctcf']['data'] is not None:
             input:
                 rules.runCTCFpredict.output
             output:
-                'genome/tracks/CTCF-prediction.bed'
+                'tracks/CTCF-prediction.bed'
             group:
                 'processCTCF'
             params:
@@ -291,7 +291,7 @@ if config['ctcf']['data'] is not None:
         input:
             CTCFinput
         output:
-            'genome/tracks/CTCF.sort.bed'
+            'tracks/CTCF-sort.bed'
         group:
             'processCTCF'
         log:
@@ -306,7 +306,7 @@ if config['ctcf']['data'] is not None:
         input:
             rules.sortBed.output
         output:
-            'genome/tracks/CTCF.merged.bed'
+            'tracks/CTCF-merged.bed'
         group:
             'processCTCF'
         log:
@@ -322,7 +322,7 @@ if config['ctcf']['data'] is not None:
         input:
             rules.mergeBed.output
         output:
-            'genome/tracks/CTCF.scaled.bed'
+            'tracks/CTCF-scaled.bed'
         params:
             logScore = '--log' if config['logScore'] else ''
         group:
@@ -340,7 +340,7 @@ if config['ctcf']['data'] is not None:
         input:
             rules.scaleBed.output
         output:
-            'genome/replicates/{rep}/tracks/CTCF-sampled-{rep}.bed'
+            'tracks/{rep}/CTCF-sampled.bed'
         params:
             rep = REPS,
             seed = lambda wc: sequenceSeeds[int(wc.rep) - 1]
@@ -359,8 +359,8 @@ if config['ctcf']['data'] is not None:
         input:
             rules.filterBedScore.output
         output:
-            forward = 'genome/replicates/{rep}/tracks/CTCF-forward-{rep}.bed',
-            reversed = 'genome/replicates/{rep}/tracks/CTCF-reverse-{rep}.bed'
+            forward = 'tracks/{rep}/CTCF-forward.bed',
+            reversed = 'tracks/{rep}/CTCF-reverse.bed'
         params:
             min_rep = config['min_rep']
         group:
@@ -379,7 +379,7 @@ rule scaleTracks:
     input:
         lambda wc: track_data[wc.track]['source']
     output:
-        'genome/tracks/scaled/{track}'
+        'tracks/scaled/{track}'
     params:
         logScore = '--log' if config['logScore'] else ''
     group:
@@ -397,7 +397,7 @@ rule filterTracks:
     input:
         rules.scaleTracks.output
     output:
-        'genome/reps/{rep}/tracks/scaled/{track}'
+        'tracks/scaled/{rep}/{track}'
     params:
         rep = REPS,
         seed = lambda wc: sequenceSeeds[int(wc.rep) - 1]
@@ -417,10 +417,10 @@ def getMasking(wc):
     command = ''
     for track in track_data:
         character = track_data[track]['character']
-        command += f'--bed genome/replicates/{wc.rep}/tracks/scaled/{track},{character} '
+        command += f'--bed tracks/scaled/{wc.rep}/{track},{character} '
     if config['ctcf']['data']:
-        command += (f'--bed genome/replicates/{wc.rep}/tracks/CTCF-forward-{wc.rep}.bed,F '
-                    f'--bed genome/replicates/{wc.rep}/tracks/CTCF-reverse-{wc.rep}.bed,R ')
+        command += (f'--bed tracks/{wc.rep}/CTCF-forward.bed,F '
+                    f'--bed tracks/{wc.rep}/CTCF-reverse.bed,R ')
     return command
 
 
@@ -441,8 +441,7 @@ def getRegion(wc):
 rule maskFasta:
     input:
         getSplitOrient,
-        expand('genome/replicates/{{rep}}/tracks/scaled/{track}',
-            track = track_data.keys()),
+        expand('tracks/scaled/{{rep}}/{track}', track=track_data.keys()),
         chromSizes = rules.getChromSizes.output
     output:
         pipe('{name}/reps/{name}-{rep}-masked.fa')
