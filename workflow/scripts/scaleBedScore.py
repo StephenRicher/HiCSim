@@ -24,7 +24,8 @@ def main(file : str, transform : str, **kwargs):
             if line.startswith('#'):
                 sys.stdout.write(f'{line}')
                 continue
-            score = float(line.split()[4])
+            columns = line.split()
+            score = float(columns[4])
             if transform == 'sqrt':
                 score = np.sqrt(score)
             elif transform == 'log':
