@@ -36,7 +36,7 @@ default_config = {
                        'end':       None,},
     'syntheticSequence' : {}              ,
     'min_rep':        1,
-    'logScore':       True,
+    'scaleBed':      'sqrt',
     'bases_per_bead': 1000,
     'monomers':       100,
     'method':         'mean',
@@ -85,6 +85,10 @@ default_config = {
 config = set_config(config, default_config)
 
 workdir : config['workdir']
+
+if config['scaleBed'] not in ['sqrt', 'none', 'log']:
+    sys.exit('"scaleBed" in configuration file must be one of either '
+             '"none", "sqrt" or "log".')
 
 details = {}
 if not config['syntheticSequence']:
@@ -324,7 +328,7 @@ if config['ctcf']['data'] is not None:
         output:
             'tracks/CTCF-scaled.bed'
         params:
-            logScore = '--log' if config['logScore'] else ''
+            transform =  config['scaleBed']
         group:
             'processCTCF'
         log:
@@ -332,8 +336,8 @@ if config['ctcf']['data'] is not None:
         conda:
             f'{ENVS}/python3.yaml'
         shell:
-            '{SCRIPTS}/scaleBedScore.py {params.logScore} {input} '
-            '> {output} 2> {log}'
+            '{SCRIPTS}/scaleBedScore.py --transform {params.transform} '
+            '{input} > {output} 2> {log}'
 
 
     rule filterBedScore:
@@ -381,7 +385,7 @@ rule scaleTracks:
     output:
         'tracks/scaled/{track}'
     params:
-        logScore = '--log' if config['logScore'] else ''
+        transform = config['scaleBed']
     group:
         'lammps'
     log:
@@ -389,8 +393,8 @@ rule scaleTracks:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/scaleBedScore.py {params.logScore} {input} '
-        '{params.logScore} > {output} 2> {log}'
+        '{SCRIPTS}/scaleBedScore.py --transform {params.transform} '
+        '{input} > {output} 2> {log}'
 
 
 rule filterTracks:
