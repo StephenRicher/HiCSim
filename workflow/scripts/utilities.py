@@ -5,6 +5,32 @@ import re
 import json
 import argparse
 import pandas as pd
+import numpy as np
+
+#https://stackoverflow.com/questions/11108869/optimizing-python-distance-calculation-while-accounting-for-periodic-boundary-co/11109336#11109336
+def cdistPeriodic(x0, x1, dimensions, sqeuclidean=False):
+    delta = np.abs(x0[:, np.newaxis] - x1)
+    dimensions = np.array(dimensions)
+    delta = np.where(delta > 0.5 * dimensions, delta - dimensions, delta)
+    sqdistances = (delta ** 2).sum(axis=-1)
+    if sqeuclidean:
+        return sqdistances
+    else:
+        return np.sqrt(sqdistances)
+
+
+def pdistPeriodic(x, dimensions, sqeuclidean=False):
+    # Retrive pairwise indices
+    r,c = np.triu_indices(len(x),1)
+    # Subtract only non-repeating pairwise
+    delta = np.abs(x[r] - x[c])
+    dimensions = np.array(dimensions)
+    delta = np.where(delta > 0.5 * dimensions, delta - dimensions, delta)
+    sqdistances = (delta ** 2).sum(axis=-1)
+    if sqeuclidean:
+        return sqdistances
+    else:
+        return np.sqrt(sqdistances)
 
 
 def getAtomCount(atomGroups):

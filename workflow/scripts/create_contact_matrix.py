@@ -7,13 +7,21 @@ import json
 import logging
 import argparse
 import pandas as pd
-from utilities import getAtomCount, readJSON
+from utilities import getAtomCount, readJSON, pdistPeriodic
 from scipy.sparse import save_npz, csc_matrix
 from scipy.spatial.distance import pdist, squareform
+from typing import List
 
 __version__ = '1.0.0'
 
-def main(file: str,  atomGroups: str, outdata: str, distance: float, **kwargs) -> None:
+def main(file: str,  atomGroups: str, periodic: bool, dimensions : List, outdata: str, distance: float, **kwargs) -> None:
+
+    if periodic and not dimensions:
+        logging.warning(
+            '"--periodic" set but is ignored as "--dimensions" not set.')
+    elif dimensions and not periodic:
+        logging.warning(
+            '"--dimensions" set but is ignored as "--periodic" not set.')
 
     # Read atomGroup and retrieve TU atom indexes
     atomGroupsDict = readJSON(atomGroups)
@@ -28,7 +36,10 @@ def main(file: str,  atomGroups: str, outdata: str, distance: float, **kwargs) -
     for timestep in fullSim:
         timestep = timestep[timestep['id'].isin(atomGroupsDict['DNA'])]
         xyz = timestep[['x', 'y', 'z']].to_numpy()
-        contacts += pdist(xyz, 'sqeuclidean') < sqdistance
+        if periodic and dimensions:
+            contacts += pdistPeriodic(xyz, dimensions, sqeuclidean=True) < sqdistance
+        else:
+            contacts += pdist(xyz, 'sqeuclidean') < sqdistance
 
     save_npz(outdata, csc_matrix(squareform(contacts)))
 
@@ -43,6 +54,13 @@ def parse_arguments():
     custom.add_argument(
         'file', nargs='?', default=[],
         help='Input custom lammps simulation file (default: stdin)')
+    custom.add_argument(
+        '--periodic', action='store_true',
+        help='Compute euclidean distances considering a 3D periodic boundary'
+             'condition. Ignored if "--dimensions" not set.')
+    custom.add_argument(
+        '--dimensions', metavar='XYZ', nargs=3, type=float,
+        help='Simulation box dimensions. Ignored if "--periodic" not set.')
     custom.add_argument(
         '--distance', default=3, type=float,
         help='Max contact distance between particles (default: %(default)s)')

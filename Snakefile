@@ -291,7 +291,7 @@ if config['ctcf']['data'] is not None:
             return config['ctcf']['data']
 
 
-    rule sortBed:
+    rule sortCTCF:
         input:
             CTCFinput
         output:
@@ -306,9 +306,9 @@ if config['ctcf']['data'] is not None:
             'bedtools sort -i {input} > {output} 2> {log}'
 
 
-    rule mergeBed:
+    rule mergeCTCF:
         input:
-            rules.sortBed.output
+            rules.sortCTCF.output
         output:
             'tracks/CTCF-merged.bed'
         group:
@@ -322,9 +322,9 @@ if config['ctcf']['data'] is not None:
             '-i {input} > {output} 2> {log}'
 
 
-    rule scaleBed:
+    rule scaleCTCF:
         input:
-            rules.mergeBed.output
+            rules.mergeCTCF.output
         output:
             'tracks/CTCF-scaled.bed'
         params:
@@ -340,9 +340,9 @@ if config['ctcf']['data'] is not None:
             '{input} > {output} 2> {log}'
 
 
-    rule filterBedScore:
+    rule filterCTCF:
         input:
-            rules.scaleBed.output
+            rules.scaleCTCF.output
         output:
             'tracks/{rep}/CTCF-sampled.bed'
         params:
@@ -361,7 +361,7 @@ if config['ctcf']['data'] is not None:
 
     rule splitOrientation:
         input:
-            rules.filterBedScore.output
+            rules.filterCTCF.output
         output:
             forward = 'tracks/{rep}/CTCF-forward.bed',
             reversed = 'tracks/{rep}/CTCF-reverse.bed'
@@ -884,7 +884,11 @@ rule createContactMatrix:
     output:
         '{name}/{nbases}/reps/{rep}/matrices/contacts.npz'
     params:
-        distance =  3
+        distance = 3,
+        periodic = '--periodic'
+        x = abs(config['box']['xhi'] - config['box']['xlo']),
+        y = abs(config['box']['yhi'] - config['box']['ylo']),
+        z = abs(config['box']['zhi'] - config['box']['zlo'])
     group:
         'processAllLammps' if config['groupJobs'] else 'createContactMatrix'
     log:
@@ -892,9 +896,10 @@ rule createContactMatrix:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/create_contact_matrix.py '
+        '{SCRIPTS}/create_contact_matrix.py {params.periodic} '
         '--outdata {output} --distance {params.distance} '
-        '{input.groups} <(zcat -f {input.xyz}) &> {log}'
+        '--dimensions {params.x} {params.y} {params.z} {input.groups} '
+        '<(zcat -f {input.xyz}) &> {log}'
 
 
 rule mergeReplicates:
