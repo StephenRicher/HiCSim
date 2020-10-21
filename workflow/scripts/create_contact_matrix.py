@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 
-""" Script to read LAMMPS output and generate contact frequency matrix """
+""" Script to read LAMMPS simulation and generate contact frequency matrix """
 
 import sys
 import json
 import logging
 import argparse
-import fileinput
-import numpy as np
-from utilities import readCustom
-from timeit import default_timer as timer
+import pandas as pd
+from utilities import getAtomCount, readJSON
 from scipy.sparse import save_npz, csc_matrix
 from scipy.spatial.distance import pdist, squareform
 
@@ -19,24 +17,20 @@ def main(file: str,  atomGroups: str, outdata: str, distance: float, **kwargs) -
 
     # Read atomGroup and retrieve TU atom indexes
     atomGroupsDict = readJSON(atomGroups)
+    atomCount = getAtomCount(atomGroupsDict)
 
     sqdistance = distance**2
     contacts = 0
-    with fileinput.input(file) as fh:
-        while True:
-            try:
-                xyz = readCustom(fh, includeIDs=atomGroupsDict['DNA'])
-                contacts += pdist(xyz['atoms'], 'sqeuclidean') < sqdistance
-            except EOFError:
-                break
+
+    # Read simulation file 1 timestep at a time and filter as needed
+    fullSim = pd.read_csv(file, chunksize=atomCount)
+
+    for timestep in fullSim:
+        timestep = timestep[timestep['id'].isin(atomGroupsDict['DNA'])]
+        xyz = timestep[['x', 'y', 'z']].to_numpy()
+        contacts += pdist(xyz, 'sqeuclidean') < sqdistance
 
     save_npz(outdata, csc_matrix(squareform(contacts)))
-
-
-def readJSON(file):
-    """ Read JSON encoded data to dictionary """
-    with open(file) as fh:
-        return json.load(fh)
 
 
 def parse_arguments():
