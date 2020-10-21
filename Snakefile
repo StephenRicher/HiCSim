@@ -279,11 +279,13 @@ if config['ctcf']['data'] is not None:
                 '{SCRIPTS}/processCTCFBSDB.py --threshold {params.threshold} '
                 '{input} > {output} 2> {log}'
 
+
     def CTCFinput(wildcards):
         if config['ctcf']['computeDirection']:
             return rules.processCTCFprediction.output
         else:
             return config['ctcf']['data']
+
 
     rule sortBed:
         input:
@@ -395,7 +397,7 @@ rule filterTracks:
     input:
         rules.scaleTracks.output
     output:
-        'genome/replicates/{rep}/tracks/scaled/{track}'
+        'genome/reps/{rep}/tracks/scaled/{track}'
     params:
         rep = REPS,
         seed = lambda wc: sequenceSeeds[int(wc.rep) - 1]
@@ -429,58 +431,6 @@ def getSplitOrient(wc):
     else:
         return []
 
-rule maskFasta:
-    input:
-        getSplitOrient,
-        expand('genome/replicates/{{rep}}/tracks/scaled/{track}',
-            track = track_data.keys()),
-        chromSizes = rules.getChromSizes.output
-    output:
-        pipe(f'genome/replicates/{{rep}}/sequence/{BUILD}-masked.fa')
-    params:
-        masking = getMasking,
-        seed = lambda wc: sequenceSeeds[int(wc.rep) - 1]
-    group:
-        'lammps'
-    log:
-        f'logs/maskFasta/{BUILD}-{{rep}}.log'
-    conda:
-        f'{ENVS}/bedtools.yaml'
-    shell:
-        '{SCRIPTS}/maskFastaV2.py {input.chromSizes} {params.masking} '
-        '--seed {params.seed} > {output} 2> {log}'
-
-
-rule bgzipMasked:
-    input:
-        rules.maskFasta.output
-    output:
-        f'{rules.maskFasta.output}.gz'
-    group:
-        'lammps'
-    log:
-        f'logs/bgzipMasked/{BUILD}-{{rep}}.log'
-    conda:
-        f'{ENVS}/tabix.yaml'
-    shell:
-        'bgzip -c {input} > {output} 2> {log}'
-
-
-rule indexMasked:
-    input:
-        rules.bgzipMasked.output
-    output:
-        multiext(f'{rules.bgzipMasked.output}', '.fai', '.gzi')
-    group:
-        'lammps'
-    log:
-        f'logs/indexMasked/{BUILD}-{{rep}}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    shell:
-        'samtools faidx {input} &> {log}'
-
-
 def getRegion(wc):
     chr = details[wc.name]['chr']
     start = details[wc.name]['start']
@@ -488,29 +438,34 @@ def getRegion(wc):
     return f'{chr}:{start}-{end}'
 
 
-rule extractRegion:
+rule maskFasta:
     input:
-        fasta = rules.bgzipMasked.output,
-        index = rules.indexMasked.output
+        getSplitOrient,
+        expand('genome/replicates/{{rep}}/tracks/scaled/{track}',
+            track = track_data.keys()),
+        chromSizes = rules.getChromSizes.output
     output:
-        pipe('genome/replicates/{rep}/genome/{name}-masked-{rep}.fa')
+        pipe('{name}/reps/{name}-{rep}-masked.fa')
+    params:
+        masking = getMasking,
+        region = getRegion,
+        seed = lambda wc: sequenceSeeds[int(wc.rep) - 1]
     group:
         'lammps'
-    params:
-        region = getRegion
     log:
-        'logs/extractRegion/{name}-{rep}.log'
+        'logs/maskFasta/maskFasta-{name}-{rep}.log'
     conda:
-        f'{ENVS}/samtools.yaml'
+        f'{ENVS}/python3.yaml'
     shell:
-        'samtools faidx {input.fasta} {params.region} > {output} 2> {log}'
+        '{SCRIPTS}/maskFastaV2.py {input.chromSizes} {params.masking} '
+        '--region {params.region} --seed {params.seed} > {output} 2> {log}'
 
 
 rule FastaToBeads:
     input:
-        rules.extractRegion.output
+        rules.maskFasta.output
     output:
-        '{name}/{nbases}/reps/{rep}/sequence/{name}-beads-{rep}.txt'
+        '{name}/{nbases}/reps/{rep}/{name}-beads-{rep}.txt'
     group:
         'lammps'
     params:
@@ -921,7 +876,7 @@ rule plotTUcorrelation:
 
 rule createContactMatrix:
     input:
-        xyz = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
+        xyz = rules.reformatLammps.output,
         groups = rules.getAtomGroups.output
     output:
         '{name}/{nbases}/reps/{rep}/matrices/contacts.npz'
