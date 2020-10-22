@@ -7,7 +7,7 @@ import logging
 import argparse
 import pandas as pd
 from typing import List
-
+import scipy.stats as st
 
 __version__ = '1.0.0'
 
@@ -20,7 +20,10 @@ def main(normalisationFactors: str, dtwDistances: str, out: str, **kwargs) -> No
     dtw['seperation'] = abs(dtw['id1'] - dtw['id2'])
     dtw = pd.merge(dtw, normaliseFactors, on='seperation')
     # Multiple by -1 so that positive Z score are for closer distances
-    dtw['distance'] = ((dtw['distance'] - dtw['mean']) / dtw['std']) * -1
+    dtw['z'] = ((dtw['distance'] - dtw['mean']) / dtw['std']) * -1
+
+    # Rescale distance to contact probability
+    dtw['distance'] = st.norm.cdf(dtw['z'])
 
     dtw.to_csv(out, index=False)
 
