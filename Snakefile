@@ -983,7 +983,7 @@ def getHiCconfig(wc):
         if config['genome']['genes']:
             command += f' --genes {config["genome"]["genes"]} '
         if config['ctcf']['data'] is not None:
-            command += f'--ctcfOrient {rules.scaleBed.output} '
+            command += f'--ctcfOrient {rules.scaleCTCF.output} '
     if wc.format == 'contacts':
         if config['HiC']['vMin'] is not None:
             command += f' --vMin {config["plot"]["vMin"]} '
@@ -1001,7 +1001,7 @@ def getHiCconfig(wc):
 def getCTCFOrient(wc):
     """ Return CTCF orientation if not synthetic """
     if config['syntheticSequence'] is None:
-        return rules.scaleBed.output
+        return rules.scaleCTCF.output
     else:
         return []
 
