@@ -788,11 +788,12 @@ rule computeDTW:
 
 rule computeDTWnormalisation:
     input:
-         expand('{{name}}/{{nbases}}/reps/{rep}/DNA-euclideanDTW.csv.gz', rep=REPS)
+         expand('{{name}}/{{nbases}}/reps/{rep}/{{type}}-euclideanDTW.csv.gz',
+            rep=REPS)
     output:
-        '{name}/{nbases}/merged/info/DTW-normalisationFactors.csv.gz'
+        '{name}/{nbases}/merged/info/{type}-normalisationFactors.csv.gz'
     log:
-        'logs/computeDTWnormalisation/{name}-{nbases}.log'
+        'logs/computeDTWnormalisation/{name}-{nbases}-{type}.log'
     group:
         'computeAllDTW' if config['groupJobs'] else 'computeDTWnormalisation'
     conda:
@@ -836,7 +837,7 @@ rule plotDTW:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/plotTUdtwEuclidean.py {input.beadDistribution} '
+        '{SCRIPTS}/plotDTWeuclidean.py {input.beadDistribution} '
         '{input.dtw} --out {output.plot} --npz {output.npz} '
         '--fontSize {params.fontSize} --minRep {params.minRep} &> {log}'
 
