@@ -168,8 +168,9 @@ rule all:
         [expand('{name}/{nbases}/vmd/{name}-rep1-simulation.gif',
             nbases=config['bases_per_bead'],
             name=details.keys()) if config['GIF']['create'] else [],
-         expand('{name}/{nbases}/merged/{name}-contactMatrix-{binsize}.png',
-            nbases=config['bases_per_bead'], name=details.keys(), binsize=BINSIZE),
+         expand('{name}/{nbases}/merged/{name}-{format}-{binsize}-contactMatrix.png',
+            nbases=config['bases_per_bead'], name=details.keys(),
+            format=['DNA-dtwEuclidean','contacts'], binsize=BINSIZE),
          expand('{name}/{nbases}/merged/{name}-{plot}.png',
             nbases=config['bases_per_bead'], name=details.keys(),
             plot=['TU-correlation', 'TU-activation', 'TU-circosPlot',
@@ -657,7 +658,7 @@ rule writeTUdistribution:
     input:
         expand('{{name}}/{{nbases}}/reps/{rep}/lammps/config/atomGroups.json', rep=REPS)
     output:
-        '{name}/{nbases}/merged/{name}-TU-distribution.csv.gz'
+        '{name}/{nbases}/merged/info/{name}-TU-distribution.csv.gz'
     group:
         'processAllLammps' if config['groupJobs'] else 'writeTUdistribution'
     log:
@@ -782,7 +783,7 @@ rule computeDTWnormalisation:
     input:
          expand('{{name}}/{{nbases}}/reps/{rep}/DNA-euclideanDTW.csv.gz', rep=REPS)
     output:
-        '{name}/{nbases}/merged/DTW-normalisationFactors.csv.gz'
+        '{name}/{nbases}/merged/info/DTW-normalisationFactors.csv.gz'
     log:
         'logs/computeDTWnormalisation/{name}-{nbases}.log'
     group:
@@ -816,7 +817,8 @@ rule plotDTW:
             '{{name}}/{{nbases}}/reps/{rep}/{{type}}-euclideanDTWnormalise.csv.gz', rep=REPS),
         beadDistribution = rules.writeTUdistribution.output
     output:
-        '{name}/{nbases}/merged/{name}-{type}-dtwEuclidean.png'
+        npz = '{name}/{nbases}/merged/matrices/{name}-{type}-dtwEuclidean.npz',
+        plot = '{name}/{nbases}/merged/{name}-{type}-dtwEuclidean.png'
     params:
         minRep = config['plotTU']['minRep'],
         fontSize = config['plotTU']['fontSize']
@@ -828,8 +830,8 @@ rule plotDTW:
         f'{ENVS}/python3.yaml'
     shell:
         '{SCRIPTS}/plotTUdtwEuclidean.py {input.beadDistribution} '
-        '{input.dtw} --out {output} --fontSize {params.fontSize} '
-        '--minRep {params.minRep} &> {log}'
+        '{input.dtw} --out {output.plot} --npz {output.npz} '
+        '--fontSize {params.fontSize} --minRep {params.minRep} &> {log}'
 
 
 rule computeTUcorrelation:
@@ -885,7 +887,7 @@ rule createContactMatrix:
         '{name}/{nbases}/reps/{rep}/matrices/contacts.npz'
     params:
         distance = 3,
-        periodic = '--periodic'
+        periodic = '--periodic',
         x = abs(config['box']['xhi'] - config['box']['xlo']),
         y = abs(config['box']['yhi'] - config['box']['ylo']),
         z = abs(config['box']['zhi'] - config['box']['zlo'])
@@ -907,7 +909,7 @@ rule mergeReplicates:
         expand('{{name}}/{{nbases}}/reps/{rep}/matrices/contacts.npz',
             rep=REPS)
     output:
-        '{name}/{nbases}/merged/contacts.npz'
+        '{name}/{nbases}/merged/matrices/{name}-contacts.npz'
     params:
         method = config['method']
     group:
@@ -923,15 +925,15 @@ rule mergeReplicates:
 
 rule matrix2homer:
     input:
-        rules.mergeReplicates.output
+        '{name}/{nbases}/merged/matrices/{name}-{format}.npz'
     output:
-        '{name}/{nbases}/merged/contacts.homer'
+        '{name}/{nbases}/merged/matrices/{name}-{format}.homer'
     params:
         chr = lambda wc: details[wc.name]['chr'],
         start = lambda wc: details[wc.name]['start'],
         binsize = config['bases_per_bead']
     log:
-        'logs/matrix2homer/{name}-{nbases}.log'
+        'logs/matrix2homer/{name}-{nbases}-{format}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -944,9 +946,9 @@ rule homer2H5:
     input:
         rules.matrix2homer.output
     output:
-        '{name}/{nbases}/merged/contacts.h5'
+        '{name}/{nbases}/merged/matrices/{name}-{format}.h5'
     log:
-        'logs/homer2H5/{name}-{nbases}.log'
+        'logs/homer2H5/{name}-{nbases}-{format}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     threads:
@@ -960,11 +962,11 @@ rule mergeBins:
     input:
         rules.homer2H5.output
     output:
-        '{name}/{nbases}/merged/contacts-{binsize}.h5'
+        '{name}/{nbases}/merged/matrices/{name}-{format}-{binsize}.h5'
     params:
         nbins = MERGEBINS
     log:
-        'logs/mergeBins/{name}-{nbases}-{binsize}.log'
+        'logs/mergeBins/{name}-{nbases}-{format}-{binsize}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -982,12 +984,16 @@ def getHiCconfig(wc):
             command += f' --genes {config["genome"]["genes"]} '
         if config['ctcf']['data'] is not None:
             command += f'--ctcfOrient {rules.scaleBed.output} '
-    if config['HiC']['vMin'] is not None:
-        command += f' --vMin {config["plot"]["vMin"]} '
-    if config['HiC']['vMax'] is not None:
-        command += f' --vMax {config["plot"]["vMax"]} '
-    if config['HiC']['log']:
-        command += ' --log '
+    if wc.format == 'contacts':
+        if config['HiC']['vMin'] is not None:
+            command += f' --vMin {config["plot"]["vMin"]} '
+        if config['HiC']['vMax'] is not None:
+            command += f' --vMax {config["plot"]["vMax"]} '
+        if config['HiC']['log']:
+            command += ' --log '
+        command += f'--colourMap {config["HiC"]["colourMap"]}'
+    else:
+        command += '--colourMap viridis --vMin -2.5 --vMax 2.5 '
 
     return command
 
@@ -1008,21 +1014,19 @@ rule createConfig:
         matrix = rules.mergeBins.output,
         ctcfOrient = getCTCFOrient
     output:
-        '{name}/{nbases}/merged/configs-{binsize}.ini'
+        '{name}/{nbases}/merged/config/{name}-{format}-{binsize}-configs.ini'
     params:
         depth = getDepth,
         hicConfig = getHiCconfig,
-        colourMap = config['HiC']['colourMap']
     group:
         'plotHiC'
     log:
-        'logs/createConfig/{name}-{nbases}-{binsize}.log'
+        'logs/createConfig/{name}-{nbases}--{format}-{binsize}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
         '{SCRIPTS}/generate_config.py --matrix {input.matrix} '
-        '--colourMap {params.colourMap} --depth {params.depth} '
-        '{params.hicConfig} > {output} 2> {log}'
+        '--depth {params.depth} {params.hicConfig} > {output} 2> {log}'
 
 
 def getTitle(wc):
@@ -1033,7 +1037,7 @@ rule plotHiC:
     input:
         rules.createConfig.output
     output:
-        '{name}/{nbases}/merged/{name}-contactMatrix-{binsize}.png'
+        '{name}/{nbases}/merged/{name}-{format}-{binsize}-contactMatrix.png'
     params:
         region = getRegion,
         title = getTitle,
@@ -1041,7 +1045,7 @@ rule plotHiC:
     group:
         'plotHiC'
     log:
-        'logs/plotHiC/{name}-{nbases}-{binsize}.log'
+        'logs/plotHiC/{name}-{nbases}-{format}-{binsize}.log'
     conda:
         f'{ENVS}/pygenometracks.yaml'
     shell:
@@ -1058,7 +1062,7 @@ if config['syntheticSequence'] is None:
         input:
             rules.mergeReplicates.output
         output:
-            '{name}/{nbases}/merged/contacts.pre.tsv'
+            '{name}/{nbases}/merged/matrices/contacts.pre.tsv'
         params:
             chr = lambda wc: details[wc.name]['chr'],
             start = lambda wc: details[wc.name]['start'],
@@ -1078,7 +1082,7 @@ if config['syntheticSequence'] is None:
             tsv = rules.matrix2pre.output,
             chrom_sizes = rules.getChromSizes.output
         output:
-            '{name}/{nbases}/merged/contacts.hic'
+            '{name}/{nbases}/merged/matrices/contacts.hic'
         log:
             'logs/juicerPre/{name}-{nbases}.log'
         params:
