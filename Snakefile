@@ -7,9 +7,6 @@ import random
 import tempfile
 from set_config import set_config, read_paths, nBeads
 
-wildcard_constraints:
-    all = r'[^\/]+',
-
 BASE = workflow.basedir
 
 # Define path to conda environment specifications
@@ -163,6 +160,14 @@ track_data = {}
 for file, character in config['masking'].items():
     track_file = f'{os.path.basename(file)}'
     track_data[track_file] = {'source' : file, 'character' : character}
+
+wildcard_constraints:
+    all = r'[^\/]+',
+    format = r'contacts|DNA-dtwEuclidean',
+    name = rf'{"|".join(details.keys())}',
+    binsize = rf'{BINSIZE}',
+    nbases = rf'{config["bases_per_bead"]}',
+    rep = rf'{"|".join([str(rep) for rep in REPS])}'
 
 
 rule all:
