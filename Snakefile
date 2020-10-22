@@ -64,7 +64,9 @@ default_config = {
                        'colourMap': 'Purples',
                        'dpi':        300 ,
                        'vMin':       None    ,
-                       'vMax':       None    ,},
+                       'vMax':       None    ,
+                       'vMin2':      None    ,
+                       'vMax2':      None    ,},
     'dtwDNA':         {'sampletime': 0       ,
                        'maxtime':    100000 ,},
     'dtwTU':          {'sampletime': 0       ,
@@ -980,15 +982,19 @@ def getHiCconfig(wc):
     if not config['syntheticSequence']:
         if config['HiC']['matrix']:
             command += f'--flip --matrix2 {config["HiC"]["matrix"]} '
+            if config['HiC']['vMin2'] is not None:
+                command += f' --vMin2 {config["HiC"]["vMin2"]} '
+            if config['HiC']['vMax2'] is not None:
+                command += f' --vMax2 {config["HiC"]["vMax2"]} '
         if config['genome']['genes']:
             command += f' --genes {config["genome"]["genes"]} '
         if config['ctcf']['data'] is not None:
             command += f'--ctcfOrient {rules.scaleCTCF.output} '
     if wc.format == 'contacts':
         if config['HiC']['vMin'] is not None:
-            command += f' --vMin {config["plot"]["vMin"]} '
+            command += f' --vMin {config["HiC"]["vMin"]} '
         if config['HiC']['vMax'] is not None:
-            command += f' --vMax {config["plot"]["vMax"]} '
+            command += f' --vMax {config["HiC"]["vMax"]} '
         if config['HiC']['log']:
             command += ' --log '
         command += f'--colourMap {config["HiC"]["colourMap"]}'

@@ -62,10 +62,17 @@ def main():
         help = 'Matplotlib colour map to use for the heatmap.')
     parser.add_argument(
         '--vMin', type=float,
-        help = 'Minimum score value for HiC matrices.')
+        help = 'Minimum score value for HiC matrix 1.')
     parser.add_argument(
         '--vMax', type=float,
-        help = 'Maximum score value for matrix.')
+        help = 'Maximum score value for HiC matrix 1.')
+    parser.add_argument(
+        '--vMin2', type=float,
+        help = 'Minimum score value for HiC matrix 2.')
+    parser.add_argument(
+        '--vMax2', type=float,
+        help = 'Maximum score value for HiC matrix 2.')
+
 
     args = parser.parse_args()
     func = args.function
@@ -77,8 +84,7 @@ def main():
 
 def make_config(insulations, matrix, log, matrix2, tads, loops,
                 links, ctcfs, compare, ctcfOrient, genes, depth,
-                colourMap, vMin, vMax, flip):
-
+                colourMap, vMin, vMax, vMin2, vMax2, flip):
 
     print('[spacer]')
     if matrix and not_empty(matrix):
@@ -99,7 +105,7 @@ def make_config(insulations, matrix, log, matrix2, tads, loops,
         inverted_matrix = matrix2 if matrix2 else matrix
         if not_empty(inverted_matrix):
             write_matrix(inverted_matrix, cmap=colourMap, depth=depth,
-                vMin=vMin, vMax=vMax, invert=True, log=log)
+                vMin=vMin2, vMax=vMax2, invert=True, log=log)
     print('[spacer]')
 
     if insulations is not None:
