@@ -97,7 +97,7 @@ def make_config(insulations, matrix, logMatrix1, matrix2, logMatrix2, tads,
         inverted_matrix = matrix2 if matrix2 else matrix
         if not_empty(inverted_matrix):
             write_matrix(inverted_matrix, cmap=colourMap, depth=depth,
-                vMin=vMin2, vMax=vMax2, invert=True, log=log)
+                vMin=vMin2, vMax=vMax2, invert=True, log=logMatrix2)
     print('[spacer]')
 
     if insulations is not None:
