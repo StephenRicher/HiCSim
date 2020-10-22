@@ -20,6 +20,8 @@ def main(matrix, binsize, chromosome, start,  **kwargs) -> None:
     matrix = pd.DataFrame(matrix, columns=names)
     matrix.insert(0, 'Regions', names)
     matrix.insert(0, 'HiCMatrix (directory=.)', names)
+    # Set NaN (diagonal) to zero and round scientific notation numbers
+    matrix = matrix.fillna(0).round(10)
     matrix.to_csv(sys.stdout, sep='\t', index=False)
 
 
