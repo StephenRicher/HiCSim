@@ -19,7 +19,9 @@ def main(normalisationFactors: str, dtwDistances: str, out: str, **kwargs) -> No
 
     dtw['seperation'] = abs(dtw['id1'] - dtw['id2'])
     dtw = pd.merge(dtw, normaliseFactors, on='seperation')
-    dtw['distance'] = (dtw['distance'] - dtw['mean']) / dtw['std']
+    # Multiple by -1 so that positive Z score are for closer distances
+    dtw['distance'] = ((dtw['distance'] - dtw['mean']) / dtw['std']) * -1
+
     dtw.to_csv(out, index=False)
 
 
