@@ -59,7 +59,7 @@ default_config = {
                        'binsize':    None    ,
                        'log' :       True    ,
                        'colourMap': 'Purples',
-                       'dpi':        300 ,
+                       'dpi':        300     ,
                        'vMin':       None    ,
                        'vMax':       None    ,
                        'vMin2':      None    ,
@@ -987,18 +987,18 @@ def getHiCconfig(wc):
     if not config['syntheticSequence']:
         if config['HiC']['matrix']:
             command += f'--flip --matrix2 {config["HiC"]["matrix"]} '
-            if config['HiC']['vMin2'] is not None:
+            if config['HiC']['vMin2']:
                 command += f' --vMin2 {config["HiC"]["vMin2"]} '
-            if config['HiC']['vMax2'] is not None:
+            if config['HiC']['vMax2']:
                 command += f' --vMax2 {config["HiC"]["vMax2"]} '
         if config['genome']['genes']:
             command += f' --genes {config["genome"]["genes"]} '
         if config['ctcf']['data'] is not None:
             command += f'--ctcfOrient {rules.scaleCTCF.output} '
     if wc.format == 'contacts':
-        if config['HiC']['vMin'] is not None:
+        if config['HiC']['vMin']:
             command += f' --vMin {config["HiC"]["vMin"]} '
-        if config['HiC']['vMax'] is not None:
+        if config['HiC']['vMax']:
             command += f' --vMax {config["HiC"]["vMax"]} '
         if config['HiC']['log']:
             command += ' --logMatrix1 --logMatrix2 '
@@ -1006,6 +1006,7 @@ def getHiCconfig(wc):
         if config['HiC']['log']:
             command += ' --logMatrix2 '
         command += '--vMin 0 --vMax 1 '
+
     command += f'--colourMap {config["HiC"]["colourMap"]}'
     return command
 
