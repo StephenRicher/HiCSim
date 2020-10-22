@@ -996,9 +996,11 @@ def getHiCconfig(wc):
         if config['HiC']['vMax'] is not None:
             command += f' --vMax {config["HiC"]["vMax"]} '
         if config['HiC']['log']:
-            command += ' --log '
+            command += ' --logMatrix1 --logMatrix2 '
         command += f'--colourMap {config["HiC"]["colourMap"]}'
     else:
+        if config['HiC']['log']:
+            command += ' --logMatrix2 '
         command += '--colourMap viridis --vMin -2.5 --vMax 2.5 '
 
     return command

@@ -18,33 +18,42 @@ def main():
     parser.set_defaults(function = make_config)
 
     parser.add_argument(
-        '--insulations', nargs = '*', default = None,
-        help='Insulation score outputs of hicFindTADs (ending "tad_score.bm").')
-    parser.add_argument(
-        '--tads', nargs = '*', default = None,
-        help = 'TAD scores in ".links" format.')
-    parser.add_argument(
-        '--flip',  action='store_true',
-        help='Plot a copy of the HiC map inverted.')
-    parser.add_argument(
-        '--loops', nargs = '*', default = None,
-        help = 'Loop output.')
-    parser.add_argument(
         '--matrix',
         help = 'HiC matrix.')
     parser.add_argument(
-        '--log', default=False, action='store_true',
-        help='Log transform counts of matrices.')
+        '--logMatrix1', default=False, action='store_true',
+        help='Log transform counts of matrix 1.')
     parser.add_argument(
-        '--compare', default=False, action='store_true',
-        help='Generate .ini file for HiC compare.')
+        '--vMin', type=float,
+        help = 'Minimum score value for HiC matrix 1.')
+    parser.add_argument(
+        '--vMax', type=float,
+        help = 'Maximum score value for HiC matrix 1.')
     parser.add_argument(
         '--matrix2',
         help = 'If --flip argument is called, use to plot a different HiC'
         'matrix as inverted.')
     parser.add_argument(
-        '--links', nargs=2, default=None,
-        help = 'UP and DOWN links files showing differential interactions.')
+        '--logMatrix2', default=False, action='store_true',
+        help='Log transform counts of matrix 2.')
+    parser.add_argument(
+        '--vMin2', type=float,
+        help = 'Minimum score value for HiC matrix 2.')
+    parser.add_argument(
+        '--vMax2', type=float,
+        help = 'Maximum score value for HiC matrix 2.')
+    parser.add_argument(
+        '--flip',  action='store_true',
+        help='Plot a copy of the HiC map inverted.')
+    parser.add_argument(
+        '--compare', default=False, action='store_true',
+        help='Generate .ini file for HiC compare.')
+    parser.add_argument(
+        '--insulations', nargs = '*', default = None,
+        help='Insulation score outputs of hicFindTADs (ending "tad_score.bm").')
+    parser.add_argument(
+        '--tads', nargs = '*', default = None,
+        help = 'TAD scores in ".links" format.')
     parser.add_argument(
         '--ctcfs', nargs = '+', default=None,
         help = 'CTCF position in bigWig format.')
@@ -60,18 +69,6 @@ def main():
     parser.add_argument(
         '--colourMap', default='Purples',
         help = 'Matplotlib colour map to use for the heatmap.')
-    parser.add_argument(
-        '--vMin', type=float,
-        help = 'Minimum score value for HiC matrix 1.')
-    parser.add_argument(
-        '--vMax', type=float,
-        help = 'Maximum score value for HiC matrix 1.')
-    parser.add_argument(
-        '--vMin2', type=float,
-        help = 'Minimum score value for HiC matrix 2.')
-    parser.add_argument(
-        '--vMax2', type=float,
-        help = 'Maximum score value for HiC matrix 2.')
 
 
     args = parser.parse_args()
@@ -82,19 +79,14 @@ def main():
     return func(**vars(args))
 
 
-def make_config(insulations, matrix, log, matrix2, tads, loops,
-                links, ctcfs, compare, ctcfOrient, genes, depth,
+def make_config(insulations, matrix, logMatrix1, matrix2, logMatrix2, tads,
+                ctcfs, compare, ctcfOrient, genes, depth,
                 colourMap, vMin, vMax, vMin2, vMax2, flip):
 
     print('[spacer]')
     if matrix and not_empty(matrix):
         write_matrix(matrix, cmap=colourMap, depth=depth,
-            vMin=vMin, vMax=vMax, log=log)
-
-    if loops is not None:
-        for i, loop in enumerate(loops):
-            if not_empty(loop):
-                write_loops(loop, i = i, compare=compare)
+            vMin=vMin, vMax=vMax, log=logMatrix1)
 
     if tads is not None:
         for i, tad in enumerate(tads):
@@ -112,19 +104,6 @@ def make_config(insulations, matrix, log, matrix2, tads, loops,
         for i, insulation in enumerate(insulations):
             if not_empty(insulation):
                 write_insulation(insulation = insulation, i = i)
-        print('[spacer]')
-
-
-    if links is not None:
-        for i, link in enumerate(links):
-            if i == 0:
-                overlay = False
-                direction = 'up'
-            else:
-                overlay = True
-                direction = 'down'
-            if not_empty(link):
-                write_links(link, overlay=overlay, direction=direction)
         print('[spacer]')
 
 
@@ -174,20 +153,6 @@ def write_matrix(
     print(*config, sep='\n')
 
 
-def write_loops(loops, i, compare=False):
-    colours = ['Reds', 'Blues']
-    colour = colours[i] if compare else '#FF000080'
-
-    print(f'[Loops]',
-          f'file = {loops}',
-          f'links_type = loops',
-          f'line_style = solid',
-          f'color = {colour}',
-          f'overlay_previous = share-y',
-          f'file_type = links',
-          f'line_width = 5', sep = '\n')
-
-
 def write_tads(tads, i,
         colours = ['#d95f0280', '#1b9e7780', '#d902d980', '#00000080'],
         styles = ['dashed', 'solid', 'dashed', 'solid']):
@@ -216,32 +181,6 @@ def write_insulation(insulation, i,
           f'file_type = bedgraph_matrix',
           f'type = lines',
           f'overlay_previous = {overlay}', sep = '\n')
-
-
-def write_links(link, direction, overlay=False):
-
-    overlay = 'share-y' if overlay else 'no'
-    colour = 'Reds' if direction == 'up' else 'Blues'
-    group1, group2 = get_links_groups(link)
-    if direction == 'up':
-        title = f'Differential interactions - Red (UP in {group2})'
-    else:
-        title = ''
-
-    print(f'[{group1} vs {group2} - DI {direction}]',
-          f'file = {link}',
-          f'title = {title}',
-          f'line_style = dashed',
-          f'color = {colour}',
-          f'height = 10',
-          f'overlay_previous = {overlay}',
-          f'file_type = links', sep = '\n')
-
-
-def get_links_groups(path):
-    """ Retrieve group name pairs from links path. """
-    base = os.path.basename(path).split('-')
-    return base[0], base[2]
 
 
 def write_ctcf(ctcf, i,
