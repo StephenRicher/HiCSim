@@ -11,12 +11,12 @@ import seaborn as sns
 from typing import List
 from utilities import coeff
 import matplotlib.pyplot as plt
-
+from scipy.sparse import save_npz, csc_matrix
 
 __version__ = '1.0.0'
 
 
-def main(files: List, beadDistribution: str, out: str, minRep: int,
+def main(files: List, beadDistribution: str, out: str, npz: str, minRep: int,
         fontSize: float, **kwargs) -> None:
 
     # Set global matplotlib fontisze
@@ -43,6 +43,9 @@ def main(files: List, beadDistribution: str, out: str, minRep: int,
 
     # Convert to wide format
     TUdtw = TUdtw.pivot(index='id1', columns='id2', values=('distance', 'mean'))
+
+    if npz:
+        save_npz(npz, csc_matrix(TUdtw.to_numpy()))
 
     # Flip so diagonal is left to right
     TUdtw = TUdtw.iloc[::-1]
@@ -80,6 +83,9 @@ def parse_arguments():
     custom.add_argument(
         '--out', default='TU-pairDistances.png',
         help='TU active pair distances heatmap (default: %(default)s)')
+    custom.add_argument(
+        '--npz',
+        help='File to matrix data in ".npz format" (default: %(default)s)')
     custom.add_argument(
         '--fontSize', type=float, default=14,
         help='Font size for node name on circos plot (default: %(default)s)')
