@@ -33,10 +33,12 @@ def pdistPeriodic(x, dimensions, sqeuclidean=False):
         return np.sqrt(sqdistances)
 
 
-def getAtomCount(atomGroups):
+def getAtomCount(atomGroups, key=None):
     """ Read dictionary of atom groups and return total number of atoms """
 
     uniqueAtoms = set()
+    if key:
+        atomGroups = {key : atomGroups[key]}
     for atoms in atomGroups.values():
         uniqueAtoms.update(atoms)
     return len(uniqueAtoms)
