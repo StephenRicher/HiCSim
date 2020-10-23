@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-""" Average contact frequency matrices and plot heatmap """
+""" Plot DTW distances """
 
 import sys
 import logging
@@ -25,34 +25,34 @@ def main(files: List, beadDistribution: str, out: str, npz: str, minRep: int,
     allBeadDistribution = pd.read_csv(beadDistribution)
     polymerLength = len(allBeadDistribution.columns)
 
-    TUdtw = pd.concat((
+    dtw = pd.concat((
         pd.read_csv(file, usecols=['id1', 'id2', 'distance']) for file in files))
 
     # Average across TU pairs
-    TUdtw = TUdtw.groupby(
+    dtw = dtw.groupby(
         ['id1', 'id2']).agg(['mean', 'count']).reset_index()
 
     # Create copy, swap id1 & id2 and merge to plot full matrix
-    TUdtw_r = TUdtw.copy()
-    TUdtw_r.columns = [('id2', ''), ('id1', ''),
+    dtw_r = dtw.copy()
+    dtw_r.columns = [('id2', ''), ('id1', ''),
                        ('distance', 'mean'), ('distance', 'count')]
-    TUdtw = pd.concat([TUdtw, TUdtw_r], sort=True)
+    dtw = pd.concat([dtw, dtw_r], sort=True)
 
     # Set distance to np.nan for TU pairs with fewer than minRep samples
-    TUdtw.loc[TUdtw[('distance', 'count')] < minRep, [('distance', 'mean')]] = np.nan
+    dtw.loc[dtw[('distance', 'count')] < minRep, [('distance', 'mean')]] = np.nan
 
     # Convert to wide format
-    TUdtw = TUdtw.pivot(index='id1', columns='id2', values=('distance', 'mean'))
+    dtw = dtw.pivot(index='id1', columns='id2', values=('distance', 'mean'))
 
     if npz:
-        save_npz(npz, csc_matrix(TUdtw.to_numpy()))
+        save_npz(npz, csc_matrix(dtw.to_numpy()))
 
     # Flip so diagonal is left to right
-    TUdtw = TUdtw.iloc[::-1]
+    dtw = dtw.iloc[::-1]
 
     fig, (ax1, ax2) = plt.subplots(
         2, gridspec_kw={'height_ratios': [6, 1]}, figsize=(8, 8))
-    ax1 = sns.heatmap(TUdtw, square=True, cmap='viridis', ax=ax1)
+    ax1 = sns.heatmap(dtw, square=True, cmap='viridis', vmin=0, vmax=1 ax=ax1)
     ax1.set_facecolor('xkcd:light grey')
     ax1.xaxis.set_label_text('')
     ax1.yaxis.set_label_text('')
