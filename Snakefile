@@ -177,14 +177,12 @@ rule all:
             name=details.keys()) if config['GIF']['create'] else [],
          expand('{name}/{nbases}/merged/{name}-{format}-{binsize}-contactMatrix.png',
             nbases=config['bases_per_bead'], name=details.keys(),
-            format=['DNA-dtwEuclidean','contacts'], binsize=BINSIZE),
+            format=['contacts'], binsize=BINSIZE),
          expand('{name}/{nbases}/merged/{name}-{plot}.png',
             nbases=config['bases_per_bead'], name=details.keys(),
             plot=['TU-correlation', 'TU-activation', 'TU-circosPlot',
-                  'TU-replicateCount', 'TU-pairDistance',
-                  'TU-dtwEuclidean', 'DNA-dtwEuclidean', 'radiusGyration']),
-        expand('{name}/{nbases}/reps/{rep}/lammps/simulation.csv.gz',
-            nbases=config['bases_per_bead'], name=details.keys(),rep=REPS)]
+                  'TU-replicateCount', 'radiusGyration']),
+         directory('{name}/{nbases}/plots/{rep}/')]
 
 
 rule unzipGenome:
@@ -694,8 +692,7 @@ rule processTUinfo:
         sim = rules.reformatLammps.output,
         groups = rules.getAtomGroups.output
     output:
-        TUinfo = '{name}/{nbases}/reps/{rep}/TU-info.csv.gz',
-        pairDistance = '{name}/{nbases}/reps/{rep}/TU-pairDistance.csv.gz'
+        '{name}/{nbases}/reps/{rep}/TU-info.csv.gz',
     params:
         distance = 1.8
     group:
@@ -705,9 +702,23 @@ rule processTUinfo:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/processTUinfo.py --outPairDistance {output.pairDistance} '
-        '--outTU {output.TUinfo} --distance {params.distance} '
-        '{input.groups} {input.sim} &> {log}'
+        '{SCRIPTS}/processTUinfo.py --out {output} '
+        '--distance {params.distance} {input.groups} {input.sim} &> {log}'
+
+
+rule plotTUactivationByTime:
+    input:
+        rules.processTUinfo.output
+    output:
+        directory('{name}/{nbases}/plots/{rep}/')
+    group:
+        'processAllLammps' if config['groupJobs'] else 'plotTUactivationByTime'
+    log:
+        'logs/plotTUactivationByTime/{name}-{nbases}-{rep}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/plotTUactivationByTime.py --outdir {output} {input} &> {log}'
 
 
 rule plotTUactivation:
@@ -724,122 +735,6 @@ rule plotTUactivation:
         f'{ENVS}/python3.yaml'
     shell:
         '{SCRIPTS}/plotTUactivation.py {input} --out {output} &> {log}'
-
-
-rule plotTUdistances:
-    input:
-        distances = expand(
-            '{{name}}/{{nbases}}/reps/{rep}/TU-pairDistance.csv.gz', rep=REPS),
-        beadDistribution = rules.writeTUdistribution.output
-    output:
-        '{name}/{nbases}/merged/{name}-TU-pairDistance.png',
-    params:
-        minRep = config['plotTU']['minRep'],
-        fontSize = config['plotTU']['fontSize']
-    group:
-        'processAllLammps' if config['groupJobs'] else 'plotTUdistances'
-    log:
-        'logs/plotTUdistances/{name}-{nbases}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/plotTUdistances.py {input.beadDistribution} '
-        '{input.distances} --out {output} --fontSize {params.fontSize} '
-        '--minRep {params.minRep} &> {log}'
-
-
-def computeDTWInput(wc):
-    if wc.type == 'DNA':
-        return rules.reformatLammps.output
-    else:
-        return rules.processTUinfo.output.TUinfo
-
-
-def computeDTWparams(wc):
-    """ Build paramters for computeDTW """
-
-    sampletime = config[f'dtw{wc.type}']['sampletime']
-    maxtime = config[f'dtw{wc.type}']['maxtime']
-    params = f'--sampletime {sampletime} --maxtime {maxtime} '
-    if wc.type == 'DNA':
-        params += '--group DNA '
-
-    return params
-
-
-rule computeDTW:
-    input:
-        sim = computeDTWInput,
-        groups = rules.getAtomGroups.output
-    output:
-        '{name}/{nbases}/reps/{rep}/{type}-euclideanDTW.csv.gz'
-    params:
-        computeDTWparams
-    group:
-        'computeAllDTW' if config['groupJobs'] else 'computeDTW'
-    log:
-        'logs/computeDTW/{name}-{nbases}-{rep}-{type}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/computeTUdtw.py --out {output} {params} '
-        '{input.groups} {input.sim} &> {log}'
-
-
-rule computeDTWnormalisation:
-    input:
-         expand('{{name}}/{{nbases}}/reps/{rep}/{{type}}-euclideanDTW.csv.gz',
-            rep=REPS)
-    output:
-        '{name}/{nbases}/merged/info/{type}-normalisationFactors.csv.gz'
-    log:
-        'logs/computeDTWnormalisation/{name}-{nbases}-{type}.log'
-    group:
-        'computeAllDTW' if config['groupJobs'] else 'computeDTWnormalisation'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/computeDTWnormalisation.py --out {output} {input} &> {log}'
-
-
-rule normaliseDTW:
-    input:
-        dtw = rules.computeDTW.output,
-        normalisation = rules.computeDTWnormalisation.output
-    output:
-        '{name}/{nbases}/reps/{rep}/{type}-euclideanDTWnormalise.csv.gz'
-    log:
-        'logs/normaliseDTW/{name}-{nbases}-{rep}-{type}.log'
-    group:
-        'computeAllDTW' if config['groupJobs'] else 'normaliseDTW'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/normaliseDTW.py --out {output} '
-        '{input.normalisation} {input.dtw} &> {log}'
-
-
-rule plotDTW:
-    input:
-        dtw = expand(
-            '{{name}}/{{nbases}}/reps/{rep}/{{type}}-euclideanDTWnormalise.csv.gz', rep=REPS),
-        beadDistribution = rules.writeTUdistribution.output
-    output:
-        npz = '{name}/{nbases}/merged/matrices/{name}-{type}-dtwEuclidean.npz',
-        plot = '{name}/{nbases}/merged/{name}-{type}-dtwEuclidean.png'
-    params:
-        minRep = config['plotTU']['minRep'],
-        fontSize = config['plotTU']['fontSize']
-    group:
-        'computeAllDTW' if config['groupJobs'] else 'plotDTW'
-    log:
-        'logs/plotDTW/{name}-{nbases}-{type}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/plotDTWeuclidean.py {input.beadDistribution} '
-        '{input.dtw} --out {output.plot} --npz {output.npz} '
-        '--fontSize {params.fontSize} --minRep {params.minRep} &> {log}'
 
 
 rule computeTUcorrelation:
@@ -1174,3 +1069,113 @@ rule createGIF:
     shell:
         'convert -delay {params.delay} -loop {params.loop} '
         '{input.images} {output} &> {log}'
+
+
+## Archive ##
+
+rule plotTUdistances:
+    input:
+        distances = expand(
+            '{{name}}/{{nbases}}/reps/{rep}/TU-pairDistance.csv.gz', rep=REPS),
+        beadDistribution = rules.writeTUdistribution.output
+    output:
+        '{name}/{nbases}/merged/{name}-TU-pairDistance.png',
+    params:
+        minRep = config['plotTU']['minRep'],
+        fontSize = config['plotTU']['fontSize']
+    group:
+        'processAllLammps' if config['groupJobs'] else 'plotTUdistances'
+    log:
+        'logs/plotTUdistances/{name}-{nbases}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/plotTUdistances.py {input.beadDistribution} '
+        '{input.distances} --out {output} --fontSize {params.fontSize} '
+        '--minRep {params.minRep} &> {log}'
+
+
+def computeDTWparams(wc):
+    """ Build paramters for computeDTW """
+
+    sampletime = config[f'dtw{wc.type}']['sampletime']
+    maxtime = config[f'dtw{wc.type}']['maxtime']
+    params = f'--sampletime {sampletime} --maxtime {maxtime} '
+    params += f'--group {wc.type} '
+
+    return params
+
+
+rule computeDTW:
+    input:
+        sim = rules.reformatLammps.output,
+        groups = rules.getAtomGroups.output
+    output:
+        '{name}/{nbases}/reps/{rep}/{type}-euclideanDTW.csv.gz'
+    params:
+        computeDTWparams
+    group:
+        'computeAllDTW' if config['groupJobs'] else 'computeDTW'
+    log:
+        'logs/computeDTW/{name}-{nbases}-{rep}-{type}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/computeTUdtw.py --out {output} {params} '
+        '{input.groups} {input.sim} &> {log}'
+
+
+rule computeDTWnormalisation:
+    input:
+         expand('{{name}}/{{nbases}}/reps/{rep}/DNA-euclideanDTW.csv.gz',
+            rep=REPS)
+    output:
+        '{name}/{nbases}/merged/info/DNA-normalisationFactors.csv.gz'
+    log:
+        'logs/computeDTWnormalisation/{name}-{nbases}.log'
+    group:
+        'computeAllDTW' if config['groupJobs'] else 'computeDTWnormalisation'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/computeDTWnormalisation.py --out {output} {input} &> {log}'
+
+
+rule normaliseDTW:
+    input:
+        dtw = rules.computeDTW.output,
+        normalisation = rules.computeDTWnormalisation.output
+    output:
+        '{name}/{nbases}/reps/{rep}/{type}-euclideanDTWnormalise.csv.gz'
+    log:
+        'logs/normaliseDTW/{name}-{nbases}-{rep}-{type}.log'
+    group:
+        'computeAllDTW' if config['groupJobs'] else 'normaliseDTW'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/normaliseDTW.py --out {output} '
+        '{input.normalisation} {input.dtw} &> {log}'
+
+
+rule plotDTW:
+    input:
+        dtw = expand(
+            '{{name}}/{{nbases}}/reps/{rep}/{{type}}-euclideanDTWnormalise.csv.gz', rep=REPS),
+        beadDistribution = rules.writeTUdistribution.output
+    output:
+        npz = '{name}/{nbases}/merged/matrices/{name}-{type}-dtwEuclidean.npz',
+        plot = '{name}/{nbases}/merged/{name}-{type}-dtwEuclidean.png'
+    params:
+        minRep = config['plotTU']['minRep'],
+        fontSize = config['plotTU']['fontSize']
+    group:
+        'computeAllDTW' if config['groupJobs'] else 'plotDTW'
+    log:
+        'logs/plotDTW/{name}-{nbases}-{type}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/plotDTWeuclidean.py {input.beadDistribution} '
+        '{input.dtw} --out {output.plot} --npz {output.npz} '
+        '--fontSize {params.fontSize} --minRep {params.minRep} &> {log}'
