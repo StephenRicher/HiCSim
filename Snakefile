@@ -182,7 +182,8 @@ rule all:
             nbases=config['bases_per_bead'], name=details.keys(),
             plot=['TU-correlation', 'TU-activation', 'TU-circosPlot',
                   'TU-replicateCount', 'radiusGyration']),
-         directory('{name}/{nbases}/plots/{rep}/')]
+         expand('{name}/{nbases}/plots/{rep}/',
+            name=details.keys(), nbases=config['bases_per_bead'], rep=REPS)]
 
 
 rule unzipGenome:
@@ -739,7 +740,7 @@ rule plotTUactivation:
 
 rule computeTUcorrelation:
     input:
-        rules.processTUinfo.output.TUinfo
+        rules.processTUinfo.output
     output:
         '{name}/{nbases}/reps/{rep}/TU-correlation.csv.gz'
     group:
