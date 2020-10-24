@@ -183,7 +183,9 @@ rule all:
             plot=['TU-correlation', 'TU-activation', 'TU-circosPlot',
                   'TU-replicateCount', 'radiusGyration']),
          expand('{name}/{nbases}/plots/{rep}/',
-            name=details.keys(), nbases=config['bases_per_bead'], rep=REPS)]
+            name=details.keys(), nbases=config['bases_per_bead'], rep=REPS),
+        expand('{name}/{nbases}/plots/.aggregate.tmp',
+            name=details.keys(), nbases=config['bases_per_bead'])]
 
 
 rule unzipGenome:
@@ -713,13 +715,22 @@ rule plotTUactivationByTime:
     output:
         directory('{name}/{nbases}/plots/{rep}/')
     group:
-        'processAllLammps' if config['groupJobs'] else 'plotTUactivationByTime'
+        'plotTUactivationByTime'
     log:
         'logs/plotTUactivationByTime/{name}-{nbases}-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
         '{SCRIPTS}/plotTUactivationByTime.py --outdir {output} {input} &> {log}'
+
+
+rule aggregateTarget:
+    input:
+        expand('{{name}}/{{nbases}}/plots/{rep}/', rep=REPS)
+    output:
+        touch(temp('{name}/{nbases}/plots/.aggregate.tmp'))
+    group:
+        'plotTUactivationByTime' if config['groupJobs'] else 'aggregateTarget'
 
 
 rule plotTUactivation:
