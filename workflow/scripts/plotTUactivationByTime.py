@@ -2,18 +2,17 @@
 
 """ Compute TU-TU distance per time point and plot """
 
+
 import sys
-import logging
-import argparse
-import sys
-import json
 import logging
 import argparse
 import numpy as np
 import pandas as pd
-from scipy.spatial.distance import cdist
 import seaborn as sns
+from itertools import product
 import matplotlib.pyplot as plt
+from scipy.spatial.distance import pdist, squareform
+
 
 __version__ = '1.0.0'
 
@@ -24,20 +23,21 @@ def main(file: str, outdir: str, **kwargs) -> None:
 
     TUids = fullSim['id'].unique()
     fullSim = fullSim.groupby('time')
+    TU1, TU2 = generatePairwise(TUids)
 
     allTUs = []
     for time, timestep in fullSim:
-        for TU in TUids:
-            active = [1 if x else -1 for x in timestep['active']]
-            referencePos = timestep.loc[timestep['id'] == TU, ['x','y','z']].to_numpy()
-            comparePos = timestep[['x','y','z']].to_numpy()
-            distances = cdist(referencePos, comparePos, 'euclidean')[0]
-            timestep['cdist'] = distances * active
-            allTUs.append(pd.DataFrame(
-                {'refTU'    : [TU] * len(TUids)    ,
-                 'compTU'   : TUids                ,
-                 'time'     : [time] * len(TUids)  ,
-                 'dist'     : distances * active   ,}))
+        refActive, compActive = generatePairwise(timestep['active'])
+        positions = timestep[['x','y','z']].to_numpy()
+        compActive = [1 if x else -1 for x in compActive]
+        # Convert to squareform (to get self comparison)
+        distances = squareform(pdist(positions, 'euclidean'))
+        distances = distances.reshape(len(TU1))
+        allTUs.append(pd.DataFrame(
+            {'refTU'    : TU1                ,
+             'compTU'   : TU2                ,
+             'time'     : [time] * len(TU1)  ,
+             'dist'     : distances * compActive   ,}))
     allTUs = pd.concat(allTUs)
 
     for TU in TUids:
@@ -56,6 +56,15 @@ def main(file: str, outdir: str, **kwargs) -> None:
         ax = sns.heatmap(refTU, cmap='bwr', center=0, ax=ax)
         fig.tight_layout()
         fig.savefig(f'{outdir}/{TU}-activity.png', dpi=300, bbox_inches='tight')
+
+def generatePairwise(names):
+    names1 = []
+    names2 = []
+    names = product(names, repeat=2)
+    for name1, name2 in names:
+        names1.append(name1)
+        names2.append(name2)
+    return names1, names2
 
 
 def parse_arguments():
