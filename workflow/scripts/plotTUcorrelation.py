@@ -18,30 +18,26 @@ import matplotlib.pyplot as plt
 __version__ = '1.0.0'
 
 
-def main(files: List, beadDistribution: str, meanHeatmap: str, sumHeatmap: str,
-        circos: str, minRep: int, pvalue: float, vmin: float, vmax: float,
-        fontSize: float, **kwargs) -> None:
+def main(file: str, beadDistribution: str, meanHeatmap: str, sumHeatmap: str,
+        circos: str, minRep: int, nReps: int, pvalue: float,
+        vmin: float, vmax: float, fontSize: float, **kwargs) -> None:
 
     # Set global matplotlib fontisze
     plt.rcParams.update({'font.size': fontSize})
 
-    # Read all per-replicates correlation dataframes into 1 dataframe
-    correlation = pd.concat((pd.read_csv(file) for file in files))
+    correlation = pd.read_csv(file)
 
     allBeadDistribution = pd.read_csv(beadDistribution)
     polymerLength = len(allBeadDistribution.columns)
 
     nodeNames = correlation['row'].unique()
 
-    # Get pairwise mean correlation across replicates
-    correlation = correlation.groupby(['row', 'column']).agg(['mean', 'count'])
-
-    for method in ['mean', 'count']:
+    for method in ['r', 'count']:
         transform = correlation
-        if method == 'mean':
-            # Set mean values to NaN if replicate count less than threshold
-            if minRep:
-                transform.loc[transform[('r','count')] < minRep, [('r', 'mean'), ('p-value','mean')]] = np.nan
+        if method == 'r':
+            transform = transform.set_index(['row', 'column'])
+            # Set values to NaN if replicate count less than threshold
+            transform.loc[transform['count'] < minRep, ['r', 'p']] = np.nan
 
             G = nx.Graph()
             G.add_nodes_from(sorted(nodeNames))
@@ -50,9 +46,9 @@ def main(files: List, beadDistribution: str, meanHeatmap: str, sumHeatmap: str,
                 if row >= column:
                     continue
                 info = transform.loc[row, column]
-                if info['p-value']['mean'] >= pvalue:
+                if info['p'] >= pvalue:
                     continue
-                colours.append(info['r']['mean'])
+                colours.append(info['r'])
                 G.add_edge(row, column)
             nx.draw_circular(G,node_color='White',
                          node_size=0,
@@ -63,22 +59,17 @@ def main(files: List, beadDistribution: str, meanHeatmap: str, sumHeatmap: str,
                          with_labels=True)
             plt.savefig(circos, bbox_inches='tight')
 
-        # Extract the 'r' and 'p-value' columns corresponding to method
-        transform = transform.iloc[:, transform.columns.get_level_values(1)==method]
-        # Remove redundant 'method' multi-level index
-        transform.columns = transform.columns.droplevel(1)
+            transform = transform.reset_index()
 
-        transform = transform.reset_index()
-
-        # Set diagonal to 0 to hide trivial auto-correlation
-        transform.loc[transform.row == transform.column, 'r'] = np.nan
-        transform = transform.pivot(index='row', columns='column', values='r')
+        # Set diagonal to NaN to hide trivial auto-correlation
+        transform.loc[transform.row == transform.column, method] = np.nan
+        transform = transform.pivot(index='row', columns='column', values=method)
 
         # Flip vertically to ensure diagonal goes from bottom left to top right
         transform = transform.iloc[::-1]
         fig, (ax1, ax2) = plt.subplots(2, gridspec_kw={'height_ratios': [6, 1]}, figsize=(8, 8))
 
-        if method == 'mean':
+        if method == 'r':
             ax1 = sns.heatmap(transform, square=True,
                 cmap='bwr', center=0, vmin=vmin, vmax=vmax, ax=ax1)
             # Ensure masked cells are not within 'bwr' colour map.
@@ -86,7 +77,7 @@ def main(files: List, beadDistribution: str, meanHeatmap: str, sumHeatmap: str,
             out = meanHeatmap
         else:
             ax1 = sns.heatmap(transform, square=True,
-                cmap='binary', vmin=0, vmax=len(files), ax=ax1)
+                cmap='binary', vmin=0, vmax=nReps, ax=ax1)
             out = sumHeatmap
 
         ax1.xaxis.set_label_text('')
@@ -96,7 +87,7 @@ def main(files: List, beadDistribution: str, meanHeatmap: str, sumHeatmap: str,
         xticks = np.linspace(1, polymerLength, 10).astype(int)
         xticklabels = [i if i in xticks else '' for i in range(1, polymerLength + 1)]
         ax2 = sns.heatmap(allBeadDistribution,
-            cmap='binary', vmin=0, vmax=len(files), ax=ax2,
+            cmap='binary', vmin=0, vmax=nReps, ax=ax2,
             yticklabels=[''], xticklabels=xticklabels)
 
         # Unset xtick markers for empty string xlabels
@@ -112,10 +103,11 @@ def parse_arguments():
 
     custom = argparse.ArgumentParser(add_help=False)
     custom.set_defaults(function=main)
+    custom.add_argument('beadDistribution',
+        help='Bead distribution output of writeTUdistribution.')
     custom.add_argument(
-        'beadDistribution', help='Bead distribution output of writeTUdistribution.')
-    custom.add_argument(
-        'files', nargs='+', help='Input TF distance tables.')
+        'file',
+        help='Input correlation table.')
     custom.add_argument(
         '--meanHeatmap', default='TF-meanCorrelation.png',
         help='TF mean contact correlation heatmap (default: %(default)s)')
@@ -133,9 +125,13 @@ def parse_arguments():
         help='P-value threshold for filtering TU correlations before '
              'plotting on circos plot (default: %(default)s)')
     custom.add_argument(
-        '--minRep', type=int,
+        '--minRep', type=int, default=1,
         help='Minimum replicates required for TU-TU interaction to be given '
              'included in the correlation/circos plots (default: %(default)s)')
+    custom.add_argument(
+        '--nReps', type=int,
+        help='Number of reps in dataset - used to scale colour scheme of '
+             'count matrix')
     custom.add_argument(
         '--vmin', type=coeff, default=-0.3,
         help='Minimum value of colour scale. (default: %(default)s)')

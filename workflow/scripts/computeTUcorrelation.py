@@ -3,65 +3,57 @@
 """ Calculate TU-TU correlation """
 
 import sys
-import logging
 import argparse
+import numpy as np
 import pandas as pd
 from scipy.stats import pearsonr
 
 
 __version__ = '1.0.0'
 
-def main(file: str, **kwargs) -> None:
+def main(infile: str, out: str) -> None:
 
-    allTUinfo = pd.read_csv(file)
-    allTUinfo = allTUinfo.pivot(index='time', columns='id', values='active')
+    activityMatrix = pd.read_csv(infile).pivot(
+        index='rep', columns='TU', values='activity')
 
-    # Compute Pearson correlation coefficient and convert to long format
-    correlations = allTUinfo.corr(method='pearson').stack()
-    correlations.index.names = ['row', 'column']
-    correlations = correlations.reset_index()
-    correlations.columns = ['row', 'column', 'r']
+    allValues = []
+    for method in ['pearson', pearsonr_pval, countPair]:
+        values = activityMatrix.corr(method=method).stack()
+        allValues.append(values)
+    allValues = pd.concat(allValues, axis=1)
+    allValues.index.names = ['row', 'column']
+    allValues.columns = ['r', 'p','count']
 
-    # Combpute corresponding p-values and convert to seperate dataframe
-    pvalues = allTUinfo.corr(method=pearsonr_pval).stack()
-    pvalues.index.names = ['row', 'column']
-    pvalues = pvalues.reset_index()
-    pvalues.columns = ['row', 'column', 'p-value']
-
-    # Combine to include p-values
-    pd.merge(correlations, pvalues).to_csv(sys.stdout, index=False)
+    allValues.to_csv(out)
 
 
 def pearsonr_pval(x,y):
     return pearsonr(x,y)[1]
 
 
+def countPair(x, y):
+    """ Return count of valid pairs (both not nan) """
+
+    # Indices where both x and y are NOT np.nan
+    validIndices = np.intersect1d(
+        np.where(~np.isnan(x)),
+        np.where(~np.isnan(y)))
+    return len(validIndices)
+
+
 def parse_arguments():
+    """ Parse command line arguments. """
 
-    custom = argparse.ArgumentParser(add_help=False)
-    custom.set_defaults(function=main)
-    custom.add_argument('file', help='TU dataset - output of processTUinfo.py')
     epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+    parser.add_argument('infile', default=sys.stdin,
+        help='Input TU stats.')
+    parser.add_argument('--out', default=sys.stdout,
+        help='File to save correlation table.')
 
-    base = argparse.ArgumentParser(add_help=False)
-    base.add_argument(
-        '--version', action='version', version=f'%(prog)s {__version__}')
-    base.add_argument(
-        '--verbose', action='store_const', const=logging.DEBUG,
-        default=logging.INFO, help='verbose logging for debugging')
-
-    parser = argparse.ArgumentParser(
-        epilog=epilog, description=__doc__, parents=[base, custom])
-    args = parser.parse_args()
-
-    log_format='%(asctime)s - %(levelname)s - %(funcName)s - %(message)s'
-    logging.basicConfig(level=args.verbose, format=log_format)
-
-    return args
+    return parser.parse_args()
 
 
 if __name__ == '__main__':
     args = parse_arguments()
-    return_code = args.function(**vars(args))
-    logging.shutdown()
-    sys.exit(return_code)
+    sys.exit(main(**vars(args)))
