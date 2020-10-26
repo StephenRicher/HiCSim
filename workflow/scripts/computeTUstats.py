@@ -5,17 +5,13 @@
 
 import sys
 import zlib
-import logging
 import argparse
 import numpy as np
 import pandas as pd
 from collections import defaultdict
 
 
-__version__ = '1.0.0'
-
-
-def main(file: str, outdir: str, **kwargs) -> None:
+def main(infile: str, out: str) -> None:
 
     TUinfo = pd.read_csv(file, usecols=['time', 'id', 'active'])
     TUinfo = TUinfo.sort_values('time').groupby('id')
@@ -24,8 +20,7 @@ def main(file: str, outdir: str, **kwargs) -> None:
 
     for TU, info in TUinfo:
         activeBursts, inactiveBursts = getConsecutiveBool(info.active)
-        totalActivity = sum(activeBursts)
-
+        totalActivity = sum(info.active)
         # Calculate timestep interval
         simTime = info.time.max()
         nSteps = len(info.active)
@@ -40,7 +35,7 @@ def main(file: str, outdir: str, **kwargs) -> None:
         # Number of consecutive ON periods per unit time 10e6
         TUstats['nBursts'].append(len(activeBursts))
         TUstats['nBursts / 10e6'].append((len(activeBursts) / simTime) * 10e6)
-        TUstats['activity'].append(totalActivity / timepoints)
+        TUstats['activity'].append(totalActivity / nSteps)
         TUstats['burstLengthMean'].append(np.mean(activeBursts) * timestep)
         TUstats['burstLengthStd'].append(np.std(activeBursts) * timestep)
         TUstats['inactiveLengthMean'].append(np.mean(inactiveBursts) * timestep)
@@ -51,6 +46,8 @@ def main(file: str, outdir: str, **kwargs) -> None:
         activeCompressed = zlib.compress(boolString.encode("utf-8"))
         TUstats['complexity'].append(
             (len(activeCompressed) / len(info.active)) / minCompress)
+
+        pd.DataFrame(TUstats).to_csv(out, index=False)
 
 
 def getConsecutiveBool(arr):
@@ -72,37 +69,20 @@ def getConsecutiveBool(arr):
         falseChunks = np.insert(falseChunks, 0, boundaries[0])
     return truthChunks, falseChunks
 
+
 def parse_arguments():
-
-    custom = argparse.ArgumentParser(add_help=False)
-    custom.set_defaults(function=main)
-    custom.add_argument('file', default=sys.stdin,
-        help='Input TU activation table.')
-    custom.add_argument('--out', default=sys.stdout,
-        help='FIle to save TU expression metrics.')
-
+    """ Parse command line arguments. """
 
     epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+    parser.add_argument('infile', default=sys.stdin,
+        help='Input TU activation table.')
+    parser.add_argument('--out', default=sys.stdout,
+        help='File to save TU expression metrics.')
 
-    base = argparse.ArgumentParser(add_help=False)
-    base.add_argument(
-        '--version', action='version', version=f'%(prog)s {__version__}')
-    base.add_argument(
-        '--verbose', action='store_const', const=logging.DEBUG,
-        default=logging.INFO, help='verbose logging for debugging')
-
-    parser = argparse.ArgumentParser(
-        epilog=epilog, description=__doc__, parents=[base, custom])
-    args = parser.parse_args()
-
-    log_format='%(asctime)s - %(levelname)s - %(funcName)s - %(message)s'
-    logging.basicConfig(level=args.verbose, format=log_format)
-
-    return args
+    return parser.parse_args()
 
 
 if __name__ == '__main__':
     args = parse_arguments()
-    return_code = args.function(**vars(args))
-    logging.shutdown()
-    sys.exit(return_code)
+    sys.exit(main(**vars(args)))
