@@ -181,10 +181,12 @@ rule all:
          expand('{name}/{nbases}/merged/{name}-{plot}.png',
             nbases=config['bases_per_bead'], name=details.keys(),
             plot=['TU-correlation', 'TU-activation', 'TU-circosPlot',
-                  'TU-replicateCount', 'radiusGyration']),
+                  'TU-replicateCount', 'TU-meanVariance', 'radiusGyration']),
          expand('{name}/{nbases}/plots/{rep}/',
             name=details.keys(), nbases=config['bases_per_bead'], rep=REPS),
         expand('{name}/{nbases}/plots/.aggregate.tmp',
+            name=details.keys(), nbases=config['bases_per_bead']),
+        expand('{name}/{nbases}/merged/{name}-TU-stats.csv.gz',
             name=details.keys(), nbases=config['bases_per_bead'])]
 
 
@@ -733,6 +735,36 @@ rule aggregateTarget:
         'plotTUactivationByTime' if config['groupJobs'] else 'aggregateTarget'
 
 
+rule computeTUstats:
+    input:
+        '{name}/{nbases}/reps/{rep}/TU-info.csv.gz'
+    output:
+        '{name}/{nbases}/reps/{rep}/TU-stats.csv.gz'
+    group:
+        'processAllLammps' if config['groupJobs'] else 'computeTUstats'
+    log:
+        'logs/computeTUstats/{name}-{nbases}-{rep}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/computeTUstats.py --out {output} {input} &> {log}'
+
+
+rule mergeByRep:
+    input:
+        expand('{{name}}/{{nbases}}/reps/{rep}/TU-stats.csv.gz', rep=REPS),
+    output:
+        '{name}/{nbases}/merged/{name}-TU-stats.csv.gz'
+    group:
+        'processAllLammps' if config['groupJobs'] else 'mergeByRep'
+    log:
+        'logs/mergeByRep/{name}-{nbases}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/mergeByRep.py --out {output} {input} &> {log}'
+
+
 rule plotTUactivation:
     input:
         expand(
@@ -749,25 +781,42 @@ rule plotTUactivation:
         '{SCRIPTS}/plotTUactivation.py {input} --out {output} &> {log}'
 
 
-rule computeTUcorrelation:
+rule plotMeanVariance:
     input:
-        rules.processTUinfo.output
+        rules.mergeByRep.output
     output:
-        '{name}/{nbases}/reps/{rep}/TU-correlation.csv.gz'
+        '{name}/{nbases}/merged/{name}-TU-meanVariance.png'
+    params:
+        fontSize = config['plotTU']['fontSize']
     group:
-        'processAllLammps' if config['groupJobs'] else 'computeTUcorrelation'
+        'processAllLammps' if config['groupJobs'] else 'plotMeanVariance'
     log:
-        'logs/computeTUcorrelation/{name}-{nbases}-{rep}.log'
+        'logs/plotMeanVariance/{name}-{nbases}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '({SCRIPTS}/computeTUcorrelation.py {input} | gzip > {output}) &> {log}'
+        '{SCRIPTS}/plotMeanVariance.py {input} {output} '
+        '--fontSize {params.fontSize}  &> {log}'
+
+
+rule computeTUcorrelation:
+    input:
+        rules.mergeByRep.output
+    output:
+        '{name}/{nbases}/merged/{name}-TU-correlation.csv.gz'
+    group:
+        'processAllLammps' if config['groupJobs'] else 'computeTUcorrelation'
+    log:
+        'logs/computeTUcorrelation/{name}-{nbases}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/computeTUcorrelation.py --out {output} {input} &> {log}'
 
 
 rule plotTUcorrelation:
     input:
-        correlations = expand(
-            '{{name}}/{{nbases}}/reps/{rep}/TU-correlation.csv.gz', rep=REPS),
+        correlations = rules.computeTUcorrelation.output,
         beadDistribution = rules.writeTUdistribution.output
     output:
         meanHeatmap = '{name}/{nbases}/merged/{name}-TU-correlation.png',
