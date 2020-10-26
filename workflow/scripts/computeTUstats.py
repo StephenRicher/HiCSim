@@ -13,7 +13,7 @@ from collections import defaultdict
 
 def main(infile: str, out: str) -> None:
 
-    TUinfo = pd.read_csv(file, usecols=['time', 'id', 'active'])
+    TUinfo = pd.read_csv(infile, usecols=['time', 'id', 'active'])
     TUinfo = TUinfo.sort_values('time').groupby('id')
 
     TUstats = defaultdict(list)
