@@ -9,8 +9,9 @@ import argparse
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from itertools import product
 import matplotlib.pyplot as plt
-from scipy.spatial.distance import cdist
+from scipy.spatial.distance import pdist, squareform
 
 
 __version__ = '1.0.0'
@@ -22,27 +23,48 @@ def main(file: str, outdir: str, **kwargs) -> None:
 
     TUids = fullSim['id'].unique()
     fullSim = fullSim.groupby('time')
+    TU1, TU2 = generatePairwise(TUids)
+
+    allTUs = []
+    for time, timestep in fullSim:
+        refActive, compActive = generatePairwise(timestep['active'])
+        positions = timestep[['x','y','z']].to_numpy()
+        compActive = [1 if x else -1 for x in compActive]
+        # Convert to squareform (to get self comparison)
+        distances = squareform(pdist(positions, 'euclidean'))
+        distances = distances.reshape(len(TU1))
+        allTUs.append(pd.DataFrame(
+            {'refTU'    : TU1                ,
+             'compTU'   : TU2                ,
+             'time'     : [time] * len(TU1)  ,
+             'dist'     : distances * compActive   ,}))
+    allTUs = pd.concat(allTUs)
 
     for TU in TUids:
-        refTUs = []
-        for time, timestep in fullSim:
-            active = [1 if x else -1 for x in timestep['active']]
-            referencePos = timestep.loc[timestep['id'] == TU, ['x','y','z']].to_numpy()
-            comparePos = timestep[['x','y','z']].to_numpy()
-            distances = cdist(referencePos, comparePos, 'euclidean')[0]
-            refTUs.append(pd.DataFrame(
-                    {'compTU'   : TUids                ,
-                     'time'     : [time] * len(TUids)  ,
-                     'dist'     : distances * active   ,}))
-        refTUs = (pd.concat(refTUs)).pivot(index='compTU', columns='time', values='dist')
-        refTUs = (1/refTUs)
-        maxNonInf = refTUs.replace([np.inf, -np.inf], np.nan).max().max()
-        minNonInf = refTUs.replace([np.inf, -np.inf], np.nan).min().min()
-        refTUs = refTUs.replace([np.inf, -np.inf], [maxNonInf, minNonInf])
+        refTU = allTUs[allTUs['refTU'] == TU].pivot(
+            index='compTU', columns='time', values='dist')
+
+        # Compute larger number reflect closer association
+        refTU = (1/refTU)
+        # Get maximum and minimum non-infinite numbers
+        maxNonInf = refTU.replace([np.inf, -np.inf], np.nan).max().max()
+        minNonInf = refTU.replace([np.inf, -np.inf], np.nan).min().min()
+
+        refTU = refTU.replace([np.inf, -np.inf], [maxNonInf, minNonInf])
+
         fig, ax = plt.subplots()
-        ax = sns.heatmap(refTUs, cmap='bwr', center=0)
+        ax = sns.heatmap(refTU, cmap='bwr', center=0, ax=ax)
         fig.tight_layout()
         fig.savefig(f'{outdir}/{TU}-activity.png', dpi=300, bbox_inches='tight')
+
+def generatePairwise(names):
+    names1 = []
+    names2 = []
+    names = product(names, repeat=2)
+    for name1, name2 in names:
+        names1.append(name1)
+        names2.append(name2)
+    return names1, names2
 
 
 def parse_arguments():
