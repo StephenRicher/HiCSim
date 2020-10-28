@@ -182,11 +182,9 @@ rule all:
             nbases=config['bases_per_bead'], name=details.keys(),
             plot=['TU-correlation', 'TU-activation', 'TU-circosPlot',
                   'TU-replicateCount', 'TU-meanVariance', 'radiusGyration']),
-         expand('{name}/{nbases}/plots/{rep}/',
-            name=details.keys(), nbases=config['bases_per_bead'], rep=REPS),
-        expand('{name}/{nbases}/plots/.aggregate.tmp',
-            name=details.keys(), nbases=config['bases_per_bead']),
         expand('{name}/{nbases}/merged/{name}-TU-stats.csv.gz',
+            name=details.keys(), nbases=config['bases_per_bead']),
+        expand('{name}/{nbases}/DBSCAN/TU-pairCluster.png',
             name=details.keys(), nbases=config['bases_per_bead'])]
 
 
@@ -711,28 +709,40 @@ rule processTUinfo:
         '--distance {params.distance} {input.groups} {input.sim} &> {log}'
 
 
-rule plotTUactivationByTime:
+rule DBSCAN:
     input:
         rules.processTUinfo.output
     output:
-        directory('{name}/{nbases}/plots/{rep}/')
+        clusterPairs = '{name}/{nbases}/reps/{rep}/TU-clusterPair.csv.gz',
+        clusterPlot = '{name}/{nbases}/DBSCAN/TU-{rep}-cluster.png',
+    params:
+        eps = 6,
+        minSamples = 2
     group:
-        'plotTUactivationByTime'
+        'DBSCAN_all' if config['groupJobs'] else 'DBSCAN'
     log:
-        'logs/plotTUactivationByTime/{name}-{nbases}-{rep}.log'
+        'logs/DBSCAN/{name}-{nbases}-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/plotTUactivationByTime.py --outdir {output} {input} &> {log}'
+        '{SCRIPTS}/dbscanTU.py --outplot {output.clusterPlot} '
+        '--eps {params.eps} --minSamples {params.minSamples} '
+        '--out {output.clusterPairs} {input} &> {log}'
 
 
-rule aggregateTarget:
+rule plotDBSCAN:
     input:
-        expand('{{name}}/{{nbases}}/plots/{rep}/', rep=REPS)
+        expand('{{name}}/{{nbases}}/reps/{rep}/TU-clusterPair.csv.gz', rep=REPS),
     output:
-        touch(temp('{name}/{nbases}/plots/.aggregate.tmp'))
+         '{name}/{nbases}/DBSCAN/TU-pairCluster.png'
     group:
-        'plotTUactivationByTime' if config['groupJobs'] else 'aggregateTarget'
+        'DBSCAN_all' if config['groupJobs'] else 'plotDBSCAN'
+    log:
+        'logs/plotDBSCAN/{name}-{nbases}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/plotDBSCAN.py {output} {input} &> {log}'
 
 
 rule computeTUstats:
@@ -1240,3 +1250,27 @@ rule plotDTW:
         '{SCRIPTS}/plotDTWeuclidean.py {input.beadDistribution} '
         '{input.dtw} --out {output.plot} --npz {output.npz} '
         '--fontSize {params.fontSize} --minRep {params.minRep} &> {log}'
+
+
+rule plotTUactivationByTime:
+    input:
+        rules.processTUinfo.output
+    output:
+        directory('{name}/{nbases}/plots/{rep}/')
+    group:
+        'plotTUactivationByTime'
+    log:
+        'logs/plotTUactivationByTime/{name}-{nbases}-{rep}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/plotTUactivationByTime.py --outdir {output} {input} &> {log}'
+
+
+rule aggregateTarget:
+    input:
+        expand('{{name}}/{{nbases}}/plots/{rep}/', rep=REPS)
+    output:
+        touch(temp('{name}/{nbases}/plots/.aggregate.tmp'))
+    group:
+        'plotTUactivationByTime' if config['groupJobs'] else 'aggregateTarget'
