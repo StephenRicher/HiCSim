@@ -163,7 +163,6 @@ for file, character in config['masking'].items():
 
 wildcard_constraints:
     all = r'[^\/]+',
-    format = r'contacts|DNA-dtwEuclidean',
     name = rf'{"|".join(details.keys())}',
     binsize = rf'{BINSIZE}',
     nbases = rf'{config["bases_per_bead"]}',
@@ -172,20 +171,15 @@ wildcard_constraints:
 
 rule all:
     input:
-        [expand('{name}/{nbases}/vmd/{name}-rep1-simulation.gif',
+        [expand('vmd/{name}-{nbases}-1-simulation.gif',
             nbases=config['bases_per_bead'],
             name=details.keys()) if config['GIF']['create'] else [],
-         expand('{name}/{nbases}/merged/{name}-{format}-{binsize}-contactMatrix.png',
+         expand('plots/contactMatrix/{name}-{nbases}-{binsize}-contactMatrix.png',
+            nbases=config['bases_per_bead'], name=details.keys(), binsize=BINSIZE),
+         expand('plots/{plot}/{name}-{nbases}-{plot}.png',
             nbases=config['bases_per_bead'], name=details.keys(),
-            format=['contacts'], binsize=BINSIZE),
-         expand('{name}/{nbases}/merged/{name}-{plot}.png',
-            nbases=config['bases_per_bead'], name=details.keys(),
-            plot=['TU-correlation', 'TU-activation', 'TU-circosPlot',
-                  'TU-replicateCount', 'TU-meanVariance', 'radiusGyration']),
-        expand('{name}/{nbases}/merged/{name}-TU-stats.csv.gz',
-            name=details.keys(), nbases=config['bases_per_bead']),
-        expand('{name}/{nbases}/DBSCAN/TU-pairCluster.png',
-            name=details.keys(), nbases=config['bases_per_bead'])]
+            plot=['pairCluster', 'meanVariance','TUcorrelation', 'TUcircos',
+                  'TUactivation', 'radiusGyration', 'TUreplicateCount',])]
 
 
 rule unzipGenome:
@@ -632,7 +626,7 @@ rule plotRG:
         expand('{{name}}/{{nbases}}/reps/{rep}/lammps/radius_of_gyration.txt',
             rep=REPS)
     output:
-        '{name}/{nbases}/merged/{name}-radiusGyration.png'
+        'plots/radiusGyration/{name}-{nbases}-radiusGyration.png'
     params:
         confidence = config['plotRG']['confidence'],
         dpi = config['plotRG']['dpi']
@@ -714,7 +708,7 @@ rule DBSCAN:
         rules.processTUinfo.output
     output:
         clusterPairs = '{name}/{nbases}/reps/{rep}/TU-clusterPair.csv.gz',
-        clusterPlot = '{name}/{nbases}/DBSCAN/TU-{rep}-cluster.png',
+        clusterPlot = 'plots/DBSCAN/{name}/{name}-{nbases}-{rep}-cluster.png',
     params:
         eps = 6,
         minSamples = 2
@@ -734,7 +728,7 @@ rule plotDBSCAN:
     input:
         expand('{{name}}/{{nbases}}/reps/{rep}/TU-clusterPair.csv.gz', rep=REPS),
     output:
-         '{name}/{nbases}/DBSCAN/TU-pairCluster.png'
+         'plots/pairCluster/{name}-{nbases}-pairCluster.png'
     group:
         'DBSCAN_all' if config['groupJobs'] else 'plotDBSCAN'
     log:
@@ -775,27 +769,11 @@ rule mergeByRep:
         '{SCRIPTS}/mergeByRep.py --out {output} {input} &> {log}'
 
 
-rule plotTUactivation:
-    input:
-        expand(
-            '{{name}}/{{nbases}}/reps/{rep}/TU-info.csv.gz', rep=REPS),
-    output:
-        '{name}/{nbases}/merged/{name}-TU-activation.png'
-    group:
-        'processAllLammps' if config['groupJobs'] else 'plotTUactivation'
-    log:
-        'logs/plotTUactivation/{name}-{nbases}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/plotTUactivation.py {input} --out {output} &> {log}'
-
-
 rule plotMeanVariance:
     input:
         rules.mergeByRep.output
     output:
-        '{name}/{nbases}/merged/{name}-TU-meanVariance.png'
+        'plots/meanVariance/{name}-{nbases}-meanVariance.png'
     params:
         fontSize = config['plotTU']['fontSize']
     group:
@@ -829,9 +807,9 @@ rule plotTUcorrelation:
         correlations = rules.computeTUcorrelation.output,
         beadDistribution = rules.writeTUdistribution.output
     output:
-        meanHeatmap = '{name}/{nbases}/merged/{name}-TU-correlation.png',
-        sumHeatmap = '{name}/{nbases}/merged/{name}-TU-replicateCount.png',
-        circos = '{name}/{nbases}/merged/{name}-TU-circosPlot.png'
+        meanHeatmap = 'plots/TUcorrelation/{name}-{nbases}-TUcorrelation.png',
+        sumHeatmap = 'plots/TUreplicateCount/{name}-{nbases}-TUreplicateCount.png',
+        circos = 'plots/TUcircos/{name}-{nbases}-TUcircos.png'
     params:
         pvalue = config['plotTU']['pvalue'],
         vMin = config['plotTU']['vMin'],
@@ -851,6 +829,22 @@ rule plotTUcorrelation:
         '--fontSize {params.fontSize} --pvalue {params.pvalue} '
         '--minRep {params.minRep} --vmin {params.vMin} '
         '--vmax {params.vMax} &> {log}'
+
+
+rule plotTUactivation:
+    input:
+        expand(
+            '{{name}}/{{nbases}}/reps/{rep}/TU-info.csv.gz', rep=REPS),
+    output:
+        'plots/TUactivation/{name}-{nbases}-TUactivation.png'
+    group:
+        'processAllLammps' if config['groupJobs'] else 'plotTUactivation'
+    log:
+        'logs/plotTUactivation/{name}-{nbases}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/plotTUactivation.py {input} --out {output} &> {log}'
 
 
 rule createContactMatrix:
@@ -883,7 +877,7 @@ rule mergeReplicates:
         expand('{{name}}/{{nbases}}/reps/{rep}/matrices/contacts.npz',
             rep=REPS)
     output:
-        '{name}/{nbases}/merged/matrices/{name}-contacts.npz'
+        '{name}/{nbases}/merged/matrices/{name}.npz'
     params:
         method = config['method']
     group:
@@ -899,15 +893,15 @@ rule mergeReplicates:
 
 rule matrix2homer:
     input:
-        '{name}/{nbases}/merged/matrices/{name}-{format}.npz'
+        '{name}/{nbases}/merged/matrices/{name}.npz'
     output:
-        '{name}/{nbases}/merged/matrices/{name}-{format}.homer'
+        '{name}/{nbases}/merged/matrices/{name}.homer'
     params:
         chr = lambda wc: details[wc.name]['chr'],
         start = lambda wc: details[wc.name]['start'],
         binsize = config['bases_per_bead']
     log:
-        'logs/matrix2homer/{name}-{nbases}-{format}.log'
+        'logs/matrix2homer/{name}-{nbases}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -920,9 +914,9 @@ rule homer2H5:
     input:
         rules.matrix2homer.output
     output:
-        '{name}/{nbases}/merged/matrices/{name}-{format}.h5'
+        '{name}/{nbases}/merged/matrices/{name}.h5'
     log:
-        'logs/homer2H5/{name}-{nbases}-{format}.log'
+        'logs/homer2H5/{name}-{nbases}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     threads:
@@ -936,11 +930,11 @@ rule mergeBins:
     input:
         rules.homer2H5.output
     output:
-        '{name}/{nbases}/merged/matrices/{name}-{format}-{binsize}.h5'
+        '{name}/{nbases}/merged/matrices/{name}-{binsize}.h5'
     params:
         nbins = MERGEBINS
     log:
-        'logs/mergeBins/{name}-{nbases}-{format}-{binsize}.log'
+        'logs/mergeBins/{name}-{nbases}-{binsize}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -962,17 +956,12 @@ def getHiCconfig(wc):
             command += f' --genes {config["genome"]["genes"]} '
         if config['ctcf']['data'] is not None:
             command += f'--ctcfOrient {rules.scaleCTCF.output} '
-    if wc.format == 'contacts':
-        if config['HiC']['vMin']:
-            command += f' --vMin {config["HiC"]["vMin"]} '
-        if config['HiC']['vMax']:
-            command += f' --vMax {config["HiC"]["vMax"]} '
-        if config['HiC']['log']:
-            command += ' --logMatrix1 --logMatrix2 '
-    else:
-        if config['HiC']['log']:
-            command += ' --logMatrix2 '
-        command += '--vMin 0 --vMax 1 '
+    if config['HiC']['vMin']:
+        command += f' --vMin {config["HiC"]["vMin"]} '
+    if config['HiC']['vMax']:
+        command += f' --vMax {config["HiC"]["vMax"]} '
+    if config['HiC']['log']:
+        command += ' --logMatrix1 --logMatrix2 '
 
     command += f'--colourMap {config["HiC"]["colourMap"]}'
     return command
@@ -994,14 +983,14 @@ rule createConfig:
         matrix = rules.mergeBins.output,
         ctcfOrient = getCTCFOrient
     output:
-        '{name}/{nbases}/merged/config/{name}-{format}-{binsize}-configs.ini'
+        '{name}/{nbases}/merged/config/{name}-{binsize}-configs.ini'
     params:
         depth = getDepth,
         hicConfig = getHiCconfig,
     group:
         'plotHiC'
     log:
-        'logs/createConfig/{name}-{nbases}--{format}-{binsize}.log'
+        'logs/createConfig/{name}-{nbases}-{binsize}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1017,7 +1006,7 @@ rule plotHiC:
     input:
         rules.createConfig.output
     output:
-        '{name}/{nbases}/merged/{name}-{format}-{binsize}-contactMatrix.png'
+        'plots/contactMatrix/{name}-{nbases}-{binsize}-contactMatrix.png'
     params:
         region = getRegion,
         title = getTitle,
@@ -1025,7 +1014,7 @@ rule plotHiC:
     group:
         'plotHiC'
     log:
-        'logs/plotHiC/{name}-{nbases}-{format}-{binsize}.log'
+        'logs/plotHiC/{name}-{nbases}-{binsize}.log'
     conda:
         f'{ENVS}/pygenometracks.yaml'
     shell:
@@ -1127,7 +1116,7 @@ rule createGIF:
         rules.vmd.output,
         images = aggregateVMD
     output:
-        '{name}/{nbases}/vmd/{name}-rep1-simulation.gif'
+        'vmd/{name}-{nbases}-1-simulation.gif'
     params:
         delay = config['GIF']['delay'],
         loop = config['GIF']['loop']
