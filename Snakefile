@@ -179,7 +179,9 @@ rule all:
          expand('plots/{plot}/{name}-{nbases}-{plot}.png',
             nbases=config['bases_per_bead'], name=details.keys(),
             plot=['pairCluster', 'meanVariance','TUcorrelation', 'TUcircos',
-                  'TUactivation', 'radiusGyration', 'TUreplicateCount',])]
+                  'TUactivation', 'radiusGyration', 'TUreplicateCount',]),
+        expand('{name}/{nbases}/ATAC-beadModifier.json',
+            name=details.keys(), nbases=config['bases_per_bead'])]
 
 
 rule unzipGenome:
@@ -400,6 +402,54 @@ rule scaleTracks:
         '{input} > {output} 2> {log}'
 
 
+rule scaleATAC:
+    input:
+        '/home/stephen/phd/modelling/pipeline/example/genome/GSE47753_GM12878_ATACseq_50k_AllReps_ZINBA_pp08.bed'
+    output:
+        'tracks/ATAC-scaled.bed'
+    params:
+        transform = config['scaleBed'],
+        scoreColumn = 8
+    group:
+        'lammps'
+    log:
+        'logs/scaleATAC.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/scaleBedScore.py --transform {params.transform} '
+        '--scoreColumn {params.scoreColumn} {input} > {output} 2> {log}'
+
+
+
+def getRegion(wc):
+    chr = details[wc.name]['chr']
+    start = details[wc.name]['start']
+    end = details[wc.name]['end']
+    return f'{chr}:{start}-{end}'
+
+
+rule processATAC:
+    input:
+        rules.scaleATAC.output
+    output:
+        '{name}/{nbases}/ATAC-beadModifier.json'
+    params:
+        region = getRegion,
+        scoreColumn = 8,
+        nbases = config['bases_per_bead']
+    group:
+        'lammps'
+    log:
+        'logs/processATAC/{name}-{nbases}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/processATAC.py {params.region} {params.nbases} {input} '
+        '--scoreColumn {params.scoreColumn} > {output} 2> {log}'
+
+
+
 rule filterTracks:
     input:
         rules.scaleTracks.output
@@ -437,12 +487,6 @@ def getSplitOrient(wc):
         return rules.splitOrientation.output
     else:
         return []
-
-def getRegion(wc):
-    chr = details[wc.name]['chr']
-    start = details[wc.name]['start']
-    end = details[wc.name]['end']
-    return f'{chr}:{start}-{end}'
 
 
 rule maskFasta:
@@ -494,7 +538,8 @@ def beadsInput(wc):
 
 rule BeadsToLammps:
     input:
-        beadsInput
+        beads = beadsInput,
+        atac = rules.processATAC.output
     output:
         dat = '{name}/{nbases}/reps/{rep}/lammps/config/lammps_input.dat',
         coeffs = '{name}/{nbases}/reps/{rep}/lammps/config/coeffs.txt',
@@ -519,7 +564,7 @@ rule BeadsToLammps:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/generate_polymer.py '
+        '{SCRIPTS}/generate_polymer.py --atac {input.atac} '
         '--polymerSeed {params.polymerSeed} '
         '--monomerSeed {params.monomerSeed} '
         '--xlo {params.xlo} --xhi {params.xhi} '
@@ -530,7 +575,7 @@ rule BeadsToLammps:
         '--nMonomer {params.nMonomers} '
         '--pairCoeffs {params.coeffs} '
         '--basesPerBead {params.basesPerBead} '
-        '{params.randomWalk} {input} > {output.dat} 2> {log}'
+        '{params.randomWalk} {input.beads} > {output.dat} 2> {log}'
 
 
 rule checkCTCF:

@@ -11,9 +11,9 @@ import numpy as np
 __version__ = '1.0.0'
 
 
-def main(file : str, transform : str, **kwargs):
+def main(file : str, transform : str, scoreColumn: int, **kwargs):
 
-    max_score = maxScore(file)
+    max_score = maxScore(file, scoreColumn)
     if transform == 'sqrt':
         max_score = np.sqrt(max_score)
     elif transform == 'log':
@@ -25,24 +25,24 @@ def main(file : str, transform : str, **kwargs):
                 sys.stdout.write(f'{line}')
                 continue
             columns = line.split()
-            score = float(columns[4])
+            score = float(columns[scoreColumn])
             if transform == 'sqrt':
                 score = np.sqrt(score)
             elif transform == 'log':
                 score = np.log(score)
             scaled_score = score / max_score
-            columns[4] = str(scaled_score)
+            columns[scoreColumn] = str(scaled_score)
             line = '\t'.join(columns)
             sys.stdout.write(f'{line}\n')
 
 
-def maxScore(BED):
+def maxScore(BED, scoreColumn=4):
     record = 0
     with fileinput.input(BED) as f:
         for line in f:
             if line.startswith('#'):
                 continue
-            score = float(line.strip().split()[4])
+            score = float(line.strip().split()[scoreColumn])
             if record == 0 or score > max_score:
                 max_score = score
             record += 1
@@ -59,6 +59,9 @@ def parse_arguments():
     custom.add_argument(
         '--transform', default='none', choices=['log', 'sqrt', 'none'],
         help='Transform to apply to BED scores (default: %(default)s)')
+    custom.add_argument(
+        '--scoreColumn', type=int, default=4,
+        help='Specify score column to scale (default: %(default)s)')
     epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
 
     base = argparse.ArgumentParser(add_help=False)

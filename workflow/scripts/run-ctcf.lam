@@ -136,5 +136,5 @@ dump_modify 2 format line '%d %d %.5f %.5f %.5f %d %d %d' sort 1
 
 reset_timestep 0
 
-fix swap monomer atom/swap 10000 5 ${seed} 10 ke yes types 2 3
+fix swap monomer atom/swap 10000 5 ${seed} 10 ke yes types 1 2
 run ${sim_time}

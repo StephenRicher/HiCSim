@@ -10,16 +10,25 @@ import argparse
 import fileinput
 import numpy as np
 from collections import namedtuple
+from utilities import readJSON
+from collections import defaultdict
 
 __version__ = '1.0.0'
 
 
 class Sequence:
 
-    def __init__(self, sequence, basesPerBead,
+    def __init__(self, sequence, basesPerBead, atac=None,
             name='DNA', ctcf=False, beadID=1):
         self._beadID = beadID
         self.basesPerBead = basesPerBead
+        # Read ATAC modifiers for each Bead
+        if atac is not None:
+            self.atac = readJSON(atac)
+        else:
+            self.atac = defaultdict(int)
+        # Dictionary to store bead type : modifier
+        self.modifiers = {}
         # Should beads set as 'F' or 'R' be processed as CTCF?
         self._ctcf = ctcf
         self.ctcfs = {}
@@ -30,12 +39,15 @@ class Sequence:
         self.sequence = {}
         self.types = []
         with open(sequence) as f:
-            for line in f:
+            for i, line in enumerate(f):
                 type = line.strip()
                 if self._ctcf and type in ['F', 'R', 'B']:
                     type = f'{type}-{self._beadID}'
                     # Associate unique CTCF type with bead ID
                     self.ctcfs[type] = self._beadID
+                if type == 'N':
+                    type = f'{type}-{self._beadID}'
+                    self.modifiers[type] = float(self.atac[str(i)])
                 if type not in self.types:
                     self.types.append(type)
                 self.sequence[self._beadID] = type
@@ -60,24 +72,24 @@ class Sequence:
 
 class lammps:
 
-    def __init__(self, polymerSeed=random.randint(1, 1e100),
+    def __init__(self, nMonomers=0, polymerSeed=random.randint(1, 1e100),
             monomerSeed=random.randint(1, 1e100), randomWalk=False, TU_types=[]):
         self.sequences = []
-        self.monomers = {}
         self.TU_types = TU_types # Beads to be considered transcriptional units
         self._beadID = 1
-        # typeID 1 reserved for 'N' beads
-        # typeID 2 reserved for active TFs
-        # typeID 3 for inactive TFs
-        self._typeID = 4
+        # typeID 1 reserved for active TFs
+        # typeID 2 for inactive TFs
+        self._typeID = 3
         self._bondID = 1
         self.typeIDs = {}
         self.randomWalk = randomWalk
         self._monomerSeed = monomerSeed
         self._polymerSeed = polymerSeed
+        self.monomers = self.loadMonomer(nMonomers, prop=0.5)
 
-    def loadSequence(self, sequence_file, basesPerBead, ctcf):
-        sequence = Sequence(sequence_file, basesPerBead=basesPerBead,
+
+    def loadSequence(self, sequence_file, atac, basesPerBead, ctcf):
+        sequence = Sequence(sequence_file, basesPerBead=basesPerBead, atac=atac,
             ctcf=ctcf, beadID=self._beadID)
         self.sequences.append(sequence)
         self._beadID += sequence.nBeads
@@ -88,31 +100,36 @@ class lammps:
                 sys.exit('Cannot set Bead type as "None".')
             self.addType(type)
 
+
     def loadMonomer(self, nMonomers, prop=0.5):
+        # Set monomer number
+        self.nMonomers = nMonomers
         # Prop is proportion of active monomers
-        # List of active monomers ('M') and inactive monomers ('Mi')
-        monomers = (int(nMonomers * prop) * ['TFa']
+        # List of active monomers ('TFa') and inactive monomers ('TFi')
+        monomers = ( int(nMonomers * prop)       * ['TFa']
                    + int(nMonomers * (1 - prop)) * ['TFi'])
+        monomerIDs = {}
         for monomer in monomers:
             self.addType(monomer)
-            self.monomers[self._beadID] = monomer
+            monomerIDs[self._beadID] = monomer
             self._beadID += 1
+        return monomerIDs
+
 
     def loadBox(self, xlo, xhi, ylo, yhi, zlo, zhi):
         Dim = namedtuple('Dim', 'lo hi')
         Box = namedtuple('Box', ['x', 'y', 'z'])
         self.box = Box(Dim(xlo, xhi), Dim(ylo, yhi), Dim(zlo, zhi))
 
+
     def addType(self, type):
-        # Bead 'N' is always type 1
-        if type == 'N':
+        # Only reserve types 1 and 2 if monomers are in simulation ...
+        # Bead 'TFa' is reserved for active monomrs - type 1
+        if self.nMonomers and type == 'TFa':
             self.typeIDs[type] = 1
-        # Bead 'M' is reserved for active monomers - type 2
-        elif type == 'TFa':
+        # Bead 'TFi' is reserved for inactive monomrs - type 2
+        elif self.nMonomers and type == 'TFi':
             self.typeIDs[type] = 2
-        # Bead 'Mi' is reserved for inactive monomrs - type 3
-        elif type == 'TFi':
-            self.typeIDs[type] = 3
         elif type not in self.typeIDs:
             self.typeIDs[type] = self._typeID
             self._typeID += 1
@@ -124,10 +141,6 @@ class lammps:
         n += self.nMonomers
         return n
 
-    @property
-    def nMonomers(self):
-        """ Return number of monomers in simulation. """
-        return len(self.monomers)
 
     @property
     def nAngles(self):
@@ -324,6 +337,21 @@ class lammps:
         fh.write(f'pair_coeff {type1ID} {type2ID} {coeff}\n')
 
 
+    def writeATACCoeffs(self, TFcoeffMin, TFcoeffMax, fh=sys.stderr):
+        """ Write ATAC modified pair coefficients for N beads and monomers """
+
+        # Range between min and max coefficients
+        coeffRange = TFcoeffMax - TFcoeffMin
+        TFa_typeID = 1
+        for sequence in self.sequences:
+            for type, modifier in sequence.modifiers.items():
+                N_typeID = self.typeIDs[type]
+                TFcoeffMod = (modifier * coeffRange) + TFcoeffMin
+                fh.write(
+                    f'pair_coeff {TFa_typeID} {N_typeID} {TFcoeffMod} 1.0 1.8\n')
+
+
+
     def writeGroup(self, fh=sys.stderr):
         for sequence in self.sequences:
             firstBeadID = min(sequence.sequence)
@@ -335,16 +363,15 @@ class lammps:
 
 
 
-def main(file, monomerSeed, polymerSeed, nMonomers, ctcf, basesPerBead, randomWalk,
+def main(file, atac, monomerSeed, polymerSeed, nMonomers, ctcf, basesPerBead, randomWalk,
         pairCoeffs, coeffOut, groupOut, xlo, xhi, ylo, yhi, zlo, zhi, **kwargs):
 
     # TO DO - the tye list needs to be input by user
     TU_types=['1', '7', '3']
-    dat = lammps(monomerSeed=monomerSeed, polymerSeed=polymerSeed,
+    dat = lammps(nMonomers, monomerSeed=monomerSeed, polymerSeed=polymerSeed,
         randomWalk=randomWalk, TU_types=TU_types)
     dat.loadBox(xlo, xhi, ylo, yhi, zlo, zhi)
-    dat.loadSequence(file, basesPerBead, ctcf)
-    dat.loadMonomer(nMonomers)
+    dat.loadSequence(file, atac, basesPerBead, ctcf)
     dat.writeLammps()
     with open(pairCoeffs) as fh:
         with open(coeffOut, 'w') as out:
@@ -355,6 +382,7 @@ def main(file, monomerSeed, polymerSeed, nMonomers, ctcf, basesPerBead, randomWa
                 atom2 = line[1]
                 # IF F-R or R-C (CTCF interaction)
                 dat.writeCoeffs(atom1, atom2, coeff, fh=out)
+            dat.writeATACCoeffs(TFcoeffMin=3,  TFcoeffMax=8, fh=out)
     with open(groupOut, 'w') as out:
         dat.writeGroup(fh=out)
 
@@ -410,6 +438,8 @@ def parse_arguments():
     custom.set_defaults(function=main)
     custom.add_argument(
         'file',metavar='SEQUENCE', help='Input bead sequence file.')
+    custom.add_argument(
+        '--atac', help='ATAC bead binding modifier')
     custom.add_argument(
         '--nMonomers', default=0, type=int,
         help='Set number of monomers for simulation.')
