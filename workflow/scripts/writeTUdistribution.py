@@ -8,7 +8,7 @@ import logging
 import pandas as pd
 import argparse
 from typing import List
-
+from utilities import readJSON
 
 __version__ = '1.0.0'
 
@@ -27,12 +27,6 @@ def main(files: List, **kwargs) -> None:
 
     allBeadDistribution = pd.DataFrame(allBeadDistribution, index=[0])
     allBeadDistribution.to_csv(sys.stdout, index=False)
-
-
-def readJSON(file):
-    """ Read JSON encoded data to dictionary """
-    with open(file) as fh:
-        return json.load(fh)
 
 
 def parse_arguments():
