@@ -2,6 +2,7 @@
 
 """ Subset ATAC JSON bead modifier by genomic region """
 
+import re
 import sys
 import json
 import logging
@@ -9,24 +10,24 @@ import argparse
 from utilities import getBead, coordinates, readJSON
 
 
-def main(infile: str, coordinates: dict, nbases: int) -> None:
+def main(infile: str, region: dict, nbases: int) -> None:
 
-    if not validCoordinates(coordinates['start'], coordinates['end'], nbases):
+    if not validCoordinates(region['start'], region['end'], nbases):
         logging.error('Error not valid coordinates.')
         return 1
 
     beadDict = readJSON(infile)
 
-    chrom = re.sub('^chr', '', coordinates['chr'])
-    startBead = getBead(coordinates['start'], nbases)
-    endBead = getBead(coordinates['end'], nbases)
+    chrom = re.sub('^chr', '', region['chr'])
+    startBead = getBead(region['start'], nbases)
+    endBead = getBead(region['end'], nbases)
     subsetBead = {}
 
-    for bead in range(startBead, endBead):
+    for i, bead in enumerate(range(startBead, endBead)):
         try:
-            subsetBead[bead] = beadDict[chrom][bead]
+            subsetBead[i] = beadDict[chrom][bead]
         except KeyError:
-            subsetBead[bead] = 0
+            subsetBead[i] = 0
 
     json.dump(subsetBead, sys.stdout)
 
@@ -42,7 +43,7 @@ def parse_arguments():
     epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
     parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
     parser.add_argument(
-        '--coordinates', required=True, metavar='CHR:START-END', type=coordinates,
+        '--region', required=True, metavar='CHR:START-END', type=coordinates,
         help='Genomic coordinates to operate on.')
     parser.add_argument(
         '--nbases', required=True, type=int,
