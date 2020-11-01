@@ -544,7 +544,7 @@ def beadsInput(wc):
 rule BeadsToLammps:
     input:
         beads = beadsInput,
-        atac = rules.processATAC.output
+        atac = rules.subsetATAC.output
     output:
         dat = '{name}/{nbases}/reps/{rep}/lammps/config/lammps_input.dat',
         coeffs = '{name}/{nbases}/reps/{rep}/lammps/config/coeffs.txt',
