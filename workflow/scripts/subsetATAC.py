@@ -3,6 +3,7 @@
 """ Subset ATAC JSON bead modifier by genomic region """
 
 import sys
+import json
 import logging
 import argparse
 from utilities import getBead, coordinates, readJSON
