@@ -5,7 +5,7 @@ container: "docker://continuumio/miniconda3:4.7.12"
 import os
 import random
 import tempfile
-from set_config import set_config, read_paths, nBeads
+from set_config import set_config, read_paths, nBeads, adjustCoordinates
 
 BASE = workflow.basedir
 
@@ -23,6 +23,7 @@ default_config = {
     'workdir':        workflow.basedir,
     'ctcf':           {'data':             None,
                        'computeDirection': True},
+    'atac':           None,
     'masking':        {},
     'genome' :        {'build':    'genome',
                        'sequence':  None,
@@ -102,9 +103,14 @@ if not config['syntheticSequence']:
     if invalid:
         sys.exit('\033[31mInvalid configuration setting.\033[m\n')
     for name in [config['genome']['name']]:
+        start, end = adjustCoordinates(
+            config['genome']['start'],
+            config['genome']['end'],
+            config['bases_per_bead'])
+        scaledRegion = f"{config['genome']['chr']}-{start}-{end}"
+        print(f'Adjusting {name} positions to {scaledRegion}')
         details[name] = {'chr':   config['genome']['chr'],
-                         'start': config['genome']['start'],
-                         'end':   config['genome']['end'],}
+                         'start': start, 'end': end}
 else:
     config['genome']['sequence'] = []
     for name in config['syntheticSequence'].keys():
@@ -402,24 +408,24 @@ rule scaleTracks:
         '{input} > {output} 2> {log}'
 
 
-rule scaleATAC:
+rule processATAC:
     input:
-        '/home/stephen/phd/modelling/pipeline/example/genome/GSE47753_GM12878_ATACseq_50k_AllReps_ZINBA_pp08.bed'
+        config['atac']
     output:
-        'tracks/ATAC-scaled.bed'
+        'tracks/ATAC/ATAC-beadModifier-{nbases}.json'
     params:
         transform = config['scaleBed'],
-        scoreColumn = 8
+        percentile = 99
     group:
         'lammps'
     log:
-        'logs/scaleATAC.log'
+        'logs/processATAC-{nbases}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/scaleBedScore.py --transform {params.transform} '
-        '--scoreColumn {params.scoreColumn} {input} > {output} 2> {log}'
-
+        '{SCRIPTS}/processATAC.py --transform {params.transform} '
+        '--nbases {wildcards.nbases} --percentile {params.percentile} '
+        '{input} > {output} 2> {log}'
 
 
 def getRegion(wc):
@@ -429,25 +435,22 @@ def getRegion(wc):
     return f'{chr}:{start}-{end}'
 
 
-rule processATAC:
+rule subsetATAC:
     input:
-        rules.scaleATAC.output
+        rules.processATAC.output
     output:
         '{name}/{nbases}/ATAC-beadModifier.json'
     params:
         region = getRegion,
-        scoreColumn = 8,
-        nbases = config['bases_per_bead']
     group:
         'lammps'
     log:
-        'logs/processATAC/{name}-{nbases}.log'
+        'logs/subsetATAC/{name}-{nbases}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/processATAC.py {params.region} {params.nbases} {input} '
-        '--scoreColumn {params.scoreColumn} > {output} 2> {log}'
-
+        '{SCRIPTS}/subsetATAC.py --nbases {wildcards.nbases} '
+        '--region {params.region} {input} > {output} 2> {log}'
 
 
 rule filterTracks:

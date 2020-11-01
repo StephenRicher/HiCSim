@@ -4,77 +4,71 @@
 
 import re
 import sys
-import json
 import argparse
 import fileinput
-from bisect import bisect_right
-from utilities import coordinates
+import numpy as np
+from utilities import getBead
+from collections import defaultdict
 
-def main(infile: str, nbases: int, coordinates: str, scoreColumn: int,) -> None:
 
+def main(infile: str, transform: str, nbases: int, percentile: float) -> None:
 
-    beadDict = buildBead(coordinates['start'], coordinates['end'], nbases)
+    beadDict = defaultdict(lambda: defaultdict(float))
     with fileinput.input(infile) as fh:
         for record in fh:
-            record = record.split()
-            chromBed = record[0]
-            startBed = int(record[1])
-            endBed = int(record[2])
-            score = float(record[scoreColumn])
-            if inRegion(coordinates['chr'], coordinates['start'],
-                        coordinates['end'], chromBed, startBed):
-                for pos in range(startBed, endBed):
-                    beadStart = findBead(beadDict, pos)
-                    if beadStart:
-                        beadDict[beadStart].append(score)
+            chrom, start, end, score = splitBedgraph(record, strip=True)
+            if score == 0:
+                continue
+            # If start/end map to same bead - add full score
+            if getBead(start, nbases) == getBead(end, nbases):
+                beadDict[chrom][getBead(start, nbases)] += score
+            # Else loop through each base and add score individually
+            else:
+                length = end - start
+                for pos in range(start, end):
+                    bead = getBead(pos, nbases)
+                    beadDict[chrom][bead] += (score / length)
 
-    meanBead =  meanBeadScore(beadDict, nbases)
-    json.dump(meanBead, sys.stdout)
+    maxBeadScore = percentileScore(beadDict, percentile)
+    maxBeadScore = transformScore(maxBeadScore, transform)
+
+    for chrom, beads in beadDict.items():
+        for bead, score in beads.items():
+            score = transformScore(score, transform)
+            beadDict[chrom][bead] = min(1, score / maxBeadScore)
+
+    json.dump(beadDict, sys.stdout)
 
 
+def splitBedgraph(record, strip=False):
+    """ Return bedgraph values correctly typed """
 
-def splitCoordinates(coordinates):
-    """ Split coordinates into ref, start and end """
+    chrom, start, end, score = record.split()[0:4]
+    if strip:
+        chrom = re.sub('^chr', '', chrom)
+    start = int(start)
+    end = int(start)
+    score = float(score)
+    return chrom, start, end, score
 
-    ref, start, end = re.split(':|-', a)
-    return ref, start, end
 
-
-def inRegion(chrom, start, end, chromBed, startBed):
-    """ Check if BED coordinates are within a genomic region """
-
-    if (chromBed.replace('chr', '') == chrom.replace('chr', '')
-            and start <= startBed < end):
-        return True
+def transformScore(score, transform=None):
+    if transform is None:
+        return score
+    elif transform == 'sqrt':
+        return np.sqrt(score)
+    elif transform == 'log':
+        return np.log(score)
     else:
-        return False
-
-def buildBead(start, end, nbases):
-    """ Intialise a dictionary of beads with bead start positions  """
-
-    beadDict = {}
-    for pos in range(start, end, nbases):
-        beadDict[pos] = []
-    return beadDict
-
-
-def findBead(beadDict, pos):
-    """ Return the beadStart position of a given base position """
-
-    beadStart = list(beadDict.keys())
-    if min(beadStart) > pos > max(beadStart):
+        logging.error(f'{transform} not valid.')
         return None
-    index =  bisect_right(beadStart, pos) - 1
-    return beadStart[index]
 
 
-def meanBeadScore(beadDict, nbases):
-    """ Compute average score for each bead position """
+def percentileScore(beadDict, q=99):
+    """ Return percentile score of all score in beadDict """
 
-    meanBead = {}
-    for i, bead in enumerate(beadDict):
-        meanBead[i] = sum(beadDict[bead]) / nbases
-    return meanBead
+    allScores = [list(d.values()) for d in beadDict.values()]
+    return np.percentile(np.concatenate(allScores), q)
 
 
 def parse_arguments():
@@ -83,16 +77,16 @@ def parse_arguments():
     epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
     parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
     parser.add_argument(
-        'coordinates', metavar='CHR:START-END', type=coordinates,
-        help='Genomic coordinates to operate on.')
+        '--transform', default=None, choices=['log', 'sqrt'],
+        help='Transform to apply to scores (default: %(default)s)')
     parser.add_argument(
-        'nbases', type=int,
+        '--percentile', default=99,
+        help='Percentile score to scale by (default: %(default)s)')
+    parser.add_argument(
+        '--nbases', required=True, type=int,
         help='Number of bases to represent 1 bead.')
     parser.add_argument('infile', nargs='?', default=[],
-        help='ATAC-seq BED file (default: stdin)')
-    parser.add_argument(
-        '--scoreColumn', type=int, default=4,
-        help='Score column for ATAC seq BED file. (default: %(default)s)')
+        help='ATAC-seq bedgraph file (default: stdin)')
 
     return parser.parse_args()
 

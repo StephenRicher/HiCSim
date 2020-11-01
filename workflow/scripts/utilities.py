@@ -127,3 +127,9 @@ def coeff(value):
     if not -1 <= ivalue <= 1:
         raise argparse.ArgumentTypeError(f'{value} must be between -1 and 1.')
     return ivalue
+
+
+def getBead(pos, nbases):
+    """ Return bead corresponding to nbases """
+
+    return pos // nbases
