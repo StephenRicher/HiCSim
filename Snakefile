@@ -23,7 +23,9 @@ default_config = {
     'workdir':        workflow.basedir,
     'ctcf':           {'data':             None,
                        'computeDirection': True},
-    'atac':           None,
+    'atac':           {'begraph':    None,
+                       'scale':     'sqrt',
+                       'percentile': 99  ,},
     'masking':        {},
     'genome' :        {'build':    'genome',
                        'sequence':  None,
@@ -410,12 +412,12 @@ rule scaleTracks:
 
 rule processATAC:
     input:
-        config['atac']
+        config['atac']['bedgraph']
     output:
         'tracks/ATAC/ATAC-beadModifier-{nbases}.json'
     params:
-        transform = config['scaleBed'],
-        percentile = 99
+        transform = config['atac']['scale'],
+        percentile = config['atac']['percentile']
     group:
         'lammps'
     log:
