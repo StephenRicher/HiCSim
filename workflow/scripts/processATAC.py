@@ -81,7 +81,7 @@ def parse_arguments():
         '--transform', default=None, choices=['log', 'sqrt'],
         help='Transform to apply to scores (default: %(default)s)')
     parser.add_argument(
-        '--percentile', default=99,
+        '--percentile', type=float, default=99,
         help='Percentile score to scale by (default: %(default)s)')
     parser.add_argument(
         '--nbases', required=True, type=int,
