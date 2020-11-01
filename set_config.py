@@ -76,3 +76,14 @@ def nBeads(file):
         for line in fh:
             nBeads += len(line.strip())
     return nBeads
+
+
+def adjustCoordinates(start, end, nbases):
+    """ Adjust coordinates to a multiple of nbases """
+    # Round down start to closest multiple of nbases
+    start = start - (start % nbases)
+    # Get amount contract end position
+    adjustContract = (end - start ) % nbases
+    end = end - adjustContract
+
+    return start, end
