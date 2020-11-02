@@ -9,6 +9,7 @@ import argparse
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from pathlib import Path
 import matplotlib.pyplot as plt
 from itertools import permutations
 from sklearn.cluster import DBSCAN
@@ -47,14 +48,18 @@ def main(infile: str, out: str, outplot: str, eps: float, minSamples: float) -> 
         cmap = sns.color_palette("Dark2", nClusters)
 
         clusterGroups = fullSim.pivot(index='id', columns='time', values='labels')
-        fig, ax = plt.subplots()
-        ax = sns.heatmap(clusterGroups, ax=ax, mask=(clusterGroups==-1), cmap=cmap)
-        colorbar = ax.collections[0].colorbar
-        r = colorbar.vmax - colorbar.vmin
-        colorbar.set_ticks(
-            [colorbar.vmin + r / nClusters * (0.5 + i) for i in range(nClusters)])
-        colorbar.set_ticklabels(clusterLabels)
-        fig.savefig(outplot, dpi=300, bbox_inches='tight')
+        if clusterGroups.empty:
+            logging.error('No valid clusters - creating empty plot file.')
+            Path(outplot).touch()
+        else:
+            fig, ax = plt.subplots()
+            ax = sns.heatmap(clusterGroups, ax=ax, mask=(clusterGroups==-1), cmap=cmap)
+            colorbar = ax.collections[0].colorbar
+            r = colorbar.vmax - colorbar.vmin
+            colorbar.set_ticks(
+                [colorbar.vmin + r / nClusters * (0.5 + i) for i in range(nClusters)])
+            colorbar.set_ticklabels(clusterLabels)
+            fig.savefig(outplot, dpi=300, bbox_inches='tight')
 
     clusterPairs = defaultdict(lambda: defaultdict(int))
     # Initialise all pairs as zero
