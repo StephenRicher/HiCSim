@@ -28,7 +28,10 @@ def main(infile: str, out: str) -> None:
 
 
 def pearsonr_pval(x,y):
-    return pearsonr(x,y)[1]
+    try:
+        return pearsonr(x,y)[1]
+    except ValueError:
+        return np.nan
 
 
 def countPair(x, y):
