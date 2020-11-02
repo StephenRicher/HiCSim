@@ -25,7 +25,7 @@ def main(infile: str, region: dict, nbases: int) -> None:
 
     for i, bead in enumerate(range(startBead, endBead)):
         try:
-            subsetBead[i] = beadDict[chrom][bead]
+            subsetBead[i] = beadDict[chrom][str(bead)]
         except KeyError:
             subsetBead[i] = 0
 
