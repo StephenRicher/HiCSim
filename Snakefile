@@ -432,10 +432,10 @@ rule processATAC:
 
 
 def getRegion(wc):
-    chr = details[wc.name]['chr']
+    chrom = details[wc.name]['chr']
     start = details[wc.name]['start']
     end = details[wc.name]['end']
-    return f'{chr}:{start}-{end}'
+    return f'{chrom}:{start}-{end}'
 
 
 rule subsetATAC:
