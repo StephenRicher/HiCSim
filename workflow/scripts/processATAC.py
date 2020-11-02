@@ -53,8 +53,8 @@ def splitBedgraph(record, strip=False):
     return chrom, start, end, score
 
 
-def transformScore(score, transform=None):
-    if transform is None:
+def transformScore(score, transform='none'):
+    if transform == 'none':
         return score
     elif transform == 'sqrt':
         return np.sqrt(score)
@@ -78,7 +78,7 @@ def parse_arguments():
     epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
     parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
     parser.add_argument(
-        '--transform', default=None, choices=['log', 'sqrt'],
+        '--transform', default='none', choices=['none', 'log', 'sqrt'],
         help='Transform to apply to scores (default: %(default)s)')
     parser.add_argument(
         '--percentile', type=float, default=99,
