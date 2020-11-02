@@ -165,9 +165,10 @@ else:
 
 # Read track file basename and masking character into a dictionary
 track_data = {}
-for file, character in config['masking'].items():
-    track_file = f'{os.path.basename(file)}'
-    track_data[track_file] = {'source' : file, 'character' : character}
+if config['masking']:
+    for file, character in config['masking'].items():
+        track_file = f'{os.path.basename(file)}'
+        track_data[track_file] = {'source' : file, 'character' : character}
 
 wildcard_constraints:
     all = r'[^\/]+',
