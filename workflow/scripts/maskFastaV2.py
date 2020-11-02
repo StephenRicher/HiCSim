@@ -59,7 +59,7 @@ def writeMaskedFasta(tracks, chromosomes, region=None):
         if not region:
             indexes = range(1, length + 1)
         elif region['chr'] == chromosome:
-            indexes = range(region['start'], region['end'] + 1)
+            indexes = range(region['start'] + 1, region['end'] + 1)
         else:
             continue
 
@@ -84,7 +84,7 @@ def parse_arguments():
         help='Chromosome sizes file (default: stdin)')
     custom.add_argument(
         '--region', metavar='CHR:START-END', default=None, type=coordinates,
-        help='Genomic region to operate on.')
+        help='Genomic region (0-based) to operate on.')
     custom.add_argument(
         '--bed', metavar='BED,CHAR', default=[],
         type=commaPair, action='append',
