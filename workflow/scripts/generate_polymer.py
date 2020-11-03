@@ -26,7 +26,7 @@ class Sequence:
         if atac is not None:
             self.atac = readJSON(atac)
         else:
-            self.atac = defaultdict(int)
+            self.atac = None
         # Dictionary to store bead type : modifier
         self.modifiers = {}
         # Should beads set as 'F' or 'R' be processed as CTCF?
@@ -45,9 +45,11 @@ class Sequence:
                     type = f'{type}-{self._beadID}'
                     # Associate unique CTCF type with bead ID
                     self.ctcfs[type] = self._beadID
-                if type == 'N':
-                    type = f'{type}-{self._beadID}'
-                    self.modifiers[type] = float(self.atac[str(i)])
+                elif self.atac and type == 'N':
+                    score = self.atac[str(i)]
+                    # Unique type for each modifier score
+                    type = f'{type}-{score}'
+                    self.modifiers[type] = float(score)
                 if type not in self.types:
                     self.types.append(type)
                 self.sequence[self._beadID] = type
