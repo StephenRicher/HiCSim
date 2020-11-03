@@ -418,7 +418,8 @@ rule processATAC:
         'tracks/ATAC/ATAC-beadModifier-{nbases}.json'
     params:
         transform = config['atac']['scale'],
-        percentile = config['atac']['percentile']
+        percentile = config['atac']['percentile'],
+        precision = 2
     group:
         'lammps'
     log:
@@ -428,7 +429,7 @@ rule processATAC:
     shell:
         '{SCRIPTS}/processATAC.py --transform {params.transform} '
         '--nbases {wildcards.nbases} --percentile {params.percentile} '
-        '{input} > {output} 2> {log}'
+        '--precision {params.precision} {input} > {output} 2> {log}'
 
 
 def getRegion(wc):
