@@ -363,7 +363,7 @@ if config['ctcf']['data'] is not None:
             rep = REPS,
             seed = lambda wc: sequenceSeeds[int(wc.rep) - 1]
         group:
-            'processCTCF'
+            'lammps'
         log:
             'logs/sampleBed/{rep}.log'
         conda:
@@ -382,7 +382,7 @@ if config['ctcf']['data'] is not None:
         params:
             min_rep = config['min_rep']
         group:
-            'processCTCF'
+            'lammps'
         log:
             'logs/splitOrientation/{rep}.log'
         conda:
