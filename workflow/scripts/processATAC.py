@@ -12,7 +12,7 @@ from utilities import getBead
 from collections import defaultdict
 
 
-def main(infile: str, transform: str, nbases: int, percentile: float) -> None:
+def main(infile: str, transform: str, nbases: int, percentile: float, precision: int) -> None:
 
     beadDict = defaultdict(lambda: defaultdict(float))
     with fileinput.input(infile) as fh:
@@ -36,7 +36,12 @@ def main(infile: str, transform: str, nbases: int, percentile: float) -> None:
     for chrom, beads in beadDict.items():
         for bead, score in beads.items():
             score = transformScore(score, transform)
-            beadDict[chrom][bead] = min(1, score / maxBeadScore)
+            # Ensure score is not greater than 1
+            scaledScore = min(1, score / maxBeadScore)
+            # Roud to n decimal places
+            if precision:
+                scaledScore = round(scaledScor, precision)
+            beadDict[chrom][bead] = scaledScore
 
     json.dump(beadDict, sys.stdout)
 
@@ -86,6 +91,9 @@ def parse_arguments():
     parser.add_argument(
         '--nbases', required=True, type=int,
         help='Number of bases to represent 1 bead.')
+    parser.add_argument(
+        '--precision', required=None, type=int,
+        help='Precision to round modifier score (default: %(default)s)')
     parser.add_argument('infile', nargs='?', default=[],
         help='ATAC-seq bedgraph file (default: stdin)')
 
