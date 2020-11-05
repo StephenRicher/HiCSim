@@ -199,8 +199,8 @@ class lammps:
 
     def writeBeads(self):
         sys.stdout.write('Atoms\n\n')
-        self.writePolymers()
         self.writeMonomers()
+        self.writePolymers()
         sys.stdout.write('\n')
 
 
