@@ -907,7 +907,7 @@ rule createContactMatrix:
         '{name}/{nbases}/reps/{rep}/matrices/contacts.npz'
     params:
         distance = 3,
-        periodic = '--periodic',
+        #periodic = '--periodic',
         x = abs(config['box']['xhi'] - config['box']['xlo']),
         y = abs(config['box']['yhi'] - config['box']['ylo']),
         z = abs(config['box']['zhi'] - config['box']['zlo'])
