@@ -393,26 +393,27 @@ rule scaleTracks:
         '{SCRIPTS}/scaleBedScore.py --transform {params.transform} '
         '{input} > {output} 2> {log}'
 
+if config['atac']['bedgraph']:
 
-rule processATAC:
-    input:
-        config['atac']['bedgraph']
-    output:
-        'tracks/ATAC/ATAC-beadModifier-{nbases}.json'
-    params:
-        transform = config['atac']['scale'],
-        percentile = config['atac']['percentile'],
-        precision = 2
-    group:
-        'lammps'
-    log:
-        'logs/processATAC-{nbases}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/processATAC.py --transform {params.transform} '
-        '--nbases {wildcards.nbases} --percentile {params.percentile} '
-        '--precision {params.precision} {input} > {output} 2> {log}'
+    rule processATAC:
+        input:
+            config['atac']['bedgraph']
+        output:
+            'tracks/ATAC/ATAC-beadModifier-{nbases}.json'
+        params:
+            transform = config['atac']['scale'],
+            percentile = config['atac']['percentile'],
+            precision = 2
+        group:
+            'lammps'
+        log:
+            'logs/processATAC-{nbases}.log'
+        conda:
+            f'{ENVS}/python3.yaml'
+        shell:
+            '{SCRIPTS}/processATAC.py --transform {params.transform} '
+            '--nbases {wildcards.nbases} --percentile {params.percentile} '
+            '--precision {params.precision} {input} > {output} 2> {log}'
 
 
 def getRegion(wc):
