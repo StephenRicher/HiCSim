@@ -23,7 +23,7 @@ default_config = {
     'workdir':        workflow.basedir,
     'ctcf':           {'data':             None,
                        'computeDirection': True},
-    'atac':           {'bedgraph':    None  ,
+    'atac':           {'bedgraph':    []    ,
                        'scale':      'none' ,
                        'percentile':  97.5  ,},
     'masking':        {},
