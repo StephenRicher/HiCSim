@@ -173,9 +173,7 @@ rule all:
          expand('plots/{plot}/{name}-{nbases}-{plot}.png',
             nbases=config['bases_per_bead'], name=details.keys(),
             plot=['pairCluster', 'meanVariance','TUcorrelation', 'TUcircos',
-                  'TUactivation', 'radiusGyration', 'TUreplicateCount',]),
-        expand('{name}/{nbases}/ATAC-beadModifier.json',
-            name=details.keys(), nbases=config['bases_per_bead'])]
+                  'TUactivation', 'radiusGyration', 'TUreplicateCount',])]
 
 
 rule unzipGenome:
