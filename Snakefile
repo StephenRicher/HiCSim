@@ -127,29 +127,14 @@ BUILD = config['genome']['build']
 # Define list of N reps from 1 to N
 REPS = list(range(1, config['reps'] + 1))
 
-# Set pipeline seed
-random.seed(config['random']['seed'])
-# Set seeds for generating bead sequence
-if config['random']['sequence']:
-    sequenceSeeds = [random.randint(1, (2**16) - 1) for rep in REPS]
-else:
-    sequenceSeeds = [random.randint(1, (2**16) - 1)] * config['reps']
-# Set seeds for generating bead sequence
-if config['random']['initialConform']:
-    initialConformSeeds = [random.randint(1, (2**16) - 1) for rep in REPS]
-else:
-    initialConformSeeds = [random.randint(1, (2**16) - 1)] * config['reps']
-# Set seeds for generating monomer positions
-if config['random']['monomerPositions']:
-    monomerSeeds = [random.randint(1, (2**16) - 1) for rep in REPS]
-else:
-    monomerSeeds = [random.randint(1, (2**16) - 1)] * config['reps']
-# Set seeds for running lammps simulation
-if config['random']['simulation']:
-    simulationSeeds = [random.randint(1, (2**16) - 1) for rep in REPS]
-else:
-    simulationSeeds = [random.randint(1, (2**16) - 1)] * config['reps']
-
+# Set seeds for different parts of workflow.
+seeds = {}
+for type in ['sequence', 'initialConform', 'monomerPositions', 'simulation']:
+    random.seed(config['random']['seed'])
+    if config['random'][type]:
+        seeds[type] = [random.randint(1, (2**16) - 1) for rep in REPS]
+    else:
+        seeds[type] = [random.randint(1, (2**16) - 1)] * config['reps']
 
 if config['HiC']['binsize'] is not None:
     BINSIZE = int(config['HiC']['binsize'])
@@ -361,7 +346,7 @@ if config['ctcf']['data'] is not None:
             'tracks/{rep}/CTCF-sampled.bed'
         params:
             rep = REPS,
-            seed = lambda wc: sequenceSeeds[int(wc.rep) - 1]
+            seed = lambda wc: seeds['sequence'][int(wc.rep) - 1]
         group:
             'lammps'
         log:
@@ -464,7 +449,7 @@ rule filterTracks:
         'tracks/scaled/{rep}/{track}'
     params:
         rep = REPS,
-        seed = lambda wc: sequenceSeeds[int(wc.rep) - 1]
+        seed = lambda wc: seeds['sequence'][int(wc.rep) - 1]
     group:
         'lammps'
     log:
@@ -506,7 +491,7 @@ rule maskFasta:
     params:
         masking = getMasking,
         region = getRegion,
-        seed = lambda wc: sequenceSeeds[int(wc.rep) - 1]
+        seed = lambda wc: seeds['sequence'][int(wc.rep) - 1]
     group:
         'lammps'
     log:
@@ -527,7 +512,7 @@ rule FastaToBeads:
         'lammps'
     params:
         bases_per_bead = config['bases_per_bead'],
-        seed = lambda wc: sequenceSeeds[int(wc.rep) - 1]
+        seed = lambda wc: seeds['sequence'][int(wc.rep) - 1]
     log:
         'logs/sequenceToBeads/{name}-{nbases}-{rep}.log'
     conda:
@@ -543,10 +528,30 @@ def beadsInput(wc):
     else:
         return rules.FastaToBeads.output
 
+
+def setBeadsToLammpsCmd():
+    cmd = '{SCRIPTS}/generate_polymer.py '
+    if config['atac']['bedgraph']:
+        cmd += '--atac {input.atac} '
+    cmd += (
+        '--polymerSeed {params.polymerSeed} '
+        '--monomerSeed {params.monomerSeed} '
+        '--xlo {params.xlo} --xhi {params.xhi} '
+        '--ylo {params.ylo} --yhi {params.yhi} '
+        '--zlo {params.zlo} --zhi {params.zhi} '
+        '--ctcf --coeffOut {output.coeffs} '
+        '--groupOut {output.groups} '
+        '--nMonomer {params.nMonomers} '
+        '--pairCoeffs {params.coeffs} '
+        '--basesPerBead {params.basesPerBead} '
+        '{params.randomWalk} {input.beads} > {output.dat} 2> {log}')
+    return cmd
+
+
 rule BeadsToLammps:
     input:
         beads = beadsInput,
-        atac = rules.subsetATAC.output
+        atac = rules.subsetATAC.output if config['atac'] else []
     output:
         dat = '{name}/{nbases}/reps/{rep}/lammps/config/lammps_input.dat',
         coeffs = '{name}/{nbases}/reps/{rep}/lammps/config/coeffs.txt',
@@ -555,8 +560,8 @@ rule BeadsToLammps:
         nMonomers = config['monomers'],
         coeffs = config['coeffs'],
         basesPerBead = config['bases_per_bead'],
-        polymerSeed = lambda wc: initialConformSeeds[int(wc.rep) - 1],
-        monomerSeed = lambda wc: monomerSeeds[int(wc.rep) - 1],
+        polymerSeed = lambda wc: seeds['initialConform'][int(wc.rep) - 1],
+        monomerSeed = lambda wc: seeds['monomerPositions'][int(wc.rep) - 1],
         xlo = config['box']['xlo'],
         xhi = config['box']['xhi'],
         ylo = config['box']['ylo'],
@@ -571,18 +576,7 @@ rule BeadsToLammps:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/generate_polymer.py --atac {input.atac} '
-        '--polymerSeed {params.polymerSeed} '
-        '--monomerSeed {params.monomerSeed} '
-        '--xlo {params.xlo} --xhi {params.xhi} '
-        '--ylo {params.ylo} --yhi {params.yhi} '
-        '--zlo {params.zlo} --zhi {params.zhi} '
-        '--ctcf --coeffOut {output.coeffs} '
-        '--groupOut {output.groups} '
-        '--nMonomer {params.nMonomers} '
-        '--pairCoeffs {params.coeffs} '
-        '--basesPerBead {params.basesPerBead} '
-        '{params.randomWalk} {input.beads} > {output.dat} 2> {log}'
+        setBeadsToLammpsCmd()
 
 
 rule checkCTCF:
@@ -662,7 +656,7 @@ rule lammps:
         sim_time = config['lammps']['sim_time'],
         cosine_potential = lambda wc: 10000 / config['bases_per_bead'],
         restart = restartCommand,
-        seed = lambda wc: simulationSeeds[int(wc.rep) - 1],
+        seed = lambda wc: seeds['simulation'][int(wc.rep) - 1],
     group:
         'lammps'
     log:
