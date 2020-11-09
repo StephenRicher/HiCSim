@@ -5,84 +5,80 @@
 import sys
 import logging
 import argparse
-import fileinput
 import numpy as np
+from utilities import setDefaults
 
 __version__ = '1.0.0'
 
 
-def main(file : str, transform : str, scoreColumn: int, **kwargs):
+def scaleBed(file : str, transform : str, scoreColumn: int):
 
-    max_score = maxScore(file, scoreColumn)
-    if transform == 'sqrt':
-        max_score = np.sqrt(max_score)
-    elif transform == 'log':
-        max_score = np.log(max_score)
+    maxScore = getMaxScore(file, scoreColumn)
+    maxScore = transformScore(maxScore, transform)
 
-    with fileinput.input(file) as fh:
+    with open(file) as fh:
         for line in fh:
-            if line.startswith('#'):
-                sys.stdout.write(f'{line}')
-                continue
+            if bedHeader(line): continue
             columns = line.split()
             score = float(columns[scoreColumn])
-            if transform == 'sqrt':
-                score = np.sqrt(score)
-            elif transform == 'log':
-                score = np.log(score)
-            scaled_score = score / max_score
-            columns[scoreColumn] = str(scaled_score)
+            score = transformScore(score, transform)
+            scaledScore = score / maxScore
+            columns[scoreColumn] = str(scaledScore)
             line = '\t'.join(columns)
             sys.stdout.write(f'{line}\n')
 
 
-def maxScore(BED, scoreColumn=4):
-    record = 0
-    with fileinput.input(BED) as f:
-        for line in f:
-            if line.startswith('#'):
-                continue
-            score = float(line.strip().split()[scoreColumn])
-            if record == 0 or score > max_score:
-                max_score = score
-            record += 1
-    return max_score
+def bedHeader(line):
+    """ Return True for empty lines of header strings """
+
+    line = line.strip()
+    if not line or line.startswith(('browser', 'track', '#')):
+        return True
+    else:
+        return False
 
 
-def parse_arguments():
+def transformScore(score, transform='none'):
+    """ Apply specified transformation """
 
-    custom = argparse.ArgumentParser(add_help=False)
-    custom.set_defaults(function=main)
-    custom.add_argument(
-        'file', metavar='BED', nargs='?', default=[],
-        help='Input BED file (default: stdin)')
-    custom.add_argument(
+    assert transform in ['none', 'sqrt', 'log']
+    if transform == 'sqrt':
+        return np.sqrt(score)
+    elif transform == 'log':
+        return np.log(score)
+    else:
+        return score
+
+
+def getMaxScore(file, scoreColumn=4):
+    """ Determine maxScore """
+
+    with open(file) as fh:
+        for line in fh:
+            if bedHeader(line): continue
+            try:
+                score = float(line.split()[scoreColumn])
+                maxScore = max(score, maxScore)
+            except UnboundLocalError:
+                maxScore = score
+    return maxScore
+
+
+def parseArgs():
+
+    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+    parser.add_argument('file', help='Input BED file')
+    parser.add_argument(
         '--transform', default='none', choices=['log', 'sqrt', 'none'],
         help='Transform to apply to BED scores (default: %(default)s)')
-    custom.add_argument(
+    parser.add_argument(
         '--scoreColumn', type=int, default=4,
         help='Specify score column to scale (default: %(default)s)')
-    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
 
-    base = argparse.ArgumentParser(add_help=False)
-    base.add_argument(
-        '--version', action='version', version=f'%(prog)s {__version__}')
-    base.add_argument(
-        '--verbose', action='store_const', const=logging.DEBUG,
-        default=logging.INFO, help='verbose logging for debugging')
-
-    parser = argparse.ArgumentParser(
-        epilog=epilog, description=__doc__, parents=[base, custom])
-    args = parser.parse_args()
-
-    log_format='%(asctime)s - %(levelname)s - %(funcName)s - %(message)s'
-    logging.basicConfig(level=args.verbose, format=log_format)
-
-    return args
+    return setDefaults(parser, verbose=False, version=__version__)
 
 
 if __name__ == '__main__':
-    args = parse_arguments()
-    return_code = args.function(**vars(args))
-    logging.shutdown()
-    sys.exit(return_code)
+    args = parseArgs()
+    sys.exit(scaleBed(**vars(args)))
