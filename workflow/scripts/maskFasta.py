@@ -2,81 +2,119 @@
 
 """ Mask a genome with relevant bases """
 
-import os
 import sys
+import random
 import argparse
-import pyCommonTools as pct
-from utilities import commaPair
-from contextlib import ExitStack
-from subprocess import PIPE, Popen
+import logging
+import fileinput
+from utilities import commaPair, coordinates
+from collections import defaultdict
 
-from tempfile import NamedTemporaryFile
 
-def main():
+__version__ = '1.0.0'
 
-    __version__ = '1.0.0'
 
-    parser = pct.make_parser(verbose=True, version=__version__,)
-    parser.set_defaults(function=mask)
-    parser.add_argument(
-        'fasta', metavar='FASTA', nargs='?', default='/dev/stdin',
-        help='Input fasta to perform masking.')
-    parser.add_argument(
-        '--bed', metavar='BED,CHAR', default=None,
+def main(chromSizes, bed, region, seed):
+
+    random.seed(seed)
+    tracks = processBed(bed)
+    chromosomes = readChromosomes(chromSizes)
+
+    writeMaskedFasta(tracks, chromosomes, region)
+
+
+def readChromosomes(file):
+    chromosomes = {}
+    with fileinput.input(file) as fh:
+        for line in fh:
+            name, length = line.split()
+            chromosomes[name] = int(length)
+    return chromosomes
+
+
+def processBed(beds):
+
+    regions = defaultdict(lambda: defaultdict(str))
+    invalid_maskings = ['N', 'B']
+    for bed, mask in beds:
+        if mask in invalid_maskings:
+            logging.error(f'Invalid masking character {mask}. '
+                          f'Character must not be in {invalid_maskings}.')
+            sys.exit(1)
+        with open(bed) as fh:
+            for line in fh:
+                entries = line.split()
+                ref = entries[0]
+                start = int(entries[1]) + 1 # convert to 1-based
+                end = int(entries[2])
+                mid = round((start + end)/2)
+                regions[ref][mid] += mask
+
+    return regions
+
+
+def writeMaskedFasta(tracks, chromosomes, region=None):
+    for chromosome, length in chromosomes.items():
+
+        if not region:
+            indexes = range(1, length + 1)
+        elif region['chr'] == chromosome:
+            indexes = range(region['start'] + 1, region['end'] + 1)
+        else:
+            continue
+
+        sys.stdout.write(f'>{chromosome}\n')
+        for index in indexes:
+            chrTracks = tracks[chromosome]
+            if index in chrTracks:
+                base = chrTracks[index]
+                if len(base) > 1:
+                    base = random.choice(base)
+            else:
+                base = 'N'
+            sys.stdout.write(base)
+        sys.stdout.write('\n')
+
+
+def parse_arguments():
+
+    custom = argparse.ArgumentParser(add_help=False)
+    custom.set_defaults()
+    custom.add_argument('chromSizes', nargs='?', default=[],
+        help='Chromosome sizes file (default: stdin)')
+    custom.add_argument(
+        '--region', metavar='CHR:START-END', default=None, type=coordinates,
+        help='Genomic region (0-based) to operate on.')
+    custom.add_argument(
+        '--bed', metavar='BED,CHAR', default=[],
         type=commaPair, action='append',
         help='BED file of regions to mask, paired with masking character.'
-        'Call multiple times to add more files.')
+             'Call multiple times to add more files.')
+    custom.add_argument(
+        '--seed', default=None, type=float,
+        help='Seed for random number generator.')
 
-    return (pct.execute(parser))
+    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+    base = argparse.ArgumentParser(add_help=False)
+    base.add_argument(
+        '--version', action='version', version=f'%(prog)s {__version__}')
+    base.add_argument(
+        '--verbose', action='store_const', const=logging.DEBUG,
+        default=logging.INFO, help='verbose logging for debugging')
 
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[base, custom])
+    args = parser.parse_args()
 
-def mask(fasta, bed):
-    log = pct.create_logger()
+    log_format='%(asctime)s - %(levelname)s - %(funcName)s - %(message)s'
+    logging.basicConfig(level=args.verbose, format=log_format)
+    del args.verbose
 
-    if not bed:
-        catFile(fasta)
-    elif duplicateMask(bed):
-        sys.exit(1)
-    else:
-        processes = []
-        for i, (file, char) in enumerate(bed):
-            input = fasta if i == 0 else '/dev/stdin'
-            cmd = ['bedtools', 'maskfasta', '-bed', file, '-mc', char,
-                   '-fi', input, '-fo', '/dev/stdout']
-            stdin = None if i == 0 else processes[-1].stdout
-            stdout = None if i == len(bed) - 1 else PIPE
-            processes.append(Popen(cmd, stdin=stdin, stdout=stdout))
-
-        for i, process in enumerate(processes):
-            if i == len(processes) - 1:
-                process.wait()
-            else:
-                process.stdout.close()
-
-
-def catFile(file):
-    with pct.open(file) as fh:
-        for line in fh:
-            sys.stdout.write(line)
-
-
-def duplicateMask(bed):
-    """ Return True if 'bed' argument contains duplicates of masking character
-        or the same file.
-    """
-    log = pct.create_logger()
-    for index in [0, 1]:
-        unique_entries = set([i[index] for i in bed])
-        if len(unique_entries) != len(bed):
-            if index == 0:
-                log.error(f'{bed} contains duplicate filenames.')
-            else:
-                log.error(f'{bed} contains duplicate masking characters.')
-            break
-    else:
-        return False
-    return True
+    return args
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    args = parse_arguments()
+    return_code = main(**vars(args))
+    logging.shutdown()
+    sys.exit(return_code)
