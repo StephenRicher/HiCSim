@@ -6,7 +6,7 @@ import sys
 import logging
 import argparse
 import numpy as np
-from utilities import setDefaults
+from utilities import setDefaults, transformScore, bedHeader
 
 __version__ = '1.0.0'
 
@@ -26,28 +26,6 @@ def scaleBed(file : str, transform : str, scoreColumn: int):
             columns[scoreColumn] = str(scaledScore)
             line = '\t'.join(columns)
             sys.stdout.write(f'{line}\n')
-
-
-def bedHeader(line):
-    """ Return True for empty lines of header strings """
-
-    line = line.strip()
-    if not line or line.startswith(('browser', 'track', '#')):
-        return True
-    else:
-        return False
-
-
-def transformScore(score, transform='none'):
-    """ Apply specified transformation """
-
-    assert transform in ['none', 'sqrt', 'log']
-    if transform == 'sqrt':
-        return np.sqrt(score)
-    elif transform == 'log':
-        return np.log(score)
-    else:
-        return score
 
 
 def getMaxScore(file, scoreColumn=4):

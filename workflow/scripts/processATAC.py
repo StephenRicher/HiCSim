@@ -8,8 +8,8 @@ import json
 import argparse
 import fileinput
 import numpy as np
-from utilities import getBead
 from collections import defaultdict
+from utilities import getBead, transformScore
 
 
 def main(infile: str, transform: str, nbases: int, percentile: float, precision: int) -> None:
@@ -56,18 +56,6 @@ def splitBedgraph(record, strip=False):
     end = int(start)
     score = float(score)
     return chrom, start, end, score
-
-
-def transformScore(score, transform='none'):
-    if transform == 'none':
-        return score
-    elif transform == 'sqrt':
-        return np.sqrt(score)
-    elif transform == 'log':
-        return np.log(score)
-    else:
-        logging.error(f'{transform} not valid.')
-        return None
 
 
 def percentileScore(beadDict, q=99):
