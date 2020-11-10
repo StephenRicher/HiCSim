@@ -9,11 +9,12 @@ import pandas as pd
 import seaborn as sns
 from typing import List
 import matplotlib.pyplot as plt
+from utilities import setDefaults
 
 __version__ = '1.0.0'
 
 
-def main(files: List, out: str, **kwargs) -> None:
+def plotTUactivation(files: List, out: str):
 
     activations = pd.concat((pd.read_csv(file) for file in files))
     activations = activations.groupby(['time', 'id']).sum().reset_index()
@@ -29,38 +30,19 @@ def main(files: List, out: str, **kwargs) -> None:
     fig.savefig(out, dpi=300, bbox_inches='tight')
 
 
-def parse_arguments():
+def parseArgs():
 
-    custom = argparse.ArgumentParser(add_help=False)
-    custom.set_defaults(function=main)
+    epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
     custom.add_argument(
-        'files', nargs='+',
-        help='Input TF activation tables.')
-    custom.add_argument(
-        '--out', default='TU-activation.png',
-        help='TF mean contact correlation heatmap (default: %(default)s)')
+        'files', nargs='+', help='Input TF activation tables.')
+    requiredNamed = parser.add_argument_group('required named arguments')
+    requiredNamed.add_argument(
+        '--out', required=True, help='Output plot filename.')
 
-    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
-
-    base = argparse.ArgumentParser(add_help=False)
-    base.add_argument(
-        '--version', action='version', version=f'%(prog)s {__version__}')
-    base.add_argument(
-        '--verbose', action='store_const', const=logging.DEBUG,
-        default=logging.INFO, help='verbose logging for debugging')
-
-    parser = argparse.ArgumentParser(
-        epilog=epilog, description=__doc__, parents=[base, custom])
-    args = parser.parse_args()
-
-    log_format='%(asctime)s - %(levelname)s - %(funcName)s - %(message)s'
-    logging.basicConfig(level=args.verbose, format=log_format)
-
-    return args
+    return setDefaults(parser, verbose=False, version=__version__)
 
 
 if __name__ == '__main__':
-    args = parse_arguments()
-    return_code = args.function(**vars(args))
-    logging.shutdown()
-    sys.exit(return_code)
+    args = parseArgs()
+    sys.exit(plotTUactivation(**vars(args)))
