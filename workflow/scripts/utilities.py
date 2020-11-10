@@ -30,6 +30,27 @@ def setDefaults(parser, verbose=True, version=None):
     return args
 
 
+def transformScore(score, transform='none'):
+    """ Apply specified transformation """
+
+    assert transform in ['none', 'sqrt', 'log']
+    if transform == 'sqrt':
+        return np.sqrt(score)
+    elif transform == 'log':
+        return np.log(score)
+    else:
+        return score
+
+
+def bedHeader(line):
+    """ Return True for empty lines of header strings """
+
+    line = line.strip()
+    if not line or line.startswith(('browser', 'track', '#')):
+        return True
+    else:
+        return False
+
 #https://stackoverflow.com/questions/11108869/optimizing-python-distance-calculation-while-accounting-for-periodic-boundary-co/11109336#11109336
 def cdistPeriodic(x0, x1, dimensions, sqeuclidean=False):
     delta = np.abs(x0[:, np.newaxis] - x1)
@@ -73,45 +94,6 @@ def readJSON(file):
         return json.load(fh)
 
 
-def npz(value):
-    ''' Ensure output file ends with '.npz'. '''
-
-    if not value.endswith('.npz'):
-        raise argparse.ArgumentTypeError(
-            f'Out file {value} must end with: \'.npz\'.')
-    else:
-        return value
-
-
-def scale(value):
-    ''' Ensure input is numeric or 'None'. '''
-
-    if value == 'None':
-        return None
-    try:
-        return float(value)
-    except ValueError:
-        raise argparse.ArgumentTypeError(f'must be float value or None')
-
-
-def region(value):
-    ''' Validate input for region argument of create_contact_matrix '''
-
-    pattern = re.compile('^[0-9]+-[0-9]+$')
-    if not pattern.match(value):
-        raise argparse.ArgumentTypeError(
-            f'Expected format is START-END e.g 1-100000000')
-    regions = {}
-    regions['start'] = int(value.split('-')[0])
-    regions['end'] = int(value.split('-')[1])
-
-    if not regions['start'] < regions['end']:
-        raise argparse.ArgumentTypeError(
-            f'Start coordinate {regions["start"]} not less '
-            f'than end coordinate {regions["end"]}.')
-    else:
-        return regions
-
 def coordinates(value):
     ''' Validate input for genomic coordinates  '''
 
@@ -130,26 +112,6 @@ def coordinates(value):
             f'than end coordinate {coords["end"]}.')
     else:
         return coords
-
-
-def commaPair(value):
-    ''' Split command seperated pair and return as dictionary '''
-
-    value = value.split(',')
-    v1 = value[0].strip()
-    v2 = value[1].strip()
-    if len(v2) != 1:
-        raise argparse.ArgumentTypeError(
-            f'Masking character {v2} shoud be single character.')
-    else:
-        return (v1, v2)
-
-
-def coeff(value):
-    ivalue = float(value)
-    if not -1 <= ivalue <= 1:
-        raise argparse.ArgumentTypeError(f'{value} must be between -1 and 1.')
-    return ivalue
 
 
 def getBead(pos, nbases):
