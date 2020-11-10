@@ -4,11 +4,11 @@
 
 import sys
 import random
-import argparse
 import logging
+import argparse
 import fileinput
-from utilities import commaPair, coordinates
 from collections import defaultdict
+from utilities import setDefaults, coordinates, bedHeader
 
 
 __version__ = '1.0.0'
@@ -43,23 +43,29 @@ def processBed(beds):
             sys.exit(1)
         with open(bed) as fh:
             for line in fh:
-                entries = line.split()
-                ref = entries[0]
-                start = int(entries[1]) + 1 # convert to 1-based
-                end = int(entries[2])
-                mid = round((start + end)/2)
+                if bedHeader(line): continue
+                ref, mid = findMidpoint(line)
                 regions[ref][mid] += mask
 
     return regions
 
 
-def writeMaskedFasta(tracks, chromosomes, region=None):
-    for chromosome, length in chromosomes.items():
+def findMidpoint(line):
+    """ Return ref and mid coordinate of BED entry """
 
+    ref, start, end = line.split()[:3]
+    mid = round((int(start) + int(end)) / 2)
+
+    return ref, mid
+
+
+def writeMaskedFasta(tracks, chromosomes, region=None):
+
+    for chromosome, length in chromosomes.items():
         if not region:
-            indexes = range(1, length + 1)
+            indexes = range(length)
         elif region['chr'] == chromosome:
-            indexes = range(region['start'] + 1, region['end'] + 1)
+            indexes = range(region['start'], region['end'])
         else:
             continue
 
@@ -76,45 +82,39 @@ def writeMaskedFasta(tracks, chromosomes, region=None):
         sys.stdout.write('\n')
 
 
-def parse_arguments():
+def commaPair(value):
+    """ Split command seperated pair and return as tuple """
 
-    custom = argparse.ArgumentParser(add_help=False)
-    custom.set_defaults()
-    custom.add_argument('chromSizes', nargs='?', default=[],
+    # Split on last occurence of comma
+    bed, maskChar = value.rsplit(',', 1)
+    if len(maskChar) != 1:
+        raise argparse.ArgumentTypeError(
+            f'Masking character {maskChar} must single character.')
+    else:
+        return (bed, maskChar)
+
+
+def parseArgs():
+
+    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+    parser.add_argument('chromSizes', nargs='?', default=[],
         help='Chromosome sizes file (default: stdin)')
-    custom.add_argument(
+    parser.add_argument(
         '--region', metavar='CHR:START-END', default=None, type=coordinates,
         help='Genomic region (0-based) to operate on.')
-    custom.add_argument(
+    parser.add_argument(
         '--bed', metavar='BED,CHAR', default=[],
         type=commaPair, action='append',
         help='BED file of regions to mask, paired with masking character.'
              'Call multiple times to add more files.')
-    custom.add_argument(
+    parser.add_argument(
         '--seed', default=None, type=float,
         help='Seed for random number generator.')
 
-    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
-    base = argparse.ArgumentParser(add_help=False)
-    base.add_argument(
-        '--version', action='version', version=f'%(prog)s {__version__}')
-    base.add_argument(
-        '--verbose', action='store_const', const=logging.DEBUG,
-        default=logging.INFO, help='verbose logging for debugging')
-
-    parser = argparse.ArgumentParser(
-        epilog=epilog, description=__doc__, parents=[base, custom])
-    args = parser.parse_args()
-
-    log_format='%(asctime)s - %(levelname)s - %(funcName)s - %(message)s'
-    logging.basicConfig(level=args.verbose, format=log_format)
-    del args.verbose
-
-    return args
+    return setDefaults(parser, verbose=False, version=__version__)
 
 
 if __name__ == '__main__':
-    args = parse_arguments()
-    return_code = main(**vars(args))
-    logging.shutdown()
-    sys.exit(return_code)
+    args = parseArgs()
+    sys.exit(main(**vars(args)))
