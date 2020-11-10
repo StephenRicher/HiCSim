@@ -1,18 +1,15 @@
 #!/usr/bin/env python3
 
-""" Average contact frequency matrices and plot heatmap """
+""" Plot pairwise TU correlation and heatmap """
 
 import sys
-import logging
 import argparse
-import itertools
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import networkx as nx
-from typing import List
 import matplotlib.pyplot as plt
-
+from utilities import setDefaults
 
 __version__ = '1.0.0'
 
