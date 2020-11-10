@@ -410,7 +410,7 @@ rule processATAC:
         f'{ENVS}/python3.yaml'
     shell:
         '{SCRIPTS}/processATAC.py --transform {params.transform} '
-        '--nbases {wildcards.nbases} --percentile {params.percentile} '
+        '--nBases {wildcards.nbases} --percentile {params.percentile} '
         '--precision {params.precision} {input} > {output} 2> {log}'
 
 
@@ -435,7 +435,7 @@ rule subsetATAC:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/subsetATAC.py --nbases {wildcards.nbases} '
+        '{SCRIPTS}/subsetATAC.py --nBases {wildcards.nbases} '
         '--region {params.region} {input} > {output} 2> {log}'
 
 
