@@ -393,6 +393,7 @@ rule scaleTracks:
         '{SCRIPTS}/scaleBedScore.py --transform {params.transform} '
         '{input} > {output} 2> {log}'
 
+
 rule processATAC:
     input:
         config['atac']['bedgraph']
@@ -826,7 +827,7 @@ rule plotMeanVariance:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/plotMeanVariance.py {input} {output} '
+        '{SCRIPTS}/plotMeanVariance.py {input} --out {output} '
         '--fontSize {params.fontSize}  &> {log}'
 
 
