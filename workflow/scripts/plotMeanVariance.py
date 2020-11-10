@@ -8,6 +8,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from utilities import setDefaults
 
+__version__ = '1.0.0'
+
 
 def plotMeanVariance(infile: str, out: str, fontSize: float) -> None:
 
