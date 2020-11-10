@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
 
-""" Average contact frequency matrices and plot heatmap """
+""" Write distribution and frequency of TUs within polymer """
 
 import sys
-import json
-import logging
-import pandas as pd
 import argparse
+import pandas as pd
 from typing import List
-from utilities import readJSON
+from utilities import setDefaults, readJSON
 
 __version__ = '1.0.0'
 
 
-def main(files: List, **kwargs) -> None:
+def writeTUdistribution(infiles: List, out: str):
 
     allBeadDistribution = {}
-    for i, file in enumerate(files):
+    for i, file in enumerate(infiles):
         beads = readJSON(file)
         # Set all beads in first iteration.
         if i == 0:
@@ -26,35 +24,19 @@ def main(files: List, **kwargs) -> None:
             allBeadDistribution[TU] += 1
 
     allBeadDistribution = pd.DataFrame(allBeadDistribution, index=[0])
-    allBeadDistribution.to_csv(sys.stdout, index=False)
+    allBeadDistribution.to_csv(out, index=False)
 
 
-def parse_arguments():
+def parseArgs():
 
-    custom = argparse.ArgumentParser(add_help=False)
-    custom.set_defaults(function=main)
-    custom.add_argument('files', nargs='+', help='Atom JSON file.')
-    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
-
-    base = argparse.ArgumentParser(add_help=False)
-    base.add_argument(
-        '--version', action='version', version=f'%(prog)s {__version__}')
-    base.add_argument(
-        '--verbose', action='store_const', const=logging.DEBUG,
-        default=logging.INFO, help='verbose logging for debugging')
-
-    parser = argparse.ArgumentParser(
-        epilog=epilog, description=__doc__, parents=[base, custom])
-    args = parser.parse_args()
-
-    log_format='%(asctime)s - %(levelname)s - %(funcName)s - %(message)s'
-    logging.basicConfig(level=args.verbose, format=log_format)
-
-    return args
+    epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+    parser.add_argument('infiles', nargs='+', help='Atom JSON file.')
+    parser.add_argument('--out', default=sys.stdout, help='Output filename')
+    
+    return setDefaults(parser, verbose=False, version=__version__)
 
 
 if __name__ == '__main__':
-    args = parse_arguments()
-    return_code = args.function(**vars(args))
-    logging.shutdown()
-    sys.exit(return_code)
+    args = parseArgs()
+    sys.exit(writeTUdistribution(**vars(args)))
