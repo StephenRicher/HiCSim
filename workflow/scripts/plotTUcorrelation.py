@@ -11,7 +11,6 @@ import pandas as pd
 import seaborn as sns
 import networkx as nx
 from typing import List
-from utilities import coeff
 import matplotlib.pyplot as plt
 
 
@@ -99,66 +98,56 @@ def main(file: str, beadDistribution: str, meanHeatmap: str, sumHeatmap: str,
         fig.savefig(out, dpi=300, bbox_inches='tight')
 
 
-def parse_arguments():
+def coeff(value):
+    ivalue = float(value)
+    if not -1 <= ivalue <= 1:
+        raise argparse.ArgumentTypeError(f'{value} must be between -1 and 1.')
+    return ivalue
 
-    custom = argparse.ArgumentParser(add_help=False)
-    custom.set_defaults(function=main)
-    custom.add_argument('beadDistribution',
+
+def parseArgs():
+
+    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+    parser.add_argument('beadDistribution',
         help='Bead distribution output of writeTUdistribution.')
-    custom.add_argument(
+    parser.add_argument(
         'file',
         help='Input correlation table.')
-    custom.add_argument(
+    parser.add_argument(
         '--meanHeatmap', default='TF-meanCorrelation.png',
         help='TF mean contact correlation heatmap (default: %(default)s)')
-    custom.add_argument(
+    parser.add_argument(
         '--sumHeatmap', default='TF-replicateCount.png',
         help='Replicate count heatmap for each pairwise correlation (default: %(default)s)')
-    custom.add_argument(
+    parser.add_argument(
         '--circos', default='TU-CircosPlot.png',
         help='TF circos plot for signicant correlations (default: %(default)s)')
-    custom.add_argument(
+    parser.add_argument(
         '--fontSize', type=float, default=14,
         help='Font size for node name on circos plot (default: %(default)s)')
-    custom.add_argument(
+    parser.add_argument(
         '--pvalue', type=float, default=10**-6,
         help='P-value threshold for filtering TU correlations before '
              'plotting on circos plot (default: %(default)s)')
-    custom.add_argument(
+    parser.add_argument(
         '--minRep', type=int, default=1,
         help='Minimum replicates required for TU-TU interaction to be given '
              'included in the correlation/circos plots (default: %(default)s)')
-    custom.add_argument(
+    parser.add_argument(
         '--nReps', type=int,
         help='Number of reps in dataset - used to scale colour scheme of '
              'count matrix')
-    custom.add_argument(
+    parser.add_argument(
         '--vmin', type=coeff, default=-0.3,
         help='Minimum value of colour scale. (default: %(default)s)')
-    custom.add_argument(
+    parser.add_argument(
         '--vmax', type=coeff, default=0.3,
         help='Maximum value of colour scale. (default: %(default)s)')
-    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
 
-    base = argparse.ArgumentParser(add_help=False)
-    base.add_argument(
-        '--version', action='version', version=f'%(prog)s {__version__}')
-    base.add_argument(
-        '--verbose', action='store_const', const=logging.DEBUG,
-        default=logging.INFO, help='verbose logging for debugging')
-
-    parser = argparse.ArgumentParser(
-        epilog=epilog, description=__doc__, parents=[base, custom])
-    args = parser.parse_args()
-
-    log_format='%(asctime)s - %(levelname)s - %(funcName)s - %(message)s'
-    logging.basicConfig(level=args.verbose, format=log_format)
-
-    return args
+    return setDefaults(parser, verbose=False, version=__version__)
 
 
 if __name__ == '__main__':
-    args = parse_arguments()
-    return_code = args.function(**vars(args))
-    logging.shutdown()
-    sys.exit(return_code)
+    args = parseArgs()
+    sys.exit(main(**vars(args)))
