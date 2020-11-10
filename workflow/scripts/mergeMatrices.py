@@ -1,20 +1,19 @@
 #!/usr/bin/env python3
 
-""" Average contact frequency matrices and plot heatmap """
+""" Merge contact matrices """
 
 import sys
-import logging
 import argparse
 import numpy as np
 from typing import List
-from utilities import npz
+from utilities import setDefaults
 from scipy.sparse import save_npz, load_npz, csc_matrix
 
 
 __version__ = '1.0.0'
 
 
-def main(matrices: List, out: str, method: str, **kwargs) -> None:
+def mergeMatrices(matrices: List, out: str, method: str):
 
     if method == 'median':
         average_matrix = compute_median(matrices)
@@ -27,7 +26,7 @@ def main(matrices: List, out: str, method: str, **kwargs) -> None:
 
 
 def compute_median(matrices: List):
-    # Stack matrices along a third dimension and compute median
+    """ Stack matrices along a third dimension and compute median """
     matrices = np.dstack([load_npz(matrix).toarray() for matrix in matrices])
     return csc_matrix(np.median(matrices, axis = 2))
 
@@ -44,40 +43,21 @@ def compute_mean(matrices: List):
     return summed_matrix / len(matrices)
 
 
-def parse_arguments():
+def parseArgs():
 
-    custom = argparse.ArgumentParser(add_help=False)
-    custom.set_defaults(function=main)
-    custom.add_argument(
-        'matrices', nargs='+',
-        help='Input contact matrices')
-    custom.add_argument(
-        '--out', default='averaged-contacts.npz', type=npz,
-        help='Summed contact matrix (default: %(default)s)')
-    custom.add_argument(
+    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+    parser.add_argument('matrices', nargs='+', help='Input contact matrices')
+    parser.add_argument(
         '--method', default='sum', choices=['mean', 'median', 'sum'],
         help='Method to compute average of matrices (default: %(default)s)')
-    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+    requiredNamed = parser.add_argument_group('required named arguments')
+    requiredNamed.add_argument(
+        '--out', required=True, help='Summed contact matrix.')
 
-    base = argparse.ArgumentParser(add_help=False)
-    base.add_argument(
-        '--version', action='version', version=f'%(prog)s {__version__}')
-    base.add_argument(
-        '--verbose', action='store_const', const=logging.DEBUG,
-        default=logging.INFO, help='verbose logging for debugging')
-
-    parser = argparse.ArgumentParser(
-        epilog=epilog, description=__doc__, parents=[base, custom])
-    args = parser.parse_args()
-
-    log_format='%(asctime)s - %(levelname)s - %(funcName)s - %(message)s'
-    logging.basicConfig(level=args.verbose, format=log_format)
-
-    return args
+    return setDefaults(parser, verbose=False, version=__version__)
 
 
 if __name__ == '__main__':
-    args = parse_arguments()
-    return_code = args.function(**vars(args))
-    logging.shutdown()
-    sys.exit(return_code)
+    args = parseArgs()
+    sys.exit(mergeMatrices(**vars(args)))

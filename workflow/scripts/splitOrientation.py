@@ -7,71 +7,61 @@ import logging
 import argparse
 import fileinput
 from contextlib import ExitStack
+from utilities import setDefaults, bedHeader
+
 
 __version__ = '1.0.0'
 
-def main(file : str, forward :str, reverse : str, min_rep : int, **kwargs):
+
+def main(file: str, forward: str, reverse: str, minRep: int):
 
     with ExitStack() as stack:
 
         fh = stack.enter_context(fileinput.input(file))
-        out_forward = stack.enter_context(open(forward, 'w'))
-        out_reverse = stack.enter_context(open(reverse, 'w'))
+        outForward = stack.enter_context(open(forward, 'w'))
+        outReverse = stack.enter_context(open(reverse, 'w'))
 
-        for line in fh:
-            columns = line.strip().split()
+        for i, line in enumerate(fh):
+            if bedHeader(line):
+                continue
+            columns = line.split()
             rep = int(columns[3])
-            if rep < min_rep:
+            if rep < minRep:
                 continue
             orientation = columns[5]
             if orientation == '+':
-                out = out_forward
+                out = outForward
+            elif oritentation == '-':
+                out = outReverse
             else:
-                out = out_reverse
+                logging.info(f'No orientation on line {i+1} - skipping.')
+                continue
 
-            print(line, end='', file = out)
+            print(line, end='', file=out)
 
 
-def parse_arguments():
+def parseArgs():
 
-    custom = argparse.ArgumentParser(add_help=False)
-    custom.set_defaults(function=main)
+    epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
     custom.add_argument(
         'file', metavar='BED', nargs='?', default=[],
         help='Input BED file (default: stdin)')
     custom.add_argument(
-        '--min_rep', type=int, default=1,
-        help='Minimum number of replicates required per '
-             'record to write (default: %(default)s)')
+        '--minRep', type=int, default=1,
+        help='Minimum replicates required to write (default: %(default)s)')
     requiredNamed = custom.add_argument_group(
         'required named arguments')
     requiredNamed.add_argument(
         '--reverse', required=True,
-        help='Output file for reverse orientation intervals.')
+        help='Reverse orientation BED output.')
     requiredNamed.add_argument(
         '--forward', required=True,
-        help='Output file for forward orientation intervals.')
-    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+        help='Forward orientation BED output.')
 
-    base = argparse.ArgumentParser(add_help=False)
-    base.add_argument(
-        '--version', action='version', version=f'%(prog)s {__version__}')
-    base.add_argument(
-        '--verbose', action='store_const', const=logging.DEBUG,
-        default=logging.INFO, help='verbose logging for debugging')
-
-    parser = argparse.ArgumentParser(
-        epilog=epilog, description=__doc__, parents=[base, custom])
-    args = parser.parse_args()
-
-    log_format='%(asctime)s - %(levelname)s - %(funcName)s - %(message)s'
-    logging.basicConfig(level=args.verbose, format=log_format)
-
-    return args
+    return setDefaults(parser, verbose=False, version=__version__)
 
 
 if __name__ == '__main__':
-    args = parse_arguments()
-    return_code = args.function(**vars(args))
-    logging.shutdown()
-    sys.exit(return_code)
+    args = parseArgs()
+    sys.exit(modifyName(**vars(args)))
