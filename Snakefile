@@ -711,7 +711,7 @@ rule writeTUdistribution:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '({SCRIPTS}/writeTUdistribution.py {input} | gzip > {output}) &> {log}'
+        '{SCRIPTS}/writeTUdistribution.py --out {output} {input} &> {log}'
 
 
 rule reformatLammps:
