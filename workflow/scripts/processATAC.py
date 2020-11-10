@@ -42,7 +42,7 @@ def processATAC(
             scaledScore = min(1, score / maxBeadScore)
             # Roud to n decimal places
             if precision:
-                scaledScore = round(scaledScor, precision)
+                scaledScore = round(scaledScore, precision)
             beadDict[chrom][bead] = scaledScore
 
     json.dump(beadDict, sys.stdout)
