@@ -1,4 +1,4 @@
-#WHEN IN DOUBT, LOOK UP @ https://lammps.sandia.gov/doc/Manual.html
+# WHEN IN DOUBT, LOOK UP @ https://lammps.sandia.gov/doc/Manual.html
 
 ############################
 ####   SIM PARAMETERS    ###
@@ -65,8 +65,15 @@ reset_timestep 0
 #GROUPS
 compute RG DNA gyration
 variable RG equal c_RG
-variable time equal -(${warm_up_time}+${timestep}-step)
-variable time equal -(${warm_up_time}+800000+${timestep}-step) # CTCF
+
+# Set no CTCF time be default
+variable ctcfTime equal 0
+variable ctcfTime equal floor((${warm_up_time}*0.5)/8) # CTCF
+variable pushapartTime equal ${warm_up_time}
+variable pushapartTime equal floor(${warm_up_time}*0.5) # CTCF
+
+variable time equal -(${pushapartTime}+(${ctcfTime}*8)+${timestep}-step)
+
 fix RG DNA print ${timestep} "${time} ${RG}" file ${radius_gyration}
 
 ####################################
@@ -78,10 +85,9 @@ dump_modify 1 format line '%d %d %.5f %.5f %.5f %d %d %d' sort 1
 ####################################
 ####    RUN -- EQUIL         #######
 ####################################
-run ${warm_up_time}
+run ${pushapartTime}
 
 unfix pushapart  # STOP DISPLACING WITH SOFT
-undump 1 # Close warm_up dump
 
 ######################################
 ####    LENNARD JONES INTERACTIONS ###
@@ -100,33 +106,36 @@ bond_coeff 1 fene 30.0 1.5 1.0 1.0
 ####################################
 ####    Progressive -- EQUIL #######
 ####################################
+
 bond_coeff 2 harmonic 0.5 1.0 # CTCF
-run 100000                    # CTCF
+run ${ctcfTime}               # CTCF
 
 bond_coeff 2 harmonic 1.0 1.0 # CTCF
-run 100000                    # CTCF
+run ${ctcfTime}               # CTCF
 
 bond_coeff 2 harmonic 1.5 1.0 # CTCF
-run 100000                    # CTCF
+run ${ctcfTime}               # CTCF
 
 bond_coeff 2 harmonic 2.0 1.0 # CTCF
-run 100000                    # CTCF
+run ${ctcfTime}               # CTCF
 
 bond_coeff 2 harmonic 2.5 1.0 # CTCF
-run 100000                    # CTCF
+run ${ctcfTime}               # CTCF
 
 bond_coeff 2 harmonic 3.0 1.0 # CTCF
-run 1000000                   # CTCF
+run ${ctcfTime}               # CTCF
 
 bond_coeff 2 harmonic 3.5 1.0 # CTCF
-run 100000                    # CTCF
+run ${ctcfTime}               # CTCF
 
 bond_coeff 2 harmonic 4.0 1.0 # CTCF
-run 100000
+run ${ctcfTime}               # CTCF
 
 ####################################
 ####    RUN -- EQUIL         #######
 ####################################
+
+undump 1         # Close warm_up dump
 
 unfix RG
 fix RG DNA print ${timestep} "$(step) ${RG}" append ${radius_gyration}
