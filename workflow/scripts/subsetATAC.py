@@ -9,6 +9,8 @@ import logging
 import argparse
 from utilities import setDefaults, getBead, coordinates, readJSON
 
+__version__ = '1.0.0'
+
 
 def subsetATAC(infile: str, region: dict, nBases: int) -> None:
 
@@ -21,8 +23,8 @@ def subsetATAC(infile: str, region: dict, nBases: int) -> None:
     chrom = re.sub('^chr', '', region['chr'])
     startBead = getBead(region['start'], nBases)
     endBead = getBead(region['end'], nBases)
+    
     subsetBead = {}
-
     for i, bead in enumerate(range(startBead, endBead)):
         try:
             subsetBead[i] = beadDict[chrom][str(bead)]
@@ -32,7 +34,7 @@ def subsetATAC(infile: str, region: dict, nBases: int) -> None:
     json.dump(subsetBead, sys.stdout)
 
 
-def validCoordinates(start, end, nBases):
+def validCoordinates(start: int, end: int, nBases: int) -> bool:
     """ Check if start/end positions are multiples of nBases """
     return start % nBases == end % nBases == 0
 
