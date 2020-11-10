@@ -384,7 +384,7 @@ def main(file, atac, monomerSeed, polymerSeed, nMonomers, ctcf, basesPerBead, ra
                 atom2 = line[1]
                 # IF F-R or R-C (CTCF interaction)
                 dat.writeCoeffs(atom1, atom2, coeff, fh=out)
-            dat.writeATACCoeffs(TFcoeffMin=3,  TFcoeffMax=8, fh=out)
+            dat.writeATACCoeffs(TFcoeffMin=1,  TFcoeffMax=8, fh=out)
     with open(groupOut, 'w') as out:
         dat.writeGroup(fh=out)
 
