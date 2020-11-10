@@ -21,6 +21,12 @@ def plotRG(files: List, dpi: int, confidence: float, out: str):
     mean = np.mean(data, axis=2)
     time = mean[:,0]
     mean = mean[:,1]
+
+    # Filter duplicate timesteps from data
+    time, uniqIdxs = np.unique(time, return_index=True)
+    mean = mean[uniqIdxs]
+    data = data[uniqIdxs,:,:]
+
     n = len(files)
     std_err = stats.sem(data, axis=2)[:,1]
     ci = std_err * stats.t.ppf((1 + confidence) / 2, n - 1)
