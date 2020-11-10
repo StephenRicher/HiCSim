@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
 
-""" Merge replicate Pandas dataframes """
+""" Merge pandas dataframes """
+
 
 import sys
 import argparse
 import pandas as pd
 from typing import List
+from utilities import setDefaults
 
 
-def main(infiles: List, out: str) -> None:
+__version__ = '1.0.0'
+
+
+def mergeByRep(infiles: List, out: str):
 
     mergedDF = []
     for rep, file in enumerate(infiles):
@@ -19,19 +24,17 @@ def main(infiles: List, out: str) -> None:
     pd.concat(mergedDF).to_csv(out, index=False)
 
 
-def parse_arguments():
-    """ Parse command line arguments. """
+def parseArgs():
 
-    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+    epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
     parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
-    parser.add_argument('infiles', nargs='*',
-        help='Input CSV files to merge.')
-    parser.add_argument('--out', default=sys.stdout,
-        help='Merged output file.')
+    parser.add_argument('infiles', nargs='*', help='Input files to merge')
+    parser.add_argument(
+        '--out', default=sys.stdout, help='Merged output (default: stdout)')
 
-    return parser.parse_args()
+    return setDefaults(parser, verbose=False, version=__version__)
 
 
 if __name__ == '__main__':
-    args = parse_arguments()
-    sys.exit(main(**vars(args)))
+    args = parseArgs()
+    sys.exit(mergeByRep(**vars(args)))

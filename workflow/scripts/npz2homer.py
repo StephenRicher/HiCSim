@@ -27,7 +27,7 @@ def npz2homer(npz: str, binsize: int, chromosome: str, start: int) -> None:
 
 def parseArgs():
 
-    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+    epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
     parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
     parser.add_argument('npz', metavar='NPZ', help='Input numpy matrix.')
     requiredNamed = parser.add_argument_group('required named arguments')

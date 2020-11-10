@@ -9,10 +9,12 @@ import argparse
 import fileinput
 import numpy as np
 from collections import defaultdict
-from utilities import getBead, transformScore
+from utilities import setDefaults, getBead, transformScore
 
 
-def main(infile: str, transform: str, nbases: int, percentile: float, precision: int) -> None:
+def processATAC(
+        infile: str, transform: str, nBases: int,
+        percentile: float, precision: int):
 
     beadDict = defaultdict(lambda: defaultdict(float))
     with fileinput.input(infile) as fh:
@@ -65,11 +67,12 @@ def percentileScore(beadDict, q=99):
     return np.percentile(np.concatenate(allScores), q)
 
 
-def parse_arguments():
-    """ Parse command line arguments. """
+def parseArgs():
 
-    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+    epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
     parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+    parser.add_argument('infile', nargs='?', default=[],
+        help='ATAC-seq bedgraph file (default: stdin)')
     parser.add_argument(
         '--transform', default='none', choices=['none', 'log', 'sqrt'],
         help='Transform to apply to scores (default: %(default)s)')
@@ -77,17 +80,16 @@ def parse_arguments():
         '--percentile', type=float, default=99,
         help='Percentile score to scale by (default: %(default)s)')
     parser.add_argument(
-        '--nbases', required=True, type=int,
-        help='Number of bases to represent 1 bead.')
-    parser.add_argument(
-        '--precision', required=None, type=int,
+        '--precision', type=int,
         help='Precision to round modifier score (default: %(default)s)')
-    parser.add_argument('infile', nargs='?', default=[],
-        help='ATAC-seq bedgraph file (default: stdin)')
+    requiredNamed = parser.add_argument_group('required named arguments')
+    requiredNamed.add_argument(
+        '--nBases', required=True, type=int,
+        help='Number of bases to represent 1 bead.')
 
-    return parser.parse_args()
+    return setDefaults(parser, verbose=False, version=__version__)
 
 
 if __name__ == '__main__':
-    args = parse_arguments()
-    sys.exit(main(**vars(args)))
+    args = parseArgs()
+    sys.exit(processATAC(**vars(args)))

@@ -7,20 +7,20 @@ import sys
 import json
 import logging
 import argparse
-from utilities import getBead, coordinates, readJSON
+from utilities import setDefaults, getBead, coordinates, readJSON
 
 
-def main(infile: str, region: dict, nbases: int) -> None:
+def subsetATAC(infile: str, region: dict, nBases: int) -> None:
 
-    if not validCoordinates(region['start'], region['end'], nbases):
+    if not validCoordinates(region['start'], region['end'], nBases):
         logging.error('Error not valid coordinates.')
         return 1
 
     beadDict = readJSON(infile)
 
     chrom = re.sub('^chr', '', region['chr'])
-    startBead = getBead(region['start'], nbases)
-    endBead = getBead(region['end'], nbases)
+    startBead = getBead(region['start'], nBases)
+    endBead = getBead(region['end'], nBases)
     subsetBead = {}
 
     for i, bead in enumerate(range(startBead, endBead)):
@@ -32,28 +32,28 @@ def main(infile: str, region: dict, nbases: int) -> None:
     json.dump(subsetBead, sys.stdout)
 
 
-def validCoordinates(start, end, nbases):
-    """ Check if start/end positions are multiples of nbases """
-    return start % nbases == end % nbases == 0
+def validCoordinates(start, end, nBases):
+    """ Check if start/end positions are multiples of nBases """
+    return start % nBases == end % nBases == 0
 
 
-def parse_arguments():
-    """ Parse command line arguments. """
+def parseArgs():
 
-    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+    epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
     parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
-    parser.add_argument(
-        '--region', required=True, metavar='CHR:START-END', type=coordinates,
-        help='Genomic coordinates to operate on.')
-    parser.add_argument(
-        '--nbases', required=True, type=int,
-        help='Number of bases to represent 1 bead.')
     parser.add_argument('infile', nargs='?', default=[],
         help='ATAC JSON bead file (default: stdin)')
+    requiredNamed = parser.add_argument_group('required named arguments')
+    requiredNamed.add_argument(
+        '--region', metavar='CHR:START-END', required=True, type=coordinates,
+        help='Genomic coordinates to operate on.')
+    requiredNamed.add_argument(
+        '--nBases', required=True, type=int,
+        help='Number of bases to represent 1 bead.')
 
-    return parser.parse_args()
+    return setDefaults(parser, verbose=False, version=__version__)
 
 
 if __name__ == '__main__':
-    args = parse_arguments()
-    sys.exit(main(**vars(args)))
+    args = parseArgs()
+    sys.exit(subsetATAC(**vars(args)))
