@@ -5,14 +5,15 @@
 import sys
 import math
 import random
-import logging
 import argparse
+from utilities import setDefaults
 
 __version__ = '1.0.0'
 
 
-def main(subclusterSequence, nClusters, bead, buffer, intraClusterBeads,
-        interClusterDistance, intraClusterDistance, **kwargs):
+def createSynthetic(
+        subclusterSequence, nClusters, bead, buffer,
+        intraClusterBeads, interClusterDistance, intraClusterDistance):
 
     writeBeads(buffer)
     for cluster in range(1, nClusters+1):
@@ -59,53 +60,36 @@ def writeBeads(nBeads, bead='N'):
     for i in range(nBeads):
         print(bead)
 
-def parse_arguments():
 
-    custom = argparse.ArgumentParser(add_help=False)
-    custom.set_defaults(function=main)
-    custom.add_argument(
+def parseArgs():
+
+    epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+    parser.add_argument(
         'subclusterSequence', nargs='?', default='3N3N3N3',
         help='Sequence of sub-cluster')
-    custom.add_argument(
-        '--nClusters',type=int, default=3,
+    parser.add_argument(
+        '--nClusters', type=int, default=3,
         help='Number of clusters in polymer')
-    custom.add_argument(
+    parser.add_argument(
         '--interClusterDistance', type=int, default=349,
         help='Distance between clusters')
-    custom.add_argument(
+    parser.add_argument(
         '--intraClusterDistance', type=int, default=70,
         help='Distance between subclusters')
-    custom.add_argument(
+    parser.add_argument(
         '--intraClusterBeads', type=int, default=4,
         help='Number of beads between the sub-clusters.')
-    custom.add_argument(
+    parser.add_argument(
         '--buffer', type=int, default=25,
         help='Number of edge beads to polymer.')
-
-    custom.add_argument(
+    parser.add_argument(
         '--bead', default='N',
         help='Default bead for interval sequences.')
-    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
 
-    base = argparse.ArgumentParser(add_help=False)
-    base.add_argument(
-        '--version', action='version', version=f'%(prog)s {__version__}')
-    base.add_argument(
-        '--verbose', action='store_const', const=logging.DEBUG,
-        default=logging.INFO, help='verbose logging for debugging')
-
-    parser = argparse.ArgumentParser(
-        epilog=epilog, description=__doc__, parents=[base, custom])
-    args = parser.parse_args()
-
-    log_format='%(asctime)s - %(levelname)s - %(funcName)s - %(message)s'
-    logging.basicConfig(level=args.verbose, format=log_format)
-
-    return args
+    return setDefaults(parser, verbose=False, version=__version__)
 
 
 if __name__ == '__main__':
-    args = parse_arguments()
-    return_code = args.function(**vars(args))
-    logging.shutdown()
-    sys.exit(return_code)
+    args = parseArgs()
+    sys.exit(createSynthetic(**vars(args)))
