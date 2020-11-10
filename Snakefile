@@ -874,22 +874,6 @@ rule plotTUcorrelation:
         '--vmax {params.vMax} &> {log}'
 
 
-rule plotTUactivation:
-    input:
-        expand(
-            '{{name}}/{{nbases}}/reps/{rep}/TU-info.csv.gz', rep=REPS),
-    output:
-        'plots/TUactivation/{name}-{nbases}-TUactivation.png'
-    group:
-        'processAllLammps' if config['groupJobs'] else 'plotTUactivation'
-    log:
-        'logs/plotTUactivation/{name}-{nbases}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/plotTUactivation.py {input} --out {output} &> {log}'
-
-
 rule createContactMatrix:
     input:
         xyz = rules.reformatLammps.output,
