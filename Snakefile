@@ -680,7 +680,7 @@ rule plotRG:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/plotRG.py --output {output} --dpi {params.dpi} '
+        '{SCRIPTS}/plotRG.py --out {output} --dpi {params.dpi} '
         '--confidence {params.confidence} {input} 2> {log}'
 
 
@@ -909,8 +909,8 @@ rule createContactMatrix:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/create_contact_matrix.py {params.periodic} '
-        '--outdata {output} --distance {params.distance} '
+        '{SCRIPTS}/createContactMatrix.py {params.periodic} '
+        '--out {output} --distance {params.distance} '
         '--dimensions {params.x} {params.y} {params.z} {input.groups} '
         '<(zcat -f {input.xyz}) &> {log}'
 
