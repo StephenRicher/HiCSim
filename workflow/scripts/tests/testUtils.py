@@ -30,9 +30,9 @@ def validateOutput(captured, datadir, expectedStdout=None, expectedStderr=None):
         assertLine(datadir.join(expectedStderr), captured.err.splitlines(True))
 
 
-def assertLine(expectedFile, observedOut):
+def assertLine(expected, observed):
     """ Read expectedFile line by line and check same as observed output """
-    
-    with open(expectedFile) as expectedOut:
-        for observedLine, expectedLine in zip(observedOut, expectedOut):
-            assert observedLine == expectedLine
+
+    with open(expected) as expected:
+        for i, (observeLine, expectLine) in enumerate(zip(observed, expected)):
+            assert observeLine == expectLine, f'Mismatch on line {i+1}.'
