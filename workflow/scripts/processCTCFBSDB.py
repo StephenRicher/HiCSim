@@ -8,6 +8,7 @@ import sys
 import logging
 import argparse
 import fileinput
+from utilities import setDefaults
 
 __version__ = '1.0.0'
 
@@ -25,37 +26,20 @@ def main(file, threshold=3, **kwargs):
             sys.stdout.write(f'{chr}\t{start}\t{end}\t{name}\t{score}\t{orient}\n')
 
 
-def parse_arguments():
+def parseArgs():
 
-    custom = argparse.ArgumentParser(add_help=False)
-    custom.set_defaults(function=main)
-    custom.add_argument(
+    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+    parser.add_argument(
         'file', metavar='FILE', nargs='?', default=[],
         help='CTCFBSDB prediction output (default: stdin)')
-    custom.add_argument(
+    parser.add_argument(
         '--threshold', default=3, type=int,
         help='Minimum valid motif score (default: %(default)s)')
-    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
 
-    base = argparse.ArgumentParser(add_help=False)
-    base.add_argument(
-        '--version', action='version', version=f'%(prog)s {__version__}')
-    base.add_argument(
-        '--verbose', action='store_const', const=logging.DEBUG,
-        default=logging.INFO, help='verbose logging for debugging')
-
-    parser = argparse.ArgumentParser(
-        epilog=epilog, description=__doc__, parents=[base, custom])
-    args = parser.parse_args()
-
-    log_format='%(asctime)s - %(levelname)s - %(funcName)s - %(message)s'
-    logging.basicConfig(level=args.verbose, format=log_format)
-
-    return args
+    return setDefaults(parser, verbose=False, version=__version__)
 
 
 if __name__ == '__main__':
-    args = parse_arguments()
-    return_code = args.function(**vars(args))
-    logging.shutdown()
-    sys.exit(return_code)
+    args = parseArgs()
+    sys.exit(main(**vars(args)))
