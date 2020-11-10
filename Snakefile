@@ -363,7 +363,7 @@ if config['ctcf']['data'] is not None:
             forward = 'tracks/{rep}/CTCF-forward.bed',
             reversed = 'tracks/{rep}/CTCF-reverse.bed'
         params:
-            min_rep = config['min_rep']
+            minRep = config['min_rep']
         group:
             'lammps'
         log:
@@ -371,7 +371,7 @@ if config['ctcf']['data'] is not None:
         conda:
             f'{ENVS}/python3.yaml'
         shell:
-            '{SCRIPTS}/split_bed.py --min_rep {params.min_rep} '
+            '{SCRIPTS}/splitOrientation.py --minRep {params.minRep} '
             '--forward {output.forward} --reverse {output.reversed} '
             '{input} &> {log}'
 
@@ -496,7 +496,7 @@ rule maskFasta:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/maskFastaV2.py {input.chromSizes} {params.masking} '
+        '{SCRIPTS}/maskFasta.py {input.chromSizes} {params.masking} '
         '--region {params.region} --seed {params.seed} > {output} 2> {log}'
 
 
@@ -930,7 +930,7 @@ rule mergeReplicates:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/average_matrices.py --out {output} '
+        '{SCRIPTS}/mergeMatrices.py --out {output} '
         '--method {params.method} {input} &> {log}'
 
 
