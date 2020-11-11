@@ -49,8 +49,7 @@ def parseArgs():
     parser.add_argument(
         '--minRep', type=int, default=1,
         help='Minimum replicates required to write (default: %(default)s)')
-    requiredNamed = parser.add_argument_group(
-        'required named arguments')
+    requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument(
         '--reverse', required=True,
         help='Reverse orientation BED output.')
