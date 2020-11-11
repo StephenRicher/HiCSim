@@ -1,4 +1,4 @@
-#WHEN IN DOUBT, LOOK UP @ https://lammps.sandia.gov/doc/Manual.html
+# WHEN IN DOUBT, LOOK UP @ https://lammps.sandia.gov/doc/Manual.html
 
 ############################
 ####   SIM PARAMETERS    ###
@@ -13,10 +13,7 @@ neigh_modify every 1 delay 1 check yes
 ############################
 ####    DEFINITIONS     ####
 ############################
-variable name index ${name}
-variable outdir index ${outdir}
-shell mkdir ${outdir}/
-restart 10000 ${outdir}/Restart.${name}.
+restart ${restartStep} ${restartPrefix}
 
 ############################
 ####   READ DATA FILE ######
@@ -26,92 +23,97 @@ read_data ${infile}
 ############################
 ####   CREATE BOX    #######
 ############################
-# no need to create box or atoms
-# it is read in the data file
+# Already in data file
 
-####################################
-####    PAIR INTERACTIONS    #######
-####    DISPLACE OVERLAPS    #######
-####################################
+##################################
+####    PAIR INTERACTIONS    #####
+####    DISPLACE OVERLAPS    #####
+##################################
 pair_style  soft 1.12246
 pair_modify     shift yes
 pair_coeff      * * 20 1.12246
 variable prefactor equal ramp(0,50)
 fix pushapart all adapt 1 pair soft a * * v_prefactor
 
-####################################
-####    BONDS                #######
-####################################
+##################################
+####    BONDS                #####
+##################################
 bond_style harmonic
 bond_coeff 1 100.0 1.1
-##TODO:
-# TRY TO REMOVE BOND OR CHANGE PARAMETERS AND SEE WHAT HAPPENS
+# CTCF BOND # bond_coeff 2 0.0 1.1
 
-####################################
-####    ANGLES                #######
-####################################
+##################################
+####    ANGLES                ####
+##################################
 angle_style cosine
-angle_coeff 1 10.0
-
-##TODO:
-# TRY TO CHANGE PARAMETERS AND SEE WHAT HAPPENS
+angle_coeff 1 ${cosinePotential}
 
 ######################################
 # INTEGRATION OF Equations of motion #
 ######################################
-fix 1 all   nve
-fix 2 all  langevin   1.0 1.0 1.0 ${seed} #2142
+fix 1 all nve
+fix 2 all langevin 1.0 1.0 1.0 ${seed}
 
 ######################
 #### CUSTOM INFO #####
 ######################
 thermo 100
-thermo_style   custom   step  temp  epair vol cpu
+thermo_style custom step temp epair vol cpu
 timestep 0.01
 reset_timestep 0
+
+## GROUPS ##
+compute RG DNA gyration
+variable RG equal c_RG
+
+variable time equal ${startTimestep}+step
+fix RG DNA print ${timestep} "${time} ${RG}" file ${radiusGyrationOut}
 
 ####################################
 ####    DUMP POSITIONS OF ATOMS ####
 ####################################
-##DAT (best for postprocessing)
-#dump 1 all custom 100 ${outdir}/${name}.* id type x y z ix iy iz
-#dump_modify   1   format '%d %d %.5f %.5f %.5f %d %d %d'
-##XYZ (best for visualisation)
-#visualise this with VMD (Extension -> Tk console -> topo readvarxyz XYZ_..)
-dump 2 all xyz ${timestep} ${outdir}/XYZ_${name}.xyz
-dump_modify 2 element O N Ca F
+dump 1 all custom ${timestep} ${warmUpOut} id type x y z ix iy iz
+dump_modify 1 format line '%d %d %.5f %.5f %.5f %d %d %d' sort 1
 
 ####################################
 ####    RUN -- EQUIL         #######
 ####################################
-run 10000
+run ${softWarmUp}
 
-unfix pushapart  ##STOP DISPLACING WITH SOFT
+unfix pushapart  # STOP DISPLACING WITH SOFT
+
 ######################################
 ####    LENNARD JONES INTERACTIONS ###
 ######################################
 pair_style  lj/cut 1.12246
 pair_modify     shift yes
-pair_coeff * *  1.0 1.0 1.12246 ##REPULSIVE ANY TWO BEADS
-pair_coeff 1 1 10 1.0 1.8  ## OVERWRITE ATTRACTIVE 1-1
-pair_coeff 2 2 10 1.0 1.8 ## OVERWRITE ATTRACTIVE 2-2
-pair_coeff 3 3 10 1.0 1.8 ## OVERWRITE ATTRACTIVE 3-3
-pair_coeff 4 4 10 1.0 1.8 ## OVERWRITE ATTRACTIVE 4-4
+pair_coeff * *  1.0 1.0 1.12246 # Repulsive - everything with everything
+## PAIR_COEFF ##
 
-
-##TODO FOR STUDENT:
-## 1. CREATE A HOMOPOLYMER (ALL BEADS TYPE =1)
-## 2. CREATE A CO-POLYMER (SOME BEADS TYPE=1, OTHERS =2)
-## 3. CHANGE DISTRIBUTION OF TYPES ALONG POLYMER (RANDOM,CLUSTERED,ETC) -> see difference
 
 ####################################
-####    FENE BONDS           #######
+####    Progressive -- EQUIL #######
 ####################################
-bond_style fene
-bond_coeff 1 30.0 1.5 1.0 1.0
+
+bond_style hybrid fene harmonic
+bond_coeff 1 fene 30 1.5 1.0 1.0
+
+# CTCF Progressive #
+# bond_coeff 2 harmonic ${harmonicCoeff} 1.0
 
 ####################################
 ####    RUN -- EQUIL         #######
 ####################################
+
+undump 1         # Close warm_up dump
+
+unfix RG
+fix RG DNA print ${timestep} "$(step) ${RG}" append ${radiusGyrationOut}
+
+dump 2 all custom ${timestep} ${simOut} id type x y z ix iy iz
+dump_modify 2 format line '%d %d %.5f %.5f %.5f %d %d %d' sort 1
+
 reset_timestep 0
-run 10000
+
+fix swap monomer atom/swap ${TFswap} 5 ${seed} 10 ke yes types 1 2
+run ${simTime}

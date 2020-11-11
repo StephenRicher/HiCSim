@@ -54,10 +54,13 @@ default_config = {
                        'yhi':         50,
                        'zlo':        -50,
                        'zhi':         50,},
-    'lammps':         {'restart':    0       ,
-                       'timestep':   1000    ,
-                       'warm_up':    20000   ,
-                       'sim_time':   2000000 ,},
+    'lammps':         {'restart':        0      ,
+                       'timestep':       1000   ,
+                       'softWarmUp':     20000  ,
+                       'harmonicWarmUp': 20000  ,
+                       'simTime':        2000000,
+                       'ctcfSteps':      100    ,
+                       'TFswap':         10000  ,},
     'HiC':            {'matrix' :    None    ,
                        'binsize':    None    ,
                        'log' :       True    ,
@@ -577,84 +580,60 @@ rule BeadsToLammps:
         setBeadsToLammpsCmd()
 
 
-rule checkCTCF:
+rule writeLammps:
     input:
-        script = f'{SCRIPTS}/run-ctcf.lam',
-        dat = rules.BeadsToLammps.output.dat
-    output:
-        temp('{name}/{nbases}/reps/{rep}/lammps/config/run-ctcf.tmp.lam')
-    group:
-        'lammps'
-    log:
-        'logs/checkCTCF/{name}-{nbases}-{rep}.log'
-    shell:
-        "(awk '/Bonds/,/Angles/{{print $2}}' {input.dat} "
-        "| grep -q 2 && cat {input.script} > {output} "
-        "|| sed -e '/# CTCF/d' {input.script} "
-        "> {output}) 2> {log}"
-
-
-rule addCTCF:
-    input:
-        script = rules.checkCTCF.output,
-        coeffs = rules.BeadsToLammps.output.coeffs,
+        script = f'{SCRIPTS}/run.lam',
+        dat = rules.BeadsToLammps.output.dat,
         groups = rules.BeadsToLammps.output.groups,
+        coeffs = rules.BeadsToLammps.output.coeffs,
     output:
-        '{name}/{nbases}/reps/{rep}/lammps/config/run-ctcf.lam'
+        '{name}/{nbases}/reps/{rep}/lammps/config/run.lam'
+    params:
+        TFswap = config['lammps']['TFswap'],
+        timestep = config['lammps']['timestep'],
+        ctcfSteps = config['lammps']['ctcfSteps'],
+        seed = lambda wc: seeds['simulation'][int(wc.rep) - 1],
+        cosinePotential = lambda wc: 10000 / config['bases_per_bead'],
+        simTime = config['lammps']['simTime'],
+        sim = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
+        softWarmUp = config['lammps']['softWarmUp'],
+        harmonicWarmUp = config['lammps']['harmonicWarmUp'],
+        warmUp = '{name}/{nbases}/reps/{rep}/lammps/warmUp.custom.gz',
+        restartStep = int(config['lammps']['restart']),
+        restartPrefix = '{name}/{nbases}/reps/{rep}/lammps/restart/Restart',
+        radiusGyration = '{name}/{nbases}/reps/{rep}/lammps/radius_of_gyration.txt'
     group:
         'lammps'
     log:
-        'logs/addCTCF/{name}-{nbases}-{rep}.log'
+        'logs/writeLammps/{name}-{nbases}-{rep}.log'
     shell:
-        "sed '/^#PAIR_COEFF/ r {input.coeffs}' {input.script} "
-        "| sed '/^#GROUPS/ r {input.groups}' > {output} 2> {log}"
+        '{SCRIPTS}/writeLammps.py --dat {input.dat} --groups {input.groups} '
+        '--pairCoeff {input.coeffs} --timestep {params.timestep} '
+        '--softWarmUp {params.softWarmUp} '
+        '--harmonicWarmUp {params.harmonicWarmUp} --warmUpOut {params.warmUp} '
+        '--simOut {params.sim} --simTime {params.simTime} '
+        '--cosinePotential {params.cosinePotential}  '
+        '--radiusGyrationOut {params.radiusGyration} --seed {params.seed} '
+        '--restartPrefix {params.restartPrefix} '
+        '--restartStep {params.restartStep} --TFswap {params.TFswap} '
+        '--ctcfSteps {params.ctcfSteps} {input.script} > {output} 2> {log}'
 
 
-lmp_cmd = ('-var infile {input.data} '
-           '-var radius_gyration {output.radius_gyration} '
-           '-var warm_up {output.warm_up} '
-           '-var warm_up_time {params.warm_up_time} '
-           '-var restart {params.restart} '
-           '-var sim {output.simulation} '
-           '-var sim_time {params.sim_time} '
-           '-var timestep {params.timestep} '
-           '-var cosine_potential {params.cosine_potential} '
-           '-var seed {params.seed} '
-           '-in {input.script} '
-           '-log /dev/null &> {log}')
+lmp_cmd = '-in {input} -log /dev/null &> {log}'
 if config['cluster'] and not config['groupJobs']:
     lmp_cmd = 'mpirun -np {threads} lmp_mpi ' + lmp_cmd
 else:
     lmp_cmd = 'lmp_serial ' + lmp_cmd
 
 
-def restartCommand(wc):
-    # Define reset command, turn restart OFF if set to 0
-    step = int(config['lammps']['restart'])
-    if step == 0:
-        return f'{step}'
-    else:
-        prefix = f'{wc.region}/{wc.nbases}/reps/{wc.rep}/lammps/restart/Restart'
-        interval = step * int(config['lammps']['timestep'])
-        return f'"{interval} {prefix}"'
-
-
 rule lammps:
     input:
-        data = rules.BeadsToLammps.output.dat,
-        script = rules.addCTCF.output
+        rules.writeLammps.output
     output:
-        warm_up = '{name}/{nbases}/reps/{rep}/lammps/warm_up.custom.gz',
+        warmUp = '{name}/{nbases}/reps/{rep}/lammps/warmUp.custom.gz',
         simulation = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
-        radius_gyration = '{name}/{nbases}/reps/{rep}/lammps/radius_of_gyration.txt',
+        radiusGyration = '{name}/{nbases}/reps/{rep}/lammps/radius_of_gyration.txt',
         restart = directory('{name}/{nbases}/reps/{rep}/lammps/restart/')
-    params:
-        timestep = config['lammps']['timestep'],
-        warm_up_time = config['lammps']['warm_up'],
-        sim_time = config['lammps']['sim_time'],
-        cosine_potential = lambda wc: 10000 / config['bases_per_bead'],
-        restart = restartCommand,
-        seed = lambda wc: seeds['simulation'][int(wc.rep) - 1],
     group:
         'lammps'
     log:
