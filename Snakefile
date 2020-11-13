@@ -176,7 +176,7 @@ rule all:
          expand('plots/{plot}/{name}-{nbases}-{plot}.png',
             nbases=config['bases_per_bead'], name=details.keys(),
             plot=['pairCluster', 'meanVariance','TUcorrelation', 'TUcircos',
-                  'TUactivation', 'radiusGyration', 'TUreplicateCount',])]
+                  'radiusGyration', 'TUreplicateCount',])]
 
 
 rule unzipGenome:
