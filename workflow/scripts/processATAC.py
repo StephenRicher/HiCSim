@@ -11,6 +11,8 @@ import numpy as np
 from collections import defaultdict
 from utilities import setDefaults, getBead, transformScore
 
+__version__ = '1.0.0'
+
 
 def processATAC(
         infile: str, transform: str, nBases: int,
@@ -23,13 +25,13 @@ def processATAC(
             if score == 0:
                 continue
             # If start/end map to same bead - add full score
-            if getBead(start, nbases) == getBead(end, nbases):
-                beadDict[chrom][getBead(start, nbases)] += score
+            if getBead(start, nBases) == getBead(end, nBases):
+                beadDict[chrom][getBead(start, nBases)] += score
             # Else loop through each base and add score individually
             else:
                 length = end - start
                 for pos in range(start, end):
-                    bead = getBead(pos, nbases)
+                    bead = getBead(pos, nBases)
                     beadDict[chrom][bead] += (score / length)
 
     maxBeadScore = percentileScore(beadDict, percentile)
