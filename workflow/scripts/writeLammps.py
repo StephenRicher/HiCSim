@@ -35,7 +35,10 @@ def writeLammps(
             logging.error(
                 'Progressive harmonic warm up cannot be less than 1. '
                 'Reduce --ctcfSteps or increase --harmonicWarmup.')
+            return 1
     else:
+        # If no CTCF add any harmonicWarmUp to softWarmUp
+        softWarmUp += harmonicWarmUp
         harmonicWarmUp = 0
     startTimestep = -(softWarmUp + (harmonicWarmUp * ctcfSteps) + timestep)
 
