@@ -70,10 +70,6 @@ default_config = {
                        'vMax':       None    ,
                        'vMin2':      None    ,
                        'vMax2':      None    ,},
-    'dtwDNA':         {'sampletime': 0       ,
-                       'maxtime':    100000 ,},
-    'dtwTU':          {'sampletime': 0       ,
-                       'maxtime':    0       ,},
     'plotRG':         {'dpi':        300     ,
                        'confidence': 0.95    ,},
     'plotTU':         {'pvalue':     0.1     ,
@@ -625,6 +621,12 @@ if config['cluster'] and not config['groupJobs']:
 else:
     lmp_cmd = 'lmp_serial ' + lmp_cmd
 
+def setRestart(wc):
+    """ Include restart directory if included """
+    if config['lammps']['restart']:
+        return directory('{name}/{nbases}/reps/{rep}/lammps/restart/')
+    else:
+        return []
 
 rule lammps:
     input:
@@ -633,7 +635,7 @@ rule lammps:
         warmUp = '{name}/{nbases}/reps/{rep}/lammps/warmUp.custom.gz',
         simulation = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
         radiusGyration = '{name}/{nbases}/reps/{rep}/lammps/radius_of_gyration.txt',
-        restart = directory('{name}/{nbases}/reps/{rep}/lammps/restart/')
+        restart = setRestart
     group:
         'lammps'
     log:
