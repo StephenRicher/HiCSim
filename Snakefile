@@ -621,7 +621,7 @@ if config['cluster'] and not config['groupJobs']:
 else:
     lmp_cmd = 'lmp_serial ' + lmp_cmd
 
-def setRestart(wc):
+def setRestart():
     """ Include restart directory if included """
     if config['lammps']['restart']:
         return directory('{name}/{nbases}/reps/{rep}/lammps/restart/')
@@ -635,7 +635,7 @@ rule lammps:
         warmUp = '{name}/{nbases}/reps/{rep}/lammps/warmUp.custom.gz',
         simulation = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
         radiusGyration = '{name}/{nbases}/reps/{rep}/lammps/radius_of_gyration.txt',
-        restart = setRestart
+        restart = setRestart()
     group:
         'lammps'
     log:
