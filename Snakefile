@@ -21,11 +21,7 @@ if not config:
 # Note does not currently correctly deal with special case config['masking'] in set_config
 default_config = {
     'workdir':        workflow.basedir,
-    'ctcf':           {'data':             None,
-                       'computeDirection': True},
-    'atac':           {'bedgraph':    []    ,
-                       'scale':      'none' ,
-                       'percentile':  97.5  ,},
+    'ctcf':           None,
     'masking':        {},
     'genome' :        {'build':    'genome',
                        'sequence':  None,
@@ -34,9 +30,8 @@ default_config = {
                        'chr':       None,
                        'start':     None,
                        'end':       None,},
+    'maxProb':        0.9,
     'syntheticSequence' : {}              ,
-    'min_rep':        1,
-    'scaleBed':      'sqrt',
     'bases_per_bead': 1000,
     'monomers':       100,
     'method':         'mean',
@@ -210,139 +205,16 @@ rule getChromSizes:
         'cut -f 1,2 {input} > {output} 2> {log}'
 
 
-if config['ctcf']['data'] is not None:
-
-    if config['ctcf']['computeDirection']:
-
-        rule modifyBedName:
-            input:
-                config['ctcf']['data']
-            output:
-                'tracks/CTCF-modifyName.bed'
-            group:
-                'processCTCF'
-            log:
-                'logs/modifyBedName.log'
-            conda:
-                f'{ENVS}/python3.yaml'
-            shell:
-                '{SCRIPTS}/modifyBedName.py {input} > {output} 2> {log}'
-
-
-        rule bed2Fasta:
-            input:
-                bed = rules.modifyBedName.output,
-                genome = rules.unzipGenome.output,
-                genomeIndex = rules.indexGenome.output
-            output:
-                'tracks/CTCF-modifyName.fasta'
-            group:
-                'processCTCF'
-            log:
-                'logs/bed2Fasta.log'
-            conda:
-                f'{ENVS}/bedtools.yaml'
-            shell:
-                'bedtools getfasta -name -fullHeader '
-                '-bed {input.bed} -fi {input.genome} > {output} 2> {log}'
-
-
-        rule runCTCFpredict:
-            input:
-                rules.bed2Fasta.output
-            output:
-                'tracks/CTCF-prediction.tsv'
-            group:
-                'processCTCF'
-            log:
-                'logs/runCTCFpredict.log'
-            conda:
-                f'{ENVS}/python3.yaml'
-            shell:
-                '{SCRIPTS}/runCTCFpredict.py {input} > {output} 2> {log}'
-
-
-        rule processCTCFprediction:
-            input:
-                rules.runCTCFpredict.output
-            output:
-                'tracks/CTCF-prediction.bed'
-            group:
-                'processCTCF'
-            params:
-                threshold = 15
-            log:
-                'logs/processCTCFprediction.log'
-            conda:
-                f'{ENVS}/python3.yaml'
-            shell:
-                '{SCRIPTS}/processCTCFBSDB.py --threshold {params.threshold} '
-                '{input} > {output} 2> {log}'
-
-
-    def CTCFinput(wildcards):
-        if config['ctcf']['computeDirection']:
-            return rules.processCTCFprediction.output
-        else:
-            return config['ctcf']['data']
-
-
-    rule sortCTCF:
-        input:
-            CTCFinput
-        output:
-            'tracks/CTCF-sort.bed'
-        group:
-            'processCTCF'
-        log:
-            'logs/sortBed.log'
-        conda:
-            f'{ENVS}/bedtools.yaml'
-        shell:
-            'bedtools sort -i {input} > {output} 2> {log}'
-
-
-    rule mergeCTCF:
-        input:
-            rules.sortCTCF.output
-        output:
-            'tracks/CTCF-merged.bed'
-        group:
-            'processCTCF'
-        log:
-            'logs/mergeBed.log'
-        conda:
-            f'{ENVS}/bedtools.yaml'
-        shell:
-            'bedtools merge -s -c 4,5,6 -o count,median,distinct '
-            '-i {input} > {output} 2> {log}'
-
-
-    rule scaleCTCF:
-        input:
-            rules.mergeCTCF.output
-        output:
-            'tracks/CTCF-scaled.bed'
-        params:
-            transform =  config['scaleBed']
-        group:
-            'processCTCF'
-        log:
-            'logs/scaleBed.log'
-        conda:
-            f'{ENVS}/python3.yaml'
-        shell:
-            '{SCRIPTS}/scaleBedScore.py --transform {params.transform} '
-            '{input} > {output} 2> {log}'
-
+if config['ctcf'] is not None:
 
     rule filterCTCF:
         input:
-            rules.scaleCTCF.output
+            config['ctcf']
         output:
-            'tracks/{rep}/CTCF-sampled.bed'
+            'tracks/{rep}/CTCF/CTCF-filtered.bed'
         params:
             rep = REPS,
+            maxProb = config['maxProb'],
             seed = lambda wc: seeds['sequence'][int(wc.rep) - 1]
         group:
             'lammps'
@@ -352,17 +224,15 @@ if config['ctcf']['data'] is not None:
             f'{ENVS}/python3.yaml'
         shell:
             '{SCRIPTS}/filterBedScore.py --seed {params.seed} '
-            '{input} > {output} 2> {log}'
+            '--maxProb {params.maxProb} {input} > {output} 2> {log}'
 
 
     rule splitOrientation:
         input:
             rules.filterCTCF.output
         output:
-            forward = 'tracks/{rep}/CTCF-forward.bed',
-            reversed = 'tracks/{rep}/CTCF-reverse.bed'
-        params:
-            minRep = config['min_rep']
+            forward = 'tracks/{rep}/CTCF/CTCF-filtered-forward.bed',
+            reversed = 'tracks/{rep}/CTCF/CTCF-filtered-reverse.bed'
         group:
             'lammps'
         log:
@@ -370,82 +240,19 @@ if config['ctcf']['data'] is not None:
         conda:
             f'{ENVS}/python3.yaml'
         shell:
-            '{SCRIPTS}/splitOrientation.py --minRep {params.minRep} '
+            '{SCRIPTS}/splitOrientation.py '
             '--forward {output.forward} --reverse {output.reversed} '
             '{input} &> {log}'
 
 
-rule scaleTracks:
+rule filterTracks:
     input:
         lambda wc: track_data[wc.track]['source']
     output:
-        'tracks/scaled/{track}'
-    params:
-        transform = config['scaleBed']
-    group:
-        'lammps'
-    log:
-        'logs/scaleTracks/{track}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/scaleBedScore.py --transform {params.transform} '
-        '{input} > {output} 2> {log}'
-
-
-rule processATAC:
-    input:
-        config['atac']['bedgraph']
-    output:
-        'tracks/ATAC/ATAC-beadModifier-{nbases}.json'
-    params:
-        transform = config['atac']['scale'],
-        percentile = config['atac']['percentile'],
-        precision = 2
-    group:
-        'lammps'
-    log:
-        'logs/processATAC-{nbases}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/processATAC.py --transform {params.transform} '
-        '--nBases {wildcards.nbases} --percentile {params.percentile} '
-        '--precision {params.precision} {input} > {output} 2> {log}'
-
-
-def getRegion(wc):
-    chrom = details[wc.name]['chr']
-    start = details[wc.name]['start']
-    end = details[wc.name]['end']
-    return f'{chrom}:{start}-{end}'
-
-
-rule subsetATAC:
-    input:
-        rules.processATAC.output
-    output:
-        '{name}/{nbases}/ATAC-beadModifier.json'
-    params:
-        region = getRegion
-    group:
-        'lammps'
-    log:
-        'logs/subsetATAC/{name}-{nbases}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/subsetATAC.py --nBases {wildcards.nbases} '
-        '--region {params.region} {input} > {output} 2> {log}'
-
-
-rule filterTracks:
-    input:
-        rules.scaleTracks.output
-    output:
-        'tracks/scaled/{rep}/{track}'
+        'tracks/{rep}/other/{track}'
     params:
         rep = REPS,
+        maxProb = config['maxProb'],
         seed = lambda wc: seeds['sequence'][int(wc.rep) - 1]
     group:
         'lammps'
@@ -455,7 +262,14 @@ rule filterTracks:
         f'{ENVS}/python3.yaml'
     shell:
         '{SCRIPTS}/filterBedScore.py --seed {params.seed} '
-        '{input} > {output} 2> {log}'
+        '--maxProb {params.maxProb} {input} > {output} 2> {log}'
+
+
+def getRegion(wc):
+    chrom = details[wc.name]['chr']
+    start = details[wc.name]['start']
+    end = details[wc.name]['end']
+    return f'{chrom}:{start}-{end}'
 
 
 def getMasking(wc):
@@ -463,16 +277,16 @@ def getMasking(wc):
     command = ''
     for track in track_data:
         character = track_data[track]['character']
-        command += f'--bed tracks/scaled/{wc.rep}/{track},{character} '
-    if config['ctcf']['data']:
-        command += (f'--bed tracks/{wc.rep}/CTCF-forward.bed,F '
-                    f'--bed tracks/{wc.rep}/CTCF-reverse.bed,R ')
+        command += f'--bed tracks/{wc.rep}/other/{track},{character} '
+    if config['ctcf'] is not None:
+        command += (f'--bed tracks/{wc.rep}/CTCF/CTCF-filtered-forward.bed,F '
+                    f'--bed tracks/{wc.rep}/CTCF/CTCF-filtered-reverse.bed,R ')
     return command
 
 
 def getSplitOrient(wc):
     """ Return rule output only if used. """
-    if config['ctcf']['data']:
+    if config['ctcf'] is not None:
         return rules.splitOrientation.output
     else:
         return []
@@ -481,10 +295,10 @@ def getSplitOrient(wc):
 rule maskFasta:
     input:
         getSplitOrient,
-        expand('tracks/scaled/{{rep}}/{track}', track=track_data.keys()),
+        expand('tracks/{{rep}}/other/{track}', track=track_data.keys()),
         chromSizes = rules.getChromSizes.output
     output:
-        pipe('{name}/reps/{name}-{rep}-masked.fa')
+        '{name}/reps/{name}-{rep}-masked.fa'
     params:
         masking = getMasking,
         region = getRegion,
@@ -528,8 +342,6 @@ def beadsInput(wc):
 
 def setBeadsToLammpsCmd():
     cmd = '{SCRIPTS}/generate_polymer.py '
-    if config['atac']['bedgraph']:
-        cmd += '--atac {input.atac} '
     cmd += (
         '--polymerSeed {params.polymerSeed} '
         '--monomerSeed {params.monomerSeed} '
@@ -548,7 +360,6 @@ def setBeadsToLammpsCmd():
 rule BeadsToLammps:
     input:
         beads = beadsInput,
-        atac = rules.subsetATAC.output if config['atac']['bedgraph'] else []
     output:
         dat = '{name}/{nbases}/reps/{rep}/lammps/config/lammps_input.dat',
         coeffs = '{name}/{nbases}/reps/{rep}/lammps/config/coeffs.txt',
@@ -963,8 +774,8 @@ def getHiCconfig(wc):
                 command += f' --vMax2 {config["HiC"]["vMax2"]} '
         if config['genome']['genes']:
             command += f' --genes {config["genome"]["genes"]} '
-        if config['ctcf']['data'] is not None:
-            command += f'--ctcfOrient {rules.scaleCTCF.output} '
+        if config['ctcf'] is not None:
+            command += f'--ctcfOrient {config["ctcf"]} '
     if config['HiC']['vMin']:
         command += f' --vMin {config["HiC"]["vMin"]} '
     if config['HiC']['vMax']:
@@ -979,7 +790,7 @@ def getHiCconfig(wc):
 def getCTCFOrient(wc):
     """ Return CTCF orientation if not synthetic """
     if config['syntheticSequence'] is None:
-        return rules.scaleCTCF.output
+        return config["ctcf"]
     else:
         return []
 

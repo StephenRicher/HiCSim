@@ -6,11 +6,9 @@ from distutils import dir_util
 
 @pytest.fixture
 def datadir(tmpdir, request):
-    '''
-    Fixture responsible for searching a folder with the same name of test
+    """ Fixture responsible for searching a folder with the same name of test
     module and, if available, moving all contents to a temporary directory so
-    tests can use them freely. datadir can be used just like tmpdir.
-    '''
+    tests can use them freely. datadir can be used just like tmpdir. """
 
     filename = request.module.__file__
     test_dir, _ = os.path.splitext(filename)

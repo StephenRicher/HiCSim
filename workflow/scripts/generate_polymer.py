@@ -18,17 +18,10 @@ __version__ = '1.0.0'
 
 class Sequence:
 
-    def __init__(self, sequence, basesPerBead, atac=None,
+    def __init__(self, sequence, basesPerBead,
             name='DNA', ctcf=False, beadID=1):
         self._beadID = beadID
         self.basesPerBead = basesPerBead
-        # Read ATAC modifiers for each Bead
-        if atac is not None:
-            self.atac = readJSON(atac)
-        else:
-            self.atac = None
-        # Dictionary to store bead type : modifier
-        self.modifiers = {}
         # Should beads set as 'F' or 'R' be processed as CTCF?
         self._ctcf = ctcf
         self.ctcfs = {}
@@ -45,11 +38,6 @@ class Sequence:
                     type = f'{type}-{self._beadID}'
                     # Associate unique CTCF type with bead ID
                     self.ctcfs[type] = self._beadID
-                elif self.atac and type == 'N':
-                    score = self.atac[str(i)]
-                    # Unique type for each modifier score
-                    type = f'{type}-{score}'
-                    self.modifiers[type] = float(score)
                 if type not in self.types:
                     self.types.append(type)
                 self.sequence[self._beadID] = type
@@ -90,8 +78,8 @@ class lammps:
         self.monomers = self.loadMonomer(nMonomers, prop=0.5)
 
 
-    def loadSequence(self, sequence_file, atac, basesPerBead, ctcf):
-        sequence = Sequence(sequence_file, basesPerBead=basesPerBead, atac=atac,
+    def loadSequence(self, sequence_file, basesPerBead, ctcf):
+        sequence = Sequence(sequence_file, basesPerBead=basesPerBead,
             ctcf=ctcf, beadID=self._beadID)
         self.sequences.append(sequence)
         self._beadID += sequence.nBeads
@@ -339,21 +327,6 @@ class lammps:
         fh.write(f'pair_coeff {type1ID} {type2ID} {coeff}\n')
 
 
-    def writeATACCoeffs(self, TFcoeffMin, TFcoeffMax, fh=sys.stderr):
-        """ Write ATAC modified pair coefficients for N beads and monomers """
-
-        # Range between min and max coefficients
-        coeffRange = TFcoeffMax - TFcoeffMin
-        TFa_typeID = 1
-        for sequence in self.sequences:
-            for type, modifier in sequence.modifiers.items():
-                N_typeID = self.typeIDs[type]
-                TFcoeffMod = (modifier * coeffRange) + TFcoeffMin
-                fh.write(
-                    f'pair_coeff {TFa_typeID} {N_typeID} {TFcoeffMod} 1.0 1.8\n')
-
-
-
     def writeGroup(self, fh=sys.stderr):
         for sequence in self.sequences:
             firstBeadID = min(sequence.sequence)
@@ -365,15 +338,15 @@ class lammps:
 
 
 
-def main(file, atac, monomerSeed, polymerSeed, nMonomers, ctcf, basesPerBead, randomWalk,
+def main(file, monomerSeed, polymerSeed, nMonomers, ctcf, basesPerBead, randomWalk,
         pairCoeffs, coeffOut, groupOut, xlo, xhi, ylo, yhi, zlo, zhi, **kwargs):
 
     # TO DO - the tye list needs to be input by user
-    TU_types=['1', '7', '3']
+    TU_types=['P', 'p']
     dat = lammps(nMonomers, monomerSeed=monomerSeed, polymerSeed=polymerSeed,
         randomWalk=randomWalk, TU_types=TU_types)
     dat.loadBox(xlo, xhi, ylo, yhi, zlo, zhi)
-    dat.loadSequence(file, atac, basesPerBead, ctcf)
+    dat.loadSequence(file, basesPerBead, ctcf)
     dat.writeLammps()
     with open(pairCoeffs) as fh:
         with open(coeffOut, 'w') as out:
@@ -384,7 +357,6 @@ def main(file, atac, monomerSeed, polymerSeed, nMonomers, ctcf, basesPerBead, ra
                 atom2 = line[1]
                 # IF F-R or R-C (CTCF interaction)
                 dat.writeCoeffs(atom1, atom2, coeff, fh=out)
-            dat.writeATACCoeffs(TFcoeffMin=1,  TFcoeffMax=8, fh=out)
     with open(groupOut, 'w') as out:
         dat.writeGroup(fh=out)
 
@@ -440,8 +412,6 @@ def parse_arguments():
     custom.set_defaults(function=main)
     custom.add_argument(
         'file',metavar='SEQUENCE', help='Input bead sequence file.')
-    custom.add_argument(
-        '--atac', help='ATAC bead binding modifier')
     custom.add_argument(
         '--nMonomers', default=0, type=int,
         help='Set number of monomers for simulation.')

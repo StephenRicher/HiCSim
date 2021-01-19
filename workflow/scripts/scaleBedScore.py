@@ -11,31 +11,31 @@ from utilities import setDefaults, transformScore, bedHeader
 __version__ = '1.0.0'
 
 
-def scaleBed(file : str, transform : str, scoreColumn: int):
+def scaleBed(file: str, transform: str):
 
-    maxScore = getMaxScore(file, scoreColumn)
+    maxScore = getMaxScore(file)
     maxScore = transformScore(maxScore, transform)
 
     with open(file) as fh:
         for line in fh:
             if bedHeader(line): continue
-            columns = line.split()
-            score = float(columns[scoreColumn])
+            columns = line.strip().split()
+            score = float(columns[4])
             score = transformScore(score, transform)
-            scaledScore = score / maxScore
-            columns[scoreColumn] = str(scaledScore)
+            score = score / maxScore
+            columns[4] = str(score)
             line = '\t'.join(columns)
-            sys.stdout.write(f'{line}\n')
+            print(line)
 
 
-def getMaxScore(file, scoreColumn=4):
+def getMaxScore(file):
     """ Determine maxScore """
 
     with open(file) as fh:
         for line in fh:
             if bedHeader(line): continue
             try:
-                score = float(line.split()[scoreColumn])
+                score = float(line.split()[4])
                 maxScore = max(score, maxScore)
             except UnboundLocalError:
                 maxScore = score
@@ -50,9 +50,6 @@ def parseArgs():
     parser.add_argument(
         '--transform', default='none', choices=['log', 'sqrt', 'none'],
         help='Transform to apply to BED scores (default: %(default)s)')
-    parser.add_argument(
-        '--scoreColumn', type=int, default=4,
-        help='Specify score column to scale (default: %(default)s)')
 
     return setDefaults(parser, verbose=False, version=__version__)
 

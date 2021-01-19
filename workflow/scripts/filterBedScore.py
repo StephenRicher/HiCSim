@@ -12,16 +12,20 @@ from utilities import setDefaults, bedHeader
 __version__ = '1.0.0'
 
 
-def filterBed(file: str, seed: float):
+def filterBed(file: str, seed: float, maxProb: float):
 
     random.seed(seed)
     with fileinput.input(file) as fh:
         for line in fh:
             if bedHeader(line): continue
-            score = float(line.split()[4])
-            assert 0 <= score <= 1, "Score not between 0 and 1"
+            columns = line.strip().split()
+            try:
+                score = float(line.split()[4])
+                assert 0 <= score <= 1, "Score not between 0 and 1"
+            except IndexError:
+                score = maxProb
             if random.random() < score:
-                print(line)
+                print('\t'.join(columns))
 
 
 def parseArgs():
@@ -33,6 +37,10 @@ def parseArgs():
     parser.add_argument(
         '--seed', default=None, type=float,
         help='Initialize the random number generator (default: %(default)s)')
+    parser.add_argument(
+        '--maxProb', default=1.0, type=float,
+        help='If no score column then set retention probability '
+             'for all entries (default: %(default)s)')
 
     return setDefaults(parser, verbose=False, version=__version__)
 
