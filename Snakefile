@@ -82,10 +82,6 @@ config = set_config(config, default_config)
 
 workdir : config['workdir']
 
-if config['scaleBed'] not in ['sqrt', 'none', 'log']:
-    sys.exit('"scaleBed" in configuration file must be one of either '
-             '"none", "sqrt" or "log".')
-
 details = {}
 if not config['syntheticSequence']:
     # If no synthetic sequence ensure genome information is provided.
