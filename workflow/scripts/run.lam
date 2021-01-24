@@ -76,6 +76,13 @@ dump 1 all custom ${timestep} ${warmUpOut} id type x y z ix iy iz
 dump_modify 1 format line '%d %d %.5f %.5f %.5f %d %d %d' sort 1
 
 ####################################
+####    Progressive -- EQUIL #######
+####################################
+
+# CTCF Progressive #
+# bond_coeff 2 ${harmonicCoeff} 1.0
+
+####################################
 ####    RUN -- EQUIL         #######
 ####################################
 run ${softWarmUp}
@@ -90,20 +97,9 @@ pair_modify     shift yes
 pair_coeff * *  1.0 1.0 1.12246 # Repulsive - everything with everything
 ## PAIR_COEFF ##
 
-
-####################################
-####    Progressive -- EQUIL #######
-####################################
-
 bond_style hybrid fene harmonic
 bond_coeff 1 fene 30 1.5 1.0 1.0
-
-# CTCF Progressive #
 # bond_coeff 2 harmonic ${harmonicCoeff} 1.0
-
-####################################
-####    RUN -- EQUIL         #######
-####################################
 
 undump 1         # Close warm_up dump
 

@@ -53,11 +53,14 @@ def writeLammps(
             elif line.startswith('# CTCF BOND #') and ctcfBond:
                 print(re.sub('# CTCF BOND # ', '', line))
             elif line.startswith('# CTCF Progressive #') and ctcfBond:
-                harmonicCoeffs = np.linspace(0, 4, ctcfSteps)
+                harmonicCoeffs = np.linspace(0, 6, ctcfSteps)
                 template = next(fh).strip('# \n')
                 for coeff in harmonicCoeffs:
                     print(re.sub('\${harmonicCoeff}', str(coeff), template))
                     print(f'run {harmonicWarmUp}')
+            elif line.startswith('# bond_coeff 2 harmonic') and ctcfBond:
+                line = line.strip('# \n')
+                print(re.sub('\${harmonicCoeff}', str(coeff), line))
             else:
                 line = re.sub('\${seed}', str(seed), line)
                 line = re.sub('\${simTime}', str(simTime), line)
