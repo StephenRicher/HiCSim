@@ -32,6 +32,8 @@ default_config = {
                        'end':       None,},
     'maxProb':        0.9,
     'syntheticSequence' : {}              ,
+    'modifySynthetic': {'beadChar': 'P'   ,
+                        'nBeads'  :  0    ,},
     'bases_per_bead': 1000,
     'monomers':       100,
     'method':         'mean',
@@ -329,9 +331,28 @@ rule FastaToBeads:
         '--seed {params.seed} {input} > {output} 2> {log}'
 
 
+rule addTUbeads:
+    input:
+        lambda wc: config['syntheticSequence'][wc.name]
+    output:
+        '{name}/{nbases}/reps/{rep}/modifiedSynthetic-{rep}.txt'
+    params:
+        seed = lambda wc: seeds['sequence'][int(wc.rep) - 1],
+        nBeads = config['modifySynthetic']['nBeads'],
+        beadChar = config['modifySynthetic']['beadChar']
+    log:
+        'logs/addTUbeads/{name}-{nbases}-{rep}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'python {SCRIPTS}/addTUbeads.py {params.nBeads} {input} '
+        '--bead {params.beadChar} --seed {params.seed}  '
+        '> {output} 2> {log}'
+
+
 def beadsInput(wc):
     if config['syntheticSequence']:
-        return config['syntheticSequence'][wc.name]
+        return rules.addTUbeads.output
     else:
         return rules.FastaToBeads.output
 
@@ -570,7 +591,7 @@ rule plotDBSCAN:
     shell:
         '{SCRIPTS}/plotDBSCAN.py {output} {input} &> {log}'
 
-
+# Add whether TU is in TAD or not...
 rule computeTUstats:
     input:
         '{name}/{nbases}/reps/{rep}/TU-info.csv.gz'
