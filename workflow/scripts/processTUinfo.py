@@ -16,6 +16,10 @@ def processTUinfo(file: str, atomGroups: str, distance: float, out: str):
 
     # Read atomGroup and retrieve TU atom indexes
     atomGroupsDict = readJSON(atomGroups)
+    if ('TU' not in atomGroupsDict) or ('TF' not in atomGroupsDict):
+        logging.error('No TU-TF pairs to process in simulation.')
+        return 1
+
     atomCount = getAtomCount(atomGroupsDict)
 
     # Read simulation file 1 timestep at a time
