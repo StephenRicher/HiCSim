@@ -45,7 +45,7 @@ def createMainParent(verbose=True, version=None):
 
 def positiveInt(value):
     if (re.match(r'^[-+]?[0-9]+$', value)
-            and int(value) > 0):
+            and int(value) >= 0):
         return int(value)
     else:
         raise argparse.ArgumentTypeError(
