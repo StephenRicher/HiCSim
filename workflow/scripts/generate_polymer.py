@@ -257,7 +257,8 @@ class lammps:
                 sys.stdout.write(f'{self._bondID} 1 {beadID} {beadID+1}\n')
                 self._bondID += 1
             for forward, reverse in self.detectConvertCTCF(sequence):
-                sys.stdout.write(f'{self._bondID} 2 {forward} {reverse}\n')
+                sys.stdout.write(
+                    f'{self._bondID} 2 {forward} {reverse} # CTCF Bond\n')
                 self._bondID += 1
         sys.stdout.write('\n')
 
