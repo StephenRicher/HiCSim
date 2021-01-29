@@ -5,6 +5,7 @@
 
 import re
 import sys
+import logging
 import argparse
 import pandas as pd
 from argUtils import setDefaults, createMainParent, positiveInt
@@ -18,12 +19,14 @@ def addTUbeads(nBeads: int, sequence: str, bead: str, seed: float):
     # Get index positions of all N beads
     Nbases = pd.Series(beadSequence[beadSequence == 'N'].index)
     # Randomly select beads to convert to TU beads
+    TUbeads = Nbases.sample(nBeads, random_state=seed)
     try:
         TUbeads = Nbases.sample(nBeads, random_state=seed)
     except ValueError:
         logging.error(
             f'Number of TUs to add ({nBeads}) is higher than '
-            f'number of N beads ({lenNbases}) in sequence.')
+            f'number of N beads ({len(Nbases)}) in sequence.')
+        return 1
     beadSequence[TUbeads] = bead
     # Write to stdout
     beadSequence.to_csv(sys.stdout, header=False, index=False)
@@ -46,8 +49,9 @@ def parseArgs():
         '--bead', default='3', type=bead,
         help='Single character to use as bead (default: %(default)s)')
     parser.add_argument(
-        '--seed', default=None, type=float,
-        help='Seed for determing TU positions (default: %(default)s)')
+        '--seed', default=None, type=positiveInt,
+        help='Non-negative integer for seeding random placement '
+             'positions (default: %(default)s)')
 
     return setDefaults(parser)
 
