@@ -9,13 +9,15 @@ import argparse
 import numpy as np
 import pandas as pd
 from collections import defaultdict
+from utilities import readJSON
 
 
-def main(infile: str, out: str) -> None:
+def main(infile: str, TADboundaries: str, out: str) -> None:
 
     TUinfo = pd.read_csv(infile, usecols=['time', 'id', 'active'])
     TUinfo = TUinfo.sort_values('time').groupby('id')
-
+    if TADboundaries is not None:
+        TADboundaries = readJSON(TADboundaries)
     TUstats = defaultdict(list)
 
     for TU, info in TUinfo:
@@ -28,7 +30,6 @@ def main(infile: str, out: str) -> None:
 
         # Compute minimum compression ratio for given length
         minCompress = len(zlib.compress(b'.' * nSteps)) / len(info.active)
-
         TUstats['TU'].append(TU)
         TUstats['simTime'].append(simTime)
         TUstats['nSteps'].append(nSteps)
@@ -40,7 +41,10 @@ def main(infile: str, out: str) -> None:
         TUstats['burstLengthStd'].append(np.std(activeBursts) * timestep)
         TUstats['inactiveLengthMean'].append(np.mean(inactiveBursts) * timestep)
         TUstats['inactiveLengthStd'].append(np.std(inactiveBursts) * timestep)
-
+        if TADboundaries is not None:
+            TADstatus = int(TADboundaries[str(TU)])
+            TUstats['section'].append(TADstatus)
+            TUstats['inTAD'].append(TADstatus > 0)
         # Convert active boolean array to binary string
         boolString = ''.join(str(int(x)) for x in np.array(info.active))
         activeCompressed = zlib.compress(boolString.encode("utf-8"))
@@ -79,6 +83,8 @@ def parse_arguments():
         help='Input TU activation table.')
     parser.add_argument('--out', default=sys.stdout,
         help='File to save TU expression metrics.')
+    parser.add_argument('--TADboundaries',
+        help='Output of extractTADboundaries.py defining per bead TAD status.')
 
     return parser.parse_args()
 
