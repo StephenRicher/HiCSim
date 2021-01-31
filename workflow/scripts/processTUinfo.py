@@ -3,6 +3,7 @@
 """ Determine TU activation state at each time point """
 
 import sys
+import logging
 import argparse
 import numpy as np
 import pandas as pd
