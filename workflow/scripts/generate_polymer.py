@@ -75,7 +75,7 @@ class lammps:
         self.randomWalk = randomWalk
         self._monomerSeed = monomerSeed
         self._polymerSeed = polymerSeed
-        self.monomers = self.loadMonomer(nMonomers, prop=0.5)
+        self.nMonomers = nMonomers
 
 
     def loadSequence(self, sequence_file, basesPerBead, ctcf):
@@ -96,8 +96,10 @@ class lammps:
         self.nMonomers = nMonomers
         # Prop is proportion of active monomers
         # List of active monomers ('TFa') and inactive monomers ('TFi')
-        monomers = ( int(nMonomers * prop)       * ['TFa']
-                   + int(nMonomers * (1 - prop)) * ['TFi'])
+        activeMonomers = int(nMonomers * prop)
+        inactiveMonomers = nMonomers - activeMonomers
+        monomers = (   activeMonomers   * ['TFa']
+                     + inactiveMonomers * ['TFi'])
         monomerIDs = {}
         for monomer in monomers:
             self.addType(monomer)
@@ -158,6 +160,8 @@ class lammps:
         return len(self.typeIDs)
 
     def writeLammps(self):
+        # Monomers load just before writing to ensure IDs are at end
+        self.monomers = self.loadMonomer(self.nMonomers, prop=0.5)
         self.writeHeader()
         self.writeMasses()
         self.writeBeads()
@@ -187,8 +191,8 @@ class lammps:
 
     def writeBeads(self):
         sys.stdout.write('Atoms\n\n')
-        self.writeMonomers()
         self.writePolymers()
+        self.writeMonomers()
         sys.stdout.write('\n')
 
 
