@@ -6,19 +6,22 @@
 import sys
 import logging
 import argparse
+import numpy as np
 import pandas as pd
 from typing import List
 from scipy.sparse import save_npz, csc_matrix
 from scipy.spatial.distance import pdist, squareform
+from argUtils import positiveInt
 from utilities import getAtomCount, readJSON, pdistPeriodic, setDefaults
 
 
 __version__ = '1.0.0'
 
 
-def createContactMatrix(file: str, atomGroups: str, periodic: bool,
+def createContactMatrix(
+        file: str, atomGroups: str, periodic: bool, seed: int,
         dimensions : List, out: str, distance: float):
-
+    np.random.seed(seed)
     if periodic and not dimensions:
         logging.warning(
             '"--periodic" set but ignored as "--dimensions" not set.')
@@ -39,9 +42,16 @@ def createContactMatrix(file: str, atomGroups: str, periodic: bool,
         timestep = timestep[timestep['id'].isin(atomGroupsDict['DNA'])]
         xyz = timestep[['x', 'y', 'z']].to_numpy()
         if periodic and dimensions:
-            contacts += pdistPeriodic(xyz, dimensions, sqeuclidean=True) < sqdistance
+            distance = pdistPeriodic(xyz, dimensions, sqeuclidean=True)
         else:
-            contacts += pdist(xyz, 'sqeuclidean') < sqdistance
+            distance = pdist(xyz, 'sqeuclidean')
+
+        # Transform to probabilities
+        distance = np.exp(-distance / sqdistance)
+        # Accept contact probabilities
+        distance = distance > np.random.rand(*distance.shape)
+        contacts += distance
+
 
     save_npz(out, csc_matrix(squareform(contacts)))
 
@@ -65,7 +75,12 @@ def parseArgs():
         help='Simulation dimensions. Ignored if "--periodic" not set.')
     parser.add_argument(
         '--distance', default=3, type=float,
-        help='Max contact distance between particles (default: %(default)s)')
+        help='Distance threshold for determing contact probability '
+             '(default: %(default)s)')
+    parser.add_argument(
+        '--seed', default=None, type=positiveInt,
+        help='Non-negative integer for seeding random placement '
+             'positions (default: %(default)s)')
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument(
         '--out', required=True, help='Output contact NPZ matrix.')
