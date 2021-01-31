@@ -32,8 +32,6 @@ default_config = {
                        'end':       None,},
     'maxProb':        0.9,
     'syntheticSequence' : {}              ,
-    'modifySynthetic': {'beadChar': 'P'   ,
-                        'nBeads'  :  0    ,},
     'bases_per_bead': 1000,
     'monomers':       100,
     'method':         'mean',
@@ -331,28 +329,25 @@ rule FastaToBeads:
         '--seed {params.seed} {input} > {output} 2> {log}'
 
 
-rule addTUbeads:
+rule sampleSynthetic:
     input:
         lambda wc: config['syntheticSequence'][wc.name]
     output:
-        '{name}/{nbases}/reps/{rep}/modifiedSynthetic-{rep}.txt'
+        '{name}/{nbases}/reps/{rep}/sampledSynthetic-{rep}.txt'
     params:
         seed = lambda wc: seeds['sequence'][int(wc.rep) - 1],
-        nBeads = config['modifySynthetic']['nBeads'],
-        beadChar = config['modifySynthetic']['beadChar']
     log:
-        'logs/addTUbeads/{name}-{nbases}-{rep}.log'
+        'logs/sampleSynthetic/{name}-{nbases}-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        'python {SCRIPTS}/addTUbeads.py {params.nBeads} {input} '
-        '--bead {params.beadChar} --seed {params.seed}  '
+        'python {SCRIPTS}/sampleSynthetic.py {input} --seed {params.seed} '
         '> {output} 2> {log}'
 
 
 def beadsInput(wc):
     if config['syntheticSequence']:
-        return rules.addTUbeads.output
+        return rules.sampleSynthetic.output
     else:
         return rules.FastaToBeads.output
 
@@ -591,10 +586,26 @@ rule plotDBSCAN:
     shell:
         '{SCRIPTS}/plotDBSCAN.py {output} {input} &> {log}'
 
-# Add whether TU is in TAD or not...
+
+rule extractTADboundaries:
+    input:
+        rules.BeadsToLammps.output.dat
+    output:
+        '{name}/{nbases}/reps/{rep}/beadTADstatus.json',
+    group:
+        'processAllLammps' if config['groupJobs'] else 'processTUinfo'
+    log:
+        'logs/extractTADboundaries/{name}-{nbases}-{rep}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'python {SCRIPTS}/extractTADboundaries.py {input} > {output} 2> {log}'
+
+
 rule computeTUstats:
     input:
-        '{name}/{nbases}/reps/{rep}/TU-info.csv.gz'
+        TUinfo = '{name}/{nbases}/reps/{rep}/TU-info.csv.gz',
+        TADboundaries = rules.extractTADboundaries.output
     output:
         '{name}/{nbases}/reps/{rep}/TU-stats.csv.gz'
     group:
@@ -604,7 +615,8 @@ rule computeTUstats:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/computeTUstats.py --out {output} {input} &> {log}'
+        '{SCRIPTS}/computeTUstats.py --out {output} '
+        '--TADboundaries {input.TADboundaries} {input.TUinfo} &> {log}'
 
 
 rule mergeByRep:
@@ -693,6 +705,7 @@ rule createContactMatrix:
     params:
         distance = 3,
         periodic = '--periodic',
+        seed = lambda wc: seeds['simulation'][int(wc.rep) - 1],
         x = abs(config['box']['xhi'] - config['box']['xlo']),
         y = abs(config['box']['yhi'] - config['box']['ylo']),
         z = abs(config['box']['zhi'] - config['box']['zlo'])
@@ -704,7 +717,7 @@ rule createContactMatrix:
         f'{ENVS}/python3.yaml'
     shell:
         '{SCRIPTS}/createContactMatrix.py {params.periodic} '
-        '--out {output} --distance {params.distance} '
+        '--out {output} --distance {params.distance} --seed {params.seed} '
         '--dimensions {params.x} {params.y} {params.z} {input.groups} '
         '<(zcat -f {input.xyz}) &> {log}'
 
