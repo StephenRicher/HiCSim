@@ -37,6 +37,7 @@ def writeLammps(
                 'Reduce --ctcfSteps or increase --harmonicWarmup.')
             return 1
     else:
+        ctcfBond = False
         # If no CTCF add any harmonicWarmUp to softWarmUp
         softWarmUp += harmonicWarmUp
         harmonicWarmUp = 0
