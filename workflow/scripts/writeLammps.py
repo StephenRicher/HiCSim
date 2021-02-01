@@ -15,11 +15,11 @@ __version__ = '1.0.0'
 
 
 def writeLammps(
-        infile: str, timestep: int,  simTime: int, dat: str,
-        softWarmUp: int, harmonicWarmUp: int,
-        restartPrefix: str, restartStep: int, ctcfSteps: int, seed: int,
-        warmUpOut: str, simOut: str, groups: str, pairCoeff: str,
-        TFswap: int, cosinePotential: float, radiusGyrationOut: str) -> None:
+        infile: str, timestep: int,  simTime: int, dat: str, warmUp: int,
+        restartPrefix: str, restartStep: int, extrusion: bool, seed: int,
+        warmUpOut: str, simOut: str, groups: str, harmonicCoeff: float,
+        pairCoeff: str, TFswap: int, cosinePotential: float,
+        radiusGyrationOut: str) -> None:
 
     if (not restartPrefix) and (restartStep != 0):
         logging.warning('Restart ignored as restartPrefix not provided.')
@@ -28,22 +28,7 @@ def writeLammps(
         logging.warning('Restart ignored as restartStep set to 0.')
         restartPrefix = ''
 
-    if hasCTCFbond(dat):
-        ctcfBond = True
-        harmonicWarmUp = round(harmonicWarmUp / ctcfSteps)
-        if harmonicWarmUp == 0:
-            logging.error(
-                'Progressive harmonic warm up cannot be less than 1. '
-                'Reduce --ctcfSteps or increase --harmonicWarmup.')
-            return 1
-    else:
-        ctcfBond = False
-        # If no CTCF add any harmonicWarmUp to softWarmUp
-        softWarmUp += harmonicWarmUp
-        harmonicWarmUp = 0
-    startTimestep = -(softWarmUp + (harmonicWarmUp * ctcfSteps) + timestep)
-
-
+    startTimestep = -(warmUp + timestep)
     with fileinput.input(infile) as fh:
         for line in fh:
             line = line.strip()
@@ -51,22 +36,14 @@ def writeLammps(
                 catFile(pairCoeff)
             elif line == '## GROUPS ##':
                 catFile(groups)
-            elif line.startswith('# CTCF BOND #') and ctcfBond:
-                print(re.sub('# CTCF BOND # ', '', line))
-            elif line.startswith('# CTCF Progressive #') and ctcfBond:
-                harmonicCoeffs = np.linspace(0, 6, ctcfSteps)
-                template = next(fh).strip('# \n')
-                for coeff in harmonicCoeffs:
-                    print(re.sub('\${harmonicCoeff}', str(coeff), template))
-                    print(f'run {harmonicWarmUp}')
-            elif line.startswith('# bond_coeff 2 harmonic') and ctcfBond:
-                line = line.strip('# \n')
-                print(re.sub('\${harmonicCoeff}', str(coeff), line))
             else:
+                if extrusion:
+                    line = re.sub('# EXTRUSION # ', '', line)
+                    line = re.sub('\${harmonicCoeff}', str(harmonicCoeff), line)
                 line = re.sub('\${seed}', str(seed), line)
                 line = re.sub('\${simTime}', str(simTime), line)
                 line = re.sub('\${timestep}', str(timestep), line)
-                line = re.sub('\${softWarmUp}', str(softWarmUp), line)
+                line = re.sub('\${warmUp}', str(warmUp), line)
                 line = re.sub('\${startTimestep}', str(startTimestep), line)
                 line = re.sub('\${cosinePotential}', str(cosinePotential), line)
                 line = re.sub('\${restartStep}', str(restartStep), line)
@@ -77,15 +54,6 @@ def writeLammps(
                 line = re.sub('\${warmUpOut}', warmUpOut, line)
                 line = re.sub('\${simOut}', simOut, line)
                 print(line)
-
-
-def hasCTCFbond(dat):
-    """ Check if dat file contains a CTCF bond """
-    with open(dat) as fh:
-        for line in fh:
-            if line.endswith('bond types\n'):
-                nBonds = int(line.split()[0])
-                return nBonds == 2
 
 
 def catFile(file):
@@ -106,11 +74,8 @@ def parseArgs():
         '--timestep', type=int, default=500,
         help='Interval to write simulation state (default: %(default)s)')
     parser.add_argument(
-        '--softWarmUp', type=int, default=100000,
+        '--warmUp', type=int, default=100000,
         help='Warm up time with soft interactions (default: %(default)s)')
-    parser.add_argument(
-        '--harmonicWarmUp', type=int, default=100000,
-        help='Warm up time for increasing harmonic bond (default: %(default)s)')
     parser.add_argument(
         '--simTime', type=int, default=100000,
         help='Total simulation time after warm up (default: %(default)s)')
@@ -121,11 +86,15 @@ def parseArgs():
         '--restartStep', type=int, default=0,
         help='Frequency to write restart state (default: %(default)s)')
     parser.add_argument(
-        '--ctcfSteps', type=int, default=100,
-        help='Steps in CTCF bond strengh increment (default: %(default)s)')
-    parser.add_argument(
         '--TFswap', type=int, default=10000,
         help='Swap frequency of TF active/inactivation (default: %(default)s)')
+    parser.add_argument(
+        '--extrusion', default=False, action='store_true',
+        help='Set to prepare script for loop extrusion (default: %(default)s)')
+    parser.add_argument(
+        '--harmonicCoeff', type=float, default=40.0,
+        help='Harmonic bond strength for extrusion factors '
+             '(default: %(default)s)')
     parser.add_argument(
         '--seed', type=int, default=random.randint(0, 10e9),
         help='Seed for simulation (default: %(default)s)')

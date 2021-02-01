@@ -51,9 +51,9 @@ default_config = {
                        'zhi':         50,},
     'lammps':         {'restart':        0      ,
                        'timestep':       1000   ,
-                       'softWarmUp':     20000  ,
-                       'harmonicWarmUp': 20000  ,
+                       'warmUp':         20000  ,
                        'simTime':        2000000,
+                       'harmonicCoeff':  40     ,
                        'ctcfSteps':      100    ,
                        'TFswap':         10000  ,},
     'HiC':            {'matrix' :    None    ,
@@ -358,13 +358,14 @@ def beadsInput(wc):
 
 def setBeadsToLammpsCmd():
     cmd = '{SCRIPTS}/generate_polymer.py '
+    cmd += '--extrusion ' if True else ''
     cmd += (
         '--polymerSeed {params.polymerSeed} '
         '--monomerSeed {params.monomerSeed} '
         '--xlo {params.xlo} --xhi {params.xhi} '
         '--ylo {params.ylo} --yhi {params.yhi} '
         '--zlo {params.zlo} --zhi {params.zhi} '
-        '--ctcf --coeffOut {output.coeffs} '
+        '--coeffOut {output.coeffs} '
         '--groupOut {output.groups} '
         '--nMonomer {params.nMonomers} '
         '--pairCoeffs {params.coeffs} '
@@ -412,15 +413,15 @@ rule writeLammps:
     output:
         '{name}/{nbases}/reps/{rep}/lammps/config/run.lam'
     params:
+        extrusion = '--extrusion' if True else '',
         TFswap = config['lammps']['TFswap'],
         timestep = config['lammps']['timestep'],
-        ctcfSteps = config['lammps']['ctcfSteps'],
         seed = lambda wc: seeds['simulation'][int(wc.rep) - 1],
         cosinePotential = lambda wc: 10000 / config['bases_per_bead'],
         simTime = config['lammps']['simTime'],
+        harmonicCoeff = config['lammps']['harmonicCoeff'],
         sim = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
-        softWarmUp = config['lammps']['softWarmUp'],
-        harmonicWarmUp = config['lammps']['harmonicWarmUp'],
+        warmUpTime = config['lammps']['warmUp'],
         warmUp = '{name}/{nbases}/reps/{rep}/lammps/warmUp.custom.gz',
         restartStep = int(config['lammps']['restart']),
         restartPrefix = '{name}/{nbases}/reps/{rep}/lammps/restart/Restart',
@@ -432,14 +433,14 @@ rule writeLammps:
     shell:
         '{SCRIPTS}/writeLammps.py --dat {input.dat} --groups {input.groups} '
         '--pairCoeff {input.coeffs} --timestep {params.timestep} '
-        '--softWarmUp {params.softWarmUp} '
-        '--harmonicWarmUp {params.harmonicWarmUp} --warmUpOut {params.warmUp} '
+        '--warmUp {params.warmUpTime} --warmUpOut {params.warmUp} '
         '--simOut {params.sim} --simTime {params.simTime} '
         '--cosinePotential {params.cosinePotential}  '
+        '--harmonicCoeff {params.harmonicCoeff} '
         '--radiusGyrationOut {params.radiusGyration} --seed {params.seed} '
-        '--restartPrefix {params.restartPrefix} '
+        '--restartPrefix {params.restartPrefix} {params.extrusion} '
         '--restartStep {params.restartStep} --TFswap {params.TFswap} '
-        '--ctcfSteps {params.ctcfSteps} {input.script} > {output} 2> {log}'
+        '{input.script} > {output} 2> {log}'
 
 
 lmp_cmd = '-in {input} -log /dev/null &> {log}'
@@ -455,9 +456,44 @@ def setRestart():
     else:
         return []
 
+if False:
+    rule lammps:
+        input:
+            rules.writeLammps.output
+        output:
+            warmUp = '{name}/{nbases}/reps/{rep}/lammps/warmUp.custom.gz',
+            simulation = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
+            radiusGyration = '{name}/{nbases}/reps/{rep}/lammps/radius_of_gyration.txt',
+            restart = setRestart()
+        group:
+            'lammps'
+        log:
+            'logs/lammps/{name}-{nbases}-{rep}.log'
+        conda:
+            f'{ENVS}/lammps.yaml'
+        shell:
+            lmp_cmd
+
+
+rule getAtomGroups:
+    input:
+        rules.BeadsToLammps.output.dat
+    output:
+        '{name}/{nbases}/reps/{rep}/lammps/config/atomGroups.json'
+    group:
+        'processAllLammps' if config['groupJobs'] else 'getAtomGroups'
+    log:
+        'logs/getAtomGroups/{name}-{nbases}-{rep}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/getAtomGroups.py {input} > {output} 2> {log}'
+
+
 rule lammps:
     input:
-        rules.writeLammps.output
+        initScript = rules.writeLammps.output,
+        groups = rules.getAtomGroups.output
     output:
         warmUp = '{name}/{nbases}/reps/{rep}/lammps/warmUp.custom.gz',
         simulation = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
@@ -470,7 +506,8 @@ rule lammps:
     conda:
         f'{ENVS}/lammps.yaml'
     shell:
-        lmp_cmd
+        'python {SCRIPTS}/runLammps.py {input.initScript} {input.groups} '
+        '&> {log}'
 
 
 rule plotRG:
@@ -491,21 +528,6 @@ rule plotRG:
     shell:
         '{SCRIPTS}/plotRG.py --out {output} --dpi {params.dpi} '
         '--confidence {params.confidence} {input} 2> {log}'
-
-
-rule getAtomGroups:
-    input:
-        rules.BeadsToLammps.output.dat
-    output:
-        '{name}/{nbases}/reps/{rep}/lammps/config/atomGroups.json'
-    group:
-        'processAllLammps' if config['groupJobs'] else 'getAtomGroups'
-    log:
-        'logs/getAtomGroups/{name}-{nbases}-{rep}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/getAtomGroups.py {input} > {output} 2> {log}'
 
 
 rule writeTUdistribution:

@@ -18,13 +18,9 @@ __version__ = '1.0.0'
 
 class Sequence:
 
-    def __init__(self, sequence, basesPerBead,
-            name='DNA', ctcf=False, beadID=1):
+    def __init__(self, sequence, basesPerBead, name='DNA', beadID=1):
         self._beadID = beadID
         self.basesPerBead = basesPerBead
-        # Should beads set as 'F' or 'R' be processed as CTCF?
-        self._ctcf = ctcf
-        self.ctcfs = {}
         self.name = name
         self.load(sequence)
 
@@ -34,10 +30,6 @@ class Sequence:
         with open(sequence) as f:
             for i, line in enumerate(f):
                 type = line.strip()
-                if self._ctcf and type in ['F', 'R', 'B']:
-                    type = f'{type}-{self._beadID}'
-                    # Associate unique CTCF type with bead ID
-                    self.ctcfs[type] = self._beadID
                 if type not in self.types:
                     self.types.append(type)
                 self.sequence[self._beadID] = type
@@ -63,7 +55,8 @@ class Sequence:
 class lammps:
 
     def __init__(self, nMonomers=0, polymerSeed=random.randint(1, 1e100),
-            monomerSeed=random.randint(1, 1e100), randomWalk=False, TU_types=[]):
+            extrusion=False, monomerSeed=random.randint(1, 1e100),
+            randomWalk=False, TU_types=[]):
         self.sequences = []
         self.TU_types = TU_types # Beads to be considered transcriptional units
         self._beadID = 1
@@ -76,11 +69,12 @@ class lammps:
         self._monomerSeed = monomerSeed
         self._polymerSeed = polymerSeed
         self.nMonomers = nMonomers
+        self.extrusion = extrusion
 
 
-    def loadSequence(self, sequence_file, basesPerBead, ctcf):
-        sequence = Sequence(sequence_file, basesPerBead=basesPerBead,
-            ctcf=ctcf, beadID=self._beadID)
+    def loadSequence(self, sequence_file, basesPerBead):
+        sequence = Sequence(
+            sequence_file, basesPerBead=basesPerBead, beadID=self._beadID)
         self.sequences.append(sequence)
         self._beadID += sequence.nBeads
         for type in sequence.types:
@@ -142,17 +136,12 @@ class lammps:
     def nBonds(self):
         bonds = 0
         for sequence in self.sequences:
-            bonds += sequence.nBonds + len(self.detectConvertCTCF(sequence))
+            bonds += sequence.nBonds
         return bonds
 
     @property
     def nBondTypes(self):
-        for sequence in self.sequences:
-            if len(self.detectConvertCTCF(sequence)) > 0:
-                n = 2
-                break
-        else:
-            n = 1
+        n = 2 if self.extrusion else 1
         return n
 
     @property
@@ -176,7 +165,8 @@ class lammps:
             f'{self.nAngles} angles\n\n'
             f'{self.nTypes} atom types\n'
             f'{self.nBondTypes} bond types\n'
-            f'1 angle types\n\n'
+            f'1 angle types\n'
+            f'{"2 extra bond per atom\n" if self.extrusion else ""}\n'
             f'{self.box.x.lo} {self.box.x.hi} xlo xhi\n'
             f'{self.box.y.lo} {self.box.y.hi} ylo yhi\n'
             f'{self.box.z.lo} {self.box.z.hi} zlo zhi\n\n')
@@ -260,10 +250,6 @@ class lammps:
                     break
                 sys.stdout.write(f'{self._bondID} 1 {beadID} {beadID+1}\n')
                 self._bondID += 1
-            for forward, reverse in self.detectConvertCTCF(sequence):
-                sys.stdout.write(
-                    f'{self._bondID} 2 {forward} {reverse} # CTCF Bond\n')
-                self._bondID += 1
         sys.stdout.write('\n')
 
 
@@ -276,43 +262,6 @@ class lammps:
                     break
                 sys.stdout.write(f'{beadID} 1 {beadID} {beadID+1} {beadID+2}\n')
         sys.stdout.write('\n')
-
-
-    def detectConvertCTCF(self, sequence):
-        """ Detect valid CTCF convergent sites. For each interval, find the nearest
-            F bead to the left and the nearest R bead to the right. This models the
-            loop extrusion hypothesis.
-        """
-        pairs = set()
-        typeList = sequence.types
-        typeIdxs = list(range(len(typeList) - 1))
-        # Ensure shuffle is same for each call within object
-        random.seed(self._polymerSeed)
-        # Shuffle to initiate loop extrusion differently per replicate
-        random.shuffle(typeIdxs)
-        usedSites = []
-        for typeIdx in typeIdxs:
-            # Set to True to prevent loops forming passed already formed loops
-            alreadyUsed = False
-            # Reverse down the list until reach forward CTCF
-            for forwardBead in reversed(typeList[:typeIdx + 1]):
-                if forwardBead in usedSites:
-                    alreadyUsed = True
-                if forwardBead.startswith(('F', 'B')) and not alreadyUsed:
-                    break
-            else:
-                continue
-            # Move up the list until reach reverse CTCF
-            for reverseBead in typeList[typeIdx + 1:]:
-                if reverseBead in usedSites:
-                    alreadyUsed = True
-                if reverseBead.startswith(('R', 'B')) and not alreadyUsed:
-                    break
-            else:
-                continue
-            usedSites.extend([forwardBead, reverseBead])
-            pairs.add((sequence.ctcfs[forwardBead], sequence.ctcfs[reverseBead]))
-        return pairs
 
 
     def writeCoeffs(self, type1, type2, coeff, fh=sys.stderr):
@@ -343,15 +292,15 @@ class lammps:
 
 
 
-def main(file, monomerSeed, polymerSeed, nMonomers, ctcf, basesPerBead, randomWalk,
+def main(file, monomerSeed, polymerSeed, nMonomers, extrusion, basesPerBead, randomWalk,
         pairCoeffs, coeffOut, groupOut, xlo, xhi, ylo, yhi, zlo, zhi, **kwargs):
 
     # TO DO - the tye list needs to be input by user
     TU_types=['P', 'p']
     dat = lammps(nMonomers, monomerSeed=monomerSeed, polymerSeed=polymerSeed,
-        randomWalk=randomWalk, TU_types=TU_types)
+        randomWalk=randomWalk, TU_types=TU_types, extrusion=extrusion)
     dat.loadBox(xlo, xhi, ylo, yhi, zlo, zhi)
-    dat.loadSequence(file, basesPerBead, ctcf)
+    dat.loadSequence(file, basesPerBead)
     dat.writeLammps()
     with open(pairCoeffs) as fh:
         with open(coeffOut, 'w') as out:
@@ -421,7 +370,7 @@ def parse_arguments():
         '--nMonomers', default=0, type=int,
         help='Set number of monomers for simulation.')
     custom.add_argument(
-        '--ctcf', default=False, action='store_true',
+        '--extrusion', default=False, action='store_true',
         help='Process beads labelled F and R as CTCF sites. Each '
              'bead is given a unique ID and convergent orientation '
              'pair coeffs are output (default: %(default)s)')

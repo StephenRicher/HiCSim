@@ -29,6 +29,9 @@ def getAtomGroups(file: str):
                     groups = line[line.index('#') + 1:]
                     if groups:
                         for group in groups:
+                            # Group all CTCF sites by direction
+                            if group.startswith(('F-', 'R-', 'B-')):
+                                atomGroups[group[0]].append(atomIdx)
                             atomGroups[group].append(atomIdx)
                     else:
                         atomGroups["None"].append(atomIdx)

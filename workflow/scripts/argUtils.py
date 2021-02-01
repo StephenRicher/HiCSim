@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 
-import sys
 import re
+import sys
 import json
 import logging
 import argparse
-import pandas as pd
-import numpy as np
 
 
 def setDefaults(parser):
