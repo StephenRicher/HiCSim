@@ -147,6 +147,7 @@ if config['masking']:
 
 wildcard_constraints:
     all = r'[^\/]+',
+    stat = r'stats|pairStats',
     name = rf'{"|".join(details.keys())}',
     binsize = rf'{BINSIZE}',
     nbases = rf'{config["bases_per_bead"]}',
@@ -163,7 +164,10 @@ rule all:
          expand('plots/{plot}/{name}-{nbases}-{plot}.png',
             nbases=config['bases_per_bead'], name=details.keys(),
             plot=['pairCluster', 'meanVariance','TUcorrelation', 'TUcircos',
-                  'radiusGyration', 'TUreplicateCount',])]
+                  'radiusGyration', 'TUreplicateCount',]),
+         expand('{name}/{nbases}/merged/{name}-TU-{stat}.csv.gz',
+            name=details.keys(), nbases=config['bases_per_bead'],
+            stat=['stats', 'pairStats'])]
 
 
 rule unzipGenome:
@@ -607,7 +611,8 @@ rule computeTUstats:
         TUinfo = '{name}/{nbases}/reps/{rep}/TU-info.csv.gz',
         TADboundaries = rules.extractTADboundaries.output
     output:
-        '{name}/{nbases}/reps/{rep}/TU-stats.csv.gz'
+        TUstats = '{name}/{nbases}/reps/{rep}/TU-stats.csv.gz',
+        TUpairStats = '{name}/{nbases}/reps/{rep}/TU-pairStats.csv.gz',
     group:
         'processAllLammps' if config['groupJobs'] else 'computeTUstats'
     log:
@@ -615,19 +620,20 @@ rule computeTUstats:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/computeTUstats.py --out {output} '
+        '{SCRIPTS}/computeTUstats.py --out {output.TUstats} '
+        '--TUpairStats {output.TUpairStats} '
         '--TADboundaries {input.TADboundaries} {input.TUinfo} &> {log}'
 
 
 rule mergeByRep:
     input:
-        expand('{{name}}/{{nbases}}/reps/{rep}/TU-stats.csv.gz', rep=REPS),
+        expand('{{name}}/{{nbases}}/reps/{rep}/TU-{{stat}}.csv.gz', rep=REPS),
     output:
-        '{name}/{nbases}/merged/{name}-TU-stats.csv.gz'
+        '{name}/{nbases}/merged/{name}-TU-{stat}.csv.gz'
     group:
         'processAllLammps' if config['groupJobs'] else 'mergeByRep'
     log:
-        'logs/mergeByRep/{name}-{nbases}.log'
+        'logs/mergeByRep/{name}-{nbases}-{stat}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -636,7 +642,7 @@ rule mergeByRep:
 
 rule plotMeanVariance:
     input:
-        rules.mergeByRep.output
+        '{name}/{nbases}/merged/{name}-TU-stats.csv.gz'
     output:
         'plots/meanVariance/{name}-{nbases}-meanVariance.png'
     params:
