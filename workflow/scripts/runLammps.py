@@ -34,7 +34,7 @@ def runLammps(initLam: str, atomGroups: str, simTime: int, TADStatus: str,
     for step in range(nIntervals):
         if step > 0:
             allExtruders.updateExtrusion()
-        time = step * (simTime / nIntervals)
+        time = step * updateInterval
         allStatus[time] = allExtruders.writeTADs()
         lmp.command(f'run {int(updateInterval / dt)}')
 
@@ -259,17 +259,13 @@ class Extruders():
 
     def attachExtruders(self):
         for extruder in self.unboundExtruders():
-            logging.warning('Checking extruder')
             if random.random() > self.addProb:
                 continue
             startPos = random.choice(self.beadIDs['DNA'])
-            logging.warning(f'Testing {startPos} for validity.')
             for pos in range(startPos, startPos + 2 + 1):
                 if not self.isValid(pos):
                     break
             else:
-                logging.warning(f'Seperation {self.beadSeperation(startPos, startPos + 2)}')
-                logging.warning(f'Threshold {self.sepThresh}')
                 if self.beadSeperation(startPos, startPos + 2) < self.sepThresh:
                     extruder.attach(startPos, startPos + 2)
                     lmp.command(f'group newbond id {extruder.left} {extruder.right}')
