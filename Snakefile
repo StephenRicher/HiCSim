@@ -49,13 +49,13 @@ default_config = {
                        'yhi':         50,
                        'zlo':        -50,
                        'zhi':         50,},
-    'lammps':         {'restart':        0      ,
-                       'timestep':       1000   ,
-                       'warmUp':         20000  ,
-                       'simTime':        2000000,
-                       'harmonicCoeff':  40     ,
-                       'ctcfSteps':      100    ,
-                       'TFswap':         10000  ,},
+    'lammps':         {'restart':        0    ,
+                       'writeInterval':  10   ,
+                       'timestep':       0.01 ,
+                       'warmUp':         20000,
+                       'simTime':        20000,
+                       'harmonicCoeff':  40   ,
+                       'TFswap':         100  ,},
     'HiC':            {'matrix' :    None    ,
                        'binsize':    None    ,
                        'log' :       True    ,
@@ -415,10 +415,10 @@ rule writeLammps:
     params:
         extrusion = '--extrusion' if True else '',
         TFswap = config['lammps']['TFswap'],
+        writeInterval = config['lammps']['writeInterval'],
         timestep = config['lammps']['timestep'],
         seed = lambda wc: seeds['simulation'][int(wc.rep) - 1],
         cosinePotential = lambda wc: 10000 / config['bases_per_bead'],
-        simTime = config['lammps']['simTime'],
         harmonicCoeff = config['lammps']['harmonicCoeff'],
         sim = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
         warmUpTime = config['lammps']['warmUp'],
@@ -432,9 +432,9 @@ rule writeLammps:
         'logs/writeLammps/{name}-{nbases}-{rep}.log'
     shell:
         '{SCRIPTS}/writeLammps.py --dat {input.dat} --groups {input.groups} '
-        '--pairCoeff {input.coeffs} --timestep {params.timestep} '
+        '--pairCoeff {input.coeffs} --writeInterval {params.writeInterval} '
         '--warmUp {params.warmUpTime} --warmUpOut {params.warmUp} '
-        '--simOut {params.sim} --simTime {params.simTime} '
+        '--simOut {params.sim} --timestep {params.timestep} '
         '--cosinePotential {params.cosinePotential}  '
         '--harmonicCoeff {params.harmonicCoeff} '
         '--radiusGyrationOut {params.radiusGyration} --seed {params.seed} '
@@ -443,36 +443,12 @@ rule writeLammps:
         '{input.script} > {output} 2> {log}'
 
 
-lmp_cmd = '-in {input} -log /dev/null &> {log}'
-if config['cluster'] and not config['groupJobs']:
-    lmp_cmd = 'mpirun -np {threads} lmp_mpi ' + lmp_cmd
-else:
-    lmp_cmd = 'lmp_serial ' + lmp_cmd
-
 def setRestart():
     """ Include restart directory if included """
     if config['lammps']['restart']:
         return directory('{name}/{nbases}/reps/{rep}/lammps/restart/')
     else:
         return []
-
-if False:
-    rule lammps:
-        input:
-            rules.writeLammps.output
-        output:
-            warmUp = '{name}/{nbases}/reps/{rep}/lammps/warmUp.custom.gz',
-            simulation = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
-            radiusGyration = '{name}/{nbases}/reps/{rep}/lammps/radius_of_gyration.txt',
-            restart = setRestart()
-        group:
-            'lammps'
-        log:
-            'logs/lammps/{name}-{nbases}-{rep}.log'
-        conda:
-            f'{ENVS}/lammps.yaml'
-        shell:
-            lmp_cmd
 
 
 rule getAtomGroups:
@@ -497,8 +473,11 @@ rule lammps:
     output:
         warmUp = '{name}/{nbases}/reps/{rep}/lammps/warmUp.custom.gz',
         simulation = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
+        TADstatus = '{name}/{nbases}/reps/{rep}/beadTADstatus.csv.gz',
         radiusGyration = '{name}/{nbases}/reps/{rep}/lammps/radius_of_gyration.txt',
         restart = setRestart()
+    params:
+        simTime = config['lammps']['simTime'],
     group:
         'lammps'
     log:
@@ -507,7 +486,7 @@ rule lammps:
         f'{ENVS}/lammps.yaml'
     shell:
         'python {SCRIPTS}/runLammps.py {input.initScript} {input.groups} '
-        '&> {log}'
+        '--TADStatus {output.TADstatus} --simTime {params.simTime} &> {log}'
 
 
 rule plotRG:
@@ -682,7 +661,7 @@ rule plotMeanVariance:
 
 rule computeTUcorrelation:
     input:
-        rules.mergeByRep.output
+        '{name}/{nbases}/merged/{name}-TU-stats.csv.gz'
     output:
         '{name}/{nbases}/merged/{name}-TU-correlation.csv.gz'
     group:

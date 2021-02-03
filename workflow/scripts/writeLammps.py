@@ -15,11 +15,11 @@ __version__ = '1.0.0'
 
 
 def writeLammps(
-        infile: str, timestep: int,  simTime: int, dat: str, warmUp: int,
-        restartPrefix: str, restartStep: int, extrusion: bool, seed: int,
-        warmUpOut: str, simOut: str, groups: str, harmonicCoeff: float,
-        pairCoeff: str, TFswap: int, cosinePotential: float,
-        radiusGyrationOut: str) -> None:
+        infile: str, timestep: float, writeInterval: float, dat: str,
+        warmUp: float, restartPrefix: str, restartStep: int, extrusion: bool,
+        seed: int, warmUpOut: str, simOut: str, groups: str,
+        harmonicCoeff: float, pairCoeff: str, TFswap: float,
+        cosinePotential: float, radiusGyrationOut: str) -> None:
 
     if (not restartPrefix) and (restartStep != 0):
         logging.warning('Restart ignored as restartPrefix not provided.')
@@ -28,7 +28,11 @@ def writeLammps(
         logging.warning('Restart ignored as restartStep set to 0.')
         restartPrefix = ''
 
-    startTimestep = -(warmUp + timestep)
+    # Convert time unit to timesteps
+    writeIntervalSteps = int(writeInterval / timestep)
+    warmUpSteps = int(warmUp / timestep)
+    TFswapSteps = int(TFswap / timestep)
+    startTimestep = -(warmUpSteps + writeIntervalSteps)
     with fileinput.input(infile) as fh:
         for line in fh:
             line = line.strip()
@@ -41,13 +45,13 @@ def writeLammps(
                     line = re.sub('# EXTRUSION # ', '', line)
                     line = re.sub('\${harmonicCoeff}', str(harmonicCoeff), line)
                 line = re.sub('\${seed}', str(seed), line)
-                line = re.sub('\${simTime}', str(simTime), line)
-                line = re.sub('\${timestep}', str(timestep), line)
-                line = re.sub('\${warmUp}', str(warmUp), line)
+                line = re.sub('\${dt}', str(timestep), line)
+                line = re.sub('\${writeInterval}', str(writeIntervalSteps), line)
+                line = re.sub('\${warmUp}', str(warmUpSteps), line)
                 line = re.sub('\${startTimestep}', str(startTimestep), line)
                 line = re.sub('\${cosinePotential}', str(cosinePotential), line)
                 line = re.sub('\${restartStep}', str(restartStep), line)
-                line = re.sub('\${TFswap}', str(TFswap), line)
+                line = re.sub('\${TFswap}', str(TFswapSteps), line)
                 line = re.sub('\${restartPrefix}', restartPrefix, line)
                 line = re.sub('\${infile}', dat, line)
                 line = re.sub('\${radiusGyrationOut}', radiusGyrationOut, line)
@@ -71,23 +75,25 @@ def parseArgs():
         'infile', nargs='?', default=[],
         help='Input Lammps template (default: stdin)')
     parser.add_argument(
-        '--timestep', type=int, default=500,
-        help='Interval to write simulation state (default: %(default)s)')
+        '--timestep', type=float, default=0.01,
+        help='Size of timestep in time units (default: %(default)s)')
     parser.add_argument(
-        '--warmUp', type=int, default=100000,
+        '--writeInterval', type=float, default=10,
+        help='Simulation status output interval in time units '
+             '(default: %(default)s)')
+    parser.add_argument(
+        '--TFswap', type=float, default=100,
+        help='Swap frequency of TF active/inactivation in time units '
+             '(default: %(default)s)')
+    parser.add_argument(
+        '--warmUp', type=int, default=10000,
         help='Warm up time with soft interactions (default: %(default)s)')
-    parser.add_argument(
-        '--simTime', type=int, default=100000,
-        help='Total simulation time after warm up (default: %(default)s)')
     parser.add_argument(
         '--restartPrefix', default='',
         help='File prefix for restart files (default: no restart)')
     parser.add_argument(
         '--restartStep', type=int, default=0,
         help='Frequency to write restart state (default: %(default)s)')
-    parser.add_argument(
-        '--TFswap', type=int, default=10000,
-        help='Swap frequency of TF active/inactivation (default: %(default)s)')
     parser.add_argument(
         '--extrusion', default=False, action='store_true',
         help='Set to prepare script for loop extrusion (default: %(default)s)')

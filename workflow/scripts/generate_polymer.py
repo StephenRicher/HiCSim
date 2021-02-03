@@ -166,7 +166,7 @@ class lammps:
             f'{self.nTypes} atom types\n'
             f'{self.nBondTypes} bond types\n'
             f'1 angle types\n'
-            f'{"2 extra bond per atom\n" if self.extrusion else ""}\n'
+            f'{"2 extra bond per atom" if self.extrusion else ""}\n'
             f'{self.box.x.lo} {self.box.x.hi} xlo xhi\n'
             f'{self.box.y.lo} {self.box.y.hi} ylo yhi\n'
             f'{self.box.z.lo} {self.box.z.hi} zlo zhi\n\n')

@@ -18,7 +18,7 @@ restart ${restartStep} ${restartPrefix}
 ############################
 ####   READ DATA FILE ######
 ############################
-read_data ${infile}
+read_data ${infile} extra/special/per/atom 2
 
 ############################
 ####   CREATE BOX    #######
@@ -59,7 +59,7 @@ fix 2 all langevin 1.0 1.0 1.0 ${seed}
 ######################
 thermo 100
 thermo_style custom step temp epair vol cpu
-timestep 0.01
+timestep ${dt}
 reset_timestep 0
 
 ## GROUPS ##
@@ -67,12 +67,12 @@ compute RG DNA gyration
 variable RG equal c_RG
 
 variable time equal ${startTimestep}+step
-fix RG DNA print ${timestep} "${time} ${RG}" file ${radiusGyrationOut}
+fix RG DNA print ${writeInterval} "${time} ${RG}" file ${radiusGyrationOut}
 
 ####################################
 ####    DUMP POSITIONS OF ATOMS ####
 ####################################
-dump 1 all custom ${timestep} ${warmUpOut} id type x y z ix iy iz
+dump 1 all custom ${writeInterval} ${warmUpOut} id type x y z ix iy iz
 dump_modify 1 format line '%d %d %.5f %.5f %.5f %d %d %d' sort 1
 
 ####################################
@@ -98,11 +98,12 @@ bond_coeff 1 fene 30 1.5 1.0 1.0
 undump 1         # Close warm_up dump
 
 unfix RG
-fix RG DNA print ${timestep} "$(step) ${RG}" append ${radiusGyrationOut}
+fix RG DNA print ${writeInterval} "$(step) ${RG}" append ${radiusGyrationOut}
 
-dump 2 all custom ${timestep} ${simOut} id type x y z ix iy iz
+dump 2 all custom ${writeInterval} ${simOut} id type x y z ix iy iz
 dump_modify 2 format line '%d %d %.5f %.5f %.5f %d %d %d' sort 1
 
 reset_timestep 0
 
+neighbor 5 bin
 fix swap monomer atom/swap ${TFswap} 5 ${seed} 10 ke yes types 1 2
