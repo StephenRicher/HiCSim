@@ -22,7 +22,7 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
               timestep: float, TFswap: float, radiusGyrationOut: str,
               pairCoeffs: str, simOut: str, beadTypes: str, seed: int):
 
-    random.seed(seed)
+    #random.seed(seed)
     nIntervals = int(simTime / updateInterval)
     stepProb = updateInterval * extrusionRate # Advancement probability
     addProb  = updateInterval * onRate        # Attachment probability
@@ -36,6 +36,8 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
     lmp = lammps()
 
     lmp.command(f'read_restart {equil}')
+    lmp.command('reset_timestep 0')
+    lmp.command(f'timestep {timestep}')
     lmp.command('neigh_modify every 1 delay 1 check yes')
     lmp.command('fix 1 all nve')
     lmp.command(f'fix 2 all langevin 1.0 1.0 1.0 {seed}')
@@ -49,19 +51,26 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
     for type, typeID in beadTypes.items():
         if type in ['TFa', 'TFi', 'N']:
             continue
-        logging.warning(f'set group {type} type {typeID}')
         lmp.command(f'set group {type} type {typeID}')
 
-    lmp.command('pair_style  lj/cut 1.12246')
+    lmp.command('pair_style lj/cut 1.12246')
     lmp.command('pair_modify shift yes')
     lmp.command('pair_coeff * *  1.0 1.0 1.12246') # Repulsive - everything with everything
-    if pairCoeffs:
-        writePairCoeffs(pairCoeffs, beadTypes)
 
     lmp.command('bond_style hybrid fene harmonic')
     lmp.command('special_bonds fene')
-    lmp.command('bond_coeff 1 fene 30 1.5 1.0 1.0')
-    lmp.command(f'bond_coeff 2 harmonic {harmonicCoeff} 1.0')
+    lmp.command('bond_coeff 1 fene 30 1.6 1.0 1.0')
+    harmonicCoeff = 1
+    lmp.command(f'bond_coeff 2 harmonic {harmonicCoeff} 1.5')
+    lmp.command(f'bond_coeff 3 harmonic {harmonicCoeff / 2} 1.5')
+
+    # Short equilibration before setting pair coeffs
+    logging.warning('Equil run')
+    lmp.command('run 10000')
+    logging.warning('Equil run done')
+
+    if pairCoeffs:
+        writePairCoeffs(pairCoeffs, beadTypes)
 
     lmp.command('compute RG DNA gyration')
     lmp.command('variable RG equal c_RG')
@@ -76,11 +85,12 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
     lmp.command(f'fix swap TU atom/swap {TFswapSteps} 5 {seed} 10 ke yes types 1 2')
 
     allStatus = {}
+    sepThresh = 3
     allExtruders = Extruders(
         nExtrudersPerBead, atomGroups, offProb, stepProb, addProb, sepThresh)
 
     for step in range(nIntervals):
-        if step > 0:
+        if step > 5:
             allExtruders.updateExtrusion()
         time = step * updateInterval
         allStatus[time] = allExtruders.writeTADs()
@@ -114,7 +124,6 @@ def writePairCoeffs(pairCoeffs, beadType):
                     temp = type1ID
                     type1ID = type2ID
                     type2ID = temp
-            logging.warning(f'pair_coeff {type1ID} {type2ID} {coeff}\n')
             lmp.command(f'pair_coeff {type1ID} {type2ID} {coeff}\n')
 
 
@@ -124,7 +133,6 @@ def writeGroups(atomGroups):
         if (group == 'DNA') or (group == 'TF'):
             continue # Already defined in equilibration
         ids = " ".join([str(i) for i in beadIDs])
-        logging.warning(f'group {group} id {ids}')
         lmp.command(f'group {group} id {ids}')
 
 
@@ -153,10 +161,14 @@ class Extruder():
     def loopIDs(self):
         return range(self.left, self.right + 1)
 
-    def nextPosition(self, direction):
+    def nextPosition(self, direction, N=1):
         assert direction in ['left', 'right']
         move = {'left' : -1, 'right' : 1}
-        return self.currentPosition(direction) + move[direction]
+        if direction == 'left':
+            return self.currentPosition(direction) - N
+        else:
+            return self.currentPosition(direction) + N
+
 
     def currentPosition(self, direction):
         assert direction in ['left', 'right']
@@ -167,15 +179,36 @@ class Extruder():
         else:
             return self.right
 
-    def attach(self, left, right):
+
+    def attach(self, left, right, sepThresh):
+        if self.isBound:
+            self.detach()
         self.isBound = True
         self.left = left
         self.right = right
+        # Create strong harmonic between new bead pairs
+        lmp.command(f'group tmpUpdate id {self.left} {self.right}')
+        lmp.command(f'create_bonds many tmpUpdate tmpUpdate 2 0.0 {sepThresh}')
+        lmp.command('group tmpUpdate delete')
+        # Create weak haronmic between next bead pairs
+        lmp.command(f'group tmpUpdate id {self.nextPosition("left")} {self.nextPosition("right")}')
+        lmp.command(f'create_bonds many tmpUpdate tmpUpdate 3 0.0 {sepThresh}')
+        lmp.command('group tmpUpdate delete')
+
 
     def detach(self):
+        occupied = " ".join([str(i) for i in self.occupied()])
+        lmp.command(f'group newbond id {occupied}')
+        lmp.command('delete_bonds newbond bond 2,3 remove special')
+        lmp.command('group newbond delete')
         self.isBound = False
         self.left = None
         self.right = None
+
+
+    def occupied(self):
+        return [self.left, self.nextPosition('left'),
+                self.right, self.nextPosition('right')]
 
 
 class Extruders():
@@ -240,7 +273,7 @@ class Extruders():
     def isOccupied(self, beadID):
         """ Check if beadID corresponds to an occupied bead """
         for extruder in self.boundExtruders():
-            if beadID in [extruder.left, extruder.right]:
+            if beadID in extruder.occupied():
                 return True
         else:
             return False
@@ -258,7 +291,8 @@ class Extruders():
         """ Check if extruder can validly extrude in direction """
         assert direction in ['left', 'right']
         # Check if next position is already occupied
-        if self.isOccupied(extruder.nextPosition(direction)):
+        if (self.isOccupied(extruder.nextPosition(direction, 1))
+                or self.isOccupied(extruder.nextPosition(direction, 2))):
             return False
         currentPos = extruder.currentPosition(direction)
         if direction == 'left' and self.isForwardCTCF(currentPos):
@@ -290,17 +324,14 @@ class Extruders():
         for extruder in self.boundExtruders():
             if random.random() > self.removeProb:
                 continue
-            lmp.command(f'group newbond id {extruder.left} {extruder.right}')
-            lmp.command('delete_bonds newbond bond 2 remove special')
-            lmp.command('group newbond delete')
             extruder.detach()
 
 
     def updateExtruders(self):
         for extruder in self.boundExtruders():
             next = {}
+            updated = False
             for direction in ['left', 'right']:
-                updated = False
                 if self.canExtrude(extruder, direction):
                     next[direction] = extruder.nextPosition(direction)
                     updated = True
@@ -309,20 +340,14 @@ class Extruders():
             # Skip if no extrusion
             if not updated:
                 continue
+            # Should I also check the next set for weak harmonic?
             if self.beadSeperation(next['left'], next['right']) > self.sepThresh:
                 continue
-            lmp.command(f'group tmpUpdate id {extruder.left} {extruder.right}')
-            lmp.command('delete_bonds tmpUpdate bond 2 remove special')
-            lmp.command('group tmpUpdate delete')
-            # Detach extruder if the next position slides of edge of polymer
+            # Detach extruder if the next position slides off edge of polymer
             if self.outOfRange(next['left']) or self.outOfRange(next['right']):
                 extruder.detach()
                 continue
-            lmp.command(f'group tmpUpdate id {next["left"]} {next["right"]}')
-            lmp.command(f'create_bonds many tmpUpdate tmpUpdate 2 0.0 {self.sepThresh}')
-            lmp.command('group tmpUpdate delete')
-            extruder.left = next['left']
-            extruder.right = next['right']
+            extruder.attach(next["left"], next["right"], self.sepThresh)
 
 
     def attachExtruders(self):
@@ -330,15 +355,14 @@ class Extruders():
             if random.random() > self.addProb:
                 continue
             startPos = random.choice(self.beadIDs['DNA'])
-            for pos in range(startPos, startPos + 2 + 1):
+            # Check position before and position after strong bond
+            for pos in range(startPos - 1, startPos + 4):
                 if not self.isValid(pos):
                     break
             else:
-                if self.beadSeperation(startPos, startPos + 2) < self.sepThresh:
-                    extruder.attach(startPos, startPos + 2)
-                    lmp.command(f'group newbond id {extruder.left} {extruder.right}')
-                    lmp.command(f'create_bonds many newbond newbond 2 0.0 {self.sepThresh}')
-                    lmp.command('group newbond delete')
+                if self.beadSeperation(startPos, startPos + 2) > self.sepThresh:
+                    continue
+                extruder.attach(startPos, startPos + 2, self.sepThresh)
 
 
     def updateExtrusion(self):
