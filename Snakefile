@@ -5,7 +5,7 @@ container: "docker://continuumio/miniconda3:4.7.12"
 import os
 import random
 import tempfile
-from set_config import set_config, read_paths, nBeads, adjustCoordinates
+from set_config import set_config, read_paths, getNbeads, adjustCoordinates
 
 BASE = workflow.basedir
 
@@ -95,22 +95,25 @@ if not config['syntheticSequence']:
     if invalid:
         sys.exit('\033[31mInvalid configuration setting.\033[m\n')
     for name in [config['genome']['name']]:
-        start, end = adjustCoordinates(
+        start, end, nBeads = adjustCoordinates(
             config['genome']['start'],
             config['genome']['end'],
             config['bases_per_bead'])
         scaledRegion = f"{config['genome']['chr']}-{start}-{end}"
         print(f'Adjusting {name} positions to {scaledRegion}')
         details[name] = {'chr':   config['genome']['chr'],
-                         'start': start, 'end': end}
+                         'start': start,
+                         'end': end,
+                         'nBeads': nBeads}
 else:
     config['genome']['sequence'] = []
     for name in config['syntheticSequence'].keys():
-        end = (nBeads(config['syntheticSequence'][name])
-               * config['bases_per_bead'])
-        details[name] = {'chr':   name,
-                         'start': 1,
-                         'end':   end}
+        nBeads = getNbeads(config['syntheticSequence'][name])
+        end = (length * config['bases_per_bead'])
+        details[name] = {'chr':    name,
+                         'start':  1,
+                         'end':    end,
+                         'nBeads': nBeads}
 
 BUILD = config['genome']['build']
 
@@ -167,7 +170,9 @@ rule all:
                   'radiusGyration', 'TUreplicateCount',]),
          expand('{name}/{nbases}/merged/{name}-TU-{stat}.csv.gz',
             name=details.keys(), nbases=config['bases_per_bead'],
-            stat=['stats', 'pairStats'])]
+            stat=['stats', 'pairStats']),
+        expand('{name}/{nbases}/lammpsInit/simulation-equil',
+            name=details.keys(), nbases=config['bases_per_bead'])]
 
 
 rule unzipGenome:
@@ -349,11 +354,25 @@ rule sampleSynthetic:
         '> {output} 2> {log}'
 
 
-def beadsInput(wc):
+def allBeadsInput(wc):
     if config['syntheticSequence']:
-        return rules.sampleSynthetic.output
+        return expand(
+            '{{name}}/{{nbases}}/reps/{rep}/sampledSynthetic-{rep}.txt', rep=REPS)
     else:
-        return rules.FastaToBeads.output
+        return expand('{{name}}/{{nbases}}/reps/{rep}/{{name}}-beads-{rep}.txt', rep=REPS)
+
+
+rule extractAtomTypes:
+    input:
+        allBeadsInput
+    output:
+        '{name}/{nbases}/beadTypeID.json'
+    log:
+        'logs/extractAtomTypes/{name}-{nbases}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'python {SCRIPTS}/extractAtomTypes.py {input} > {output} 2> {log}'
 
 
 def setBeadsToLammpsCmd():
@@ -365,28 +384,24 @@ def setBeadsToLammpsCmd():
         '--xlo {params.xlo} --xhi {params.xhi} '
         '--ylo {params.ylo} --yhi {params.yhi} '
         '--zlo {params.zlo} --zhi {params.zhi} '
-        '--coeffOut {output.coeffs} '
-        '--groupOut {output.groups} '
-        '--nMonomer {params.nMonomers} '
-        '--pairCoeffs {params.coeffs} '
+        '--nMonomers {params.nMonomers} '
         '--basesPerBead {params.basesPerBead} '
-        '{params.randomWalk} {input.beads} > {output.dat} 2> {log}')
+        '--beadTypes {input} '
+        '{params.randomWalk} {params.nBeads} > {output} 2> {log}')
     return cmd
 
 
 rule BeadsToLammps:
     input:
-        beads = beadsInput,
+        rules.extractAtomTypes.output
     output:
-        dat = '{name}/{nbases}/reps/{rep}/lammps/config/lammps_input.dat',
-        coeffs = '{name}/{nbases}/reps/{rep}/lammps/config/coeffs.txt',
-        groups = '{name}/{nbases}/reps/{rep}/lammps/config/groups.txt'
+        '{name}/{nbases}/lammpsInit/lammps_input.dat',
     params:
         nMonomers = config['monomers'],
-        coeffs = config['coeffs'],
+        nBeads = lambda wc: details[wc.name]['nBeads'],
         basesPerBead = config['bases_per_bead'],
-        polymerSeed = lambda wc: seeds['initialConform'][int(wc.rep) - 1],
-        monomerSeed = lambda wc: seeds['monomerPositions'][int(wc.rep) - 1],
+        polymerSeed = 1, #lambda wc: seeds['initialConform'][int(wc.rep) - 1],
+        monomerSeed = 1, #lambda wc: seeds['monomerPositions'][int(wc.rep) - 1],
         xlo = config['box']['xlo'],
         xhi = config['box']['xhi'],
         ylo = config['box']['ylo'],
@@ -397,65 +412,55 @@ rule BeadsToLammps:
     group:
         'lammps'
     log:
-        'logs/BeadsToLammps/{name}-{nbases}-{rep}.log'
+        'logs/BeadsToLammps/{name}-{nbases}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
         setBeadsToLammpsCmd()
 
 
-rule writeLammps:
+rule lammpsEquilibrate:
     input:
-        script = f'{SCRIPTS}/run.lam',
-        dat = rules.BeadsToLammps.output.dat,
-        groups = rules.BeadsToLammps.output.groups,
-        coeffs = rules.BeadsToLammps.output.coeffs,
+        rules.BeadsToLammps.output
     output:
-        '{name}/{nbases}/reps/{rep}/lammps/config/run.lam'
+        equil = '{name}/{nbases}/lammpsInit/simulation-equil',
+        equilInfo = '{name}/{nbases}/lammpsInit/warmUp.custom.gz',
+        radiusGyration = '{name}/{nbases}/lammpsInit/radiusOfGyration.txt'
     params:
         extrusion = '--extrusion' if True else '',
-        TFswap = config['lammps']['TFswap'],
         writeInterval = config['lammps']['writeInterval'],
         timestep = config['lammps']['timestep'],
-        seed = lambda wc: seeds['simulation'][int(wc.rep) - 1],
+        seed = 1, # lambda wc: seeds['simulation'][int(wc.rep) - 1],
         cosinePotential = lambda wc: 10000 / config['bases_per_bead'],
-        harmonicCoeff = config['lammps']['harmonicCoeff'],
-        sim = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
-        warmUpTime = config['lammps']['warmUp'],
-        warmUp = '{name}/{nbases}/reps/{rep}/lammps/warmUp.custom.gz',
-        restartStep = int(config['lammps']['restart']),
-        restartPrefix = '{name}/{nbases}/reps/{rep}/lammps/restart/Restart',
-        radiusGyration = '{name}/{nbases}/reps/{rep}/lammps/radius_of_gyration.txt'
-    group:
-        'lammps'
+        equilTime = config['lammps']['warmUp']
     log:
-        'logs/writeLammps/{name}-{nbases}-{rep}.log'
+        'logs/lammpsEquilibrate/{name}-{nbases}.log'
+    conda:
+        f'{ENVS}/lammps.yaml'
     shell:
-        '{SCRIPTS}/writeLammps.py --dat {input.dat} --groups {input.groups} '
-        '--pairCoeff {input.coeffs} --writeInterval {params.writeInterval} '
-        '--warmUp {params.warmUpTime} --warmUpOut {params.warmUp} '
-        '--simOut {params.sim} --timestep {params.timestep} '
-        '--cosinePotential {params.cosinePotential}  '
-        '--harmonicCoeff {params.harmonicCoeff} '
-        '--radiusGyrationOut {params.radiusGyration} --seed {params.seed} '
-        '--restartPrefix {params.restartPrefix} {params.extrusion} '
-        '--restartStep {params.restartStep} --TFswap {params.TFswap} '
-        '{input.script} > {output} 2> {log}'
+        'python {SCRIPTS}/runLammpsEquilibrate.py {input} {output.equil} '
+        '--timestep {params.timestep} --writeInterval {params.writeInterval} '
+        '--equilTime {params.equilTime} {params.extrusion} '
+        '--seed {params.seed} --equilInfo {output.equilInfo} '
+        '--cosinePotential {params.cosinePotential} '
+        '--radiusGyrationOut {output.radiusGyration} &> {log}'
 
 
-def setRestart():
-    """ Include restart directory if included """
-    if config['lammps']['restart']:
-        return directory('{name}/{nbases}/reps/{rep}/lammps/restart/')
+def beadsInput(wc):
+    if config['syntheticSequence']:
+        return rules.sampleSynthetic.output
     else:
-        return []
+        return rules.FastaToBeads.output
 
 
 rule getAtomGroups:
     input:
-        rules.BeadsToLammps.output.dat
+        beadsInput
     output:
         '{name}/{nbases}/reps/{rep}/lammps/config/atomGroups.json'
+    params:
+        TUs = ['P', 'p'],
+        nMonomers = config['monomers'],
     group:
         'processAllLammps' if config['groupJobs'] else 'getAtomGroups'
     log:
@@ -463,21 +468,30 @@ rule getAtomGroups:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/getAtomGroups.py {input} > {output} 2> {log}'
+        '{SCRIPTS}/getAtomGroups.py {input} --TUs {params.TUs} '
+        '--nMonomers {params.nMonomers} > {output} 2> {log}'
 
 
-rule lammps:
+rule lammpsSimulation:
     input:
-        initScript = rules.writeLammps.output,
-        groups = rules.getAtomGroups.output
+        equil = rules.lammpsEquilibrate.output.equil,
+        groups = rules.getAtomGroups.output,
+        beadTypes = rules.extractAtomTypes.output
     output:
-        warmUp = '{name}/{nbases}/reps/{rep}/lammps/warmUp.custom.gz',
-        simulation = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
+        simOut = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
         TADstatus = '{name}/{nbases}/reps/{rep}/beadTADstatus.csv.gz',
         radiusGyration = '{name}/{nbases}/reps/{rep}/lammps/radius_of_gyration.txt',
-        restart = setRestart()
     params:
         simTime = config['lammps']['simTime'],
+        extrusion = '--extrusion' if True else '',
+        TFswap = config['lammps']['TFswap'],
+        coeffs = config['coeffs'],
+        timestep = config['lammps']['timestep'],
+        writeInterval = config['lammps']['writeInterval'],
+        seed = lambda wc: seeds['simulation'][int(wc.rep) - 1],
+        harmonicCoeff = config['lammps']['harmonicCoeff'],
+        sim = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
+        radiusGyration = '{name}/{nbases}/reps/{rep}/lammps/radius_of_gyration.txt'
     group:
         'lammps'
     log:
@@ -485,8 +499,13 @@ rule lammps:
     conda:
         f'{ENVS}/lammps.yaml'
     shell:
-        'python {SCRIPTS}/runLammps.py {input.initScript} {input.groups} '
-        '--TADStatus {output.TADstatus} --simTime {params.simTime} &> {log}'
+        'python {SCRIPTS}/runLammpsSimulation.py {input.equil} {input.groups} '
+        '--TADStatus {output.TADstatus} --simTime {params.simTime} '
+        '--writeInterval {params.writeInterval} --seed {params.seed} '
+        '--harmonicCoeff {params.harmonicCoeff} --TFswap {params.TFswap} '
+        '--radiusGyrationOut {output.radiusGyration} --simOut {output.simOut} '
+        '--timestep {params.timestep} {params.extrusion} '
+        '--pairCoeffs {params.coeffs} --beadTypes {input.beadTypes} &> {log}'
 
 
 rule plotRG:
@@ -526,7 +545,7 @@ rule writeTUdistribution:
 
 rule reformatLammps:
     input:
-        rules.lammps.output.simulation
+        rules.lammpsSimulation.output.simOut
     output:
         '{name}/{nbases}/reps/{rep}/lammps/simulation.csv.gz'
     group:
@@ -594,7 +613,7 @@ rule plotDBSCAN:
 
 rule extractTADboundaries:
     input:
-        rules.BeadsToLammps.output.dat
+        rules.BeadsToLammps.output
     output:
         '{name}/{nbases}/reps/{rep}/beadTADstatus.json',
     group:

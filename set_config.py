@@ -69,7 +69,7 @@ def read_paths(filepath):
     return data
 
 
-def nBeads(file):
+def getNbeads(file):
     """ Return number of beads in sequence file """
     nBeads = 0
     with open(file) as fh:
@@ -85,5 +85,6 @@ def adjustCoordinates(start, end, nbases):
     # Get amount contract end position
     adjustContract = (end - start ) % nbases
     end = end - adjustContract
+    nbeads = int((end - start) / nbases)
 
-    return start, end
+    return start, end, nbeads
