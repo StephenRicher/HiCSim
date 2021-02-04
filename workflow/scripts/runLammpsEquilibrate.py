@@ -13,7 +13,7 @@ __version__ = '1.0.0'
 
 def runEquilibrationLammps(
         inputDat: str, equilOut: str, timestep: float, writeInterval: float,
-        equilTime: float, extrusion: bool, seed: int, equilInfo: str,
+        equilTime: float, seed: int, equilInfo: str,
         cosinePotential: float, radiusGyrationOut: str) -> None:
 
     # Convert time unit to timesteps
@@ -41,8 +41,8 @@ def runEquilibrationLammps(
 
     lmp.command('bond_style harmonic')
     lmp.command('bond_coeff 1 100.0 1.1')
-    if extrusion:
-        lmp.command('bond_coeff 2 0.0 1.1')
+    lmp.command('bond_coeff 2 0.0 1.1')
+    lmp.command('bond_coeff 3 0.0 1.1')
 
     lmp.command('angle_style cosine')
     lmp.command(f'angle_coeff 1 {cosinePotential}')
@@ -110,9 +110,6 @@ def parseArgs():
     parser.add_argument(
         '--equilTime', type=int, default=10000,
         help='Equilibration time with soft interactions (default: %(default)s)')
-    parser.add_argument(
-        '--extrusion', default=False, action='store_true',
-        help='Set to prepare script for loop extrusion (default: %(default)s)')
     parser.add_argument(
         '--seed', type=int, default=random.randint(0, 10e9),
         help='Seed for simulation (default: %(default)s)')
