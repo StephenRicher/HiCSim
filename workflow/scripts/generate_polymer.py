@@ -19,7 +19,7 @@ __version__ = '1.0.0'
 class lammps:
 
     def __init__(self, nPolymerBeads, basesPerBead, beadTypes={}, nMonomers=0, polymerSeed=random.randint(1, 1e100),
-            extrusion=False, monomerSeed=random.randint(1, 1e100),
+            monomerSeed=random.randint(1, 1e100),
             randomWalk=False):
         self.nPolymerBeads = nPolymerBeads
         self.basesPerBead = basesPerBead
@@ -30,7 +30,6 @@ class lammps:
         self._monomerSeed = monomerSeed
         self._polymerSeed = polymerSeed
         self.nMonomers = nMonomers
-        self.extrusion = extrusion
 
     @property
     def nBeads(self):
@@ -50,7 +49,8 @@ class lammps:
 
     @property
     def nBondTypes(self):
-        return 2 if self.extrusion else 1
+        # 1 for between bead FENE, 2 for strong/weak harmonic extrusion
+        return 3
 
 
     def loadBox(self, xlo, xhi, ylo, yhi, zlo, zhi):
@@ -74,7 +74,7 @@ class lammps:
             f'{self.nTypes} atom types\n'
             f'{self.nBondTypes} bond types\n'
             f'1 angle types\n'
-            f'{"2 extra bond per atom" if self.extrusion else ""}\n'
+            f'2 extra bond per atom\n'
             f'{self.box.x.lo} {self.box.x.hi} xlo xhi\n'
             f'{self.box.y.lo} {self.box.y.hi} ylo yhi\n'
             f'{self.box.z.lo} {self.box.z.hi} zlo zhi\n\n')
@@ -112,25 +112,57 @@ class lammps:
         return x, y, z
 
 
+    def getDist(self, x1, x2, y1, y2, z1, z2):
+        """ Calculate Euclidean distance between 2 points in 3D """
+        dx = (x1 - x2)**2
+        dy = (y1 - y2)**2
+        dz = (z1 - z2)**2
+        return (dx + dy + dz)**0.5
+
+
+    def getPos(self, theta, k, vx=0.38):
+        """ Get x, y, z alonge helecoidal curve """
+        x = 12 * (vx + (1 - vx) * (np.cos(k * theta))**2 * np.cos(theta))
+        y = 12 * (vx + (1 - vx) * (np.cos(k * theta))**2 * np.sin(theta))
+        z = theta / (2 * np.pi)
+        return x, y, z
+
+
+    def getEqualSpacing(self, theta=0, k=4, vx=0.38, sep=1, error=0.05):
+        """ Generate approximately equally spaced points on 3D curve """
+        x0, y0, z0 = self.getPos(theta, k, vx)
+        allX = [x0]
+        allY = [y0]
+        allZ = [z0]
+        maxSep = sep * (1 + error)
+        minSep = sep * (1 - error)
+        while len(allX) < self.nPolymerBeads:
+            while True:
+                theta += 0.001
+                xNext, yNext, zNext = self.getPos(theta, k, vx)
+                sep = self.getDist(allX[-1], xNext, allY[-1], yNext, allZ[-1], zNext)
+                if (sep > minSep) and (sep < maxSep):
+                    allX.append(xNext)
+                    allY.append(yNext)
+                    allZ.append(zNext)
+                    break
+        return allX, allY, allZ
+
+
     def writePolymers(self):
         random.seed(self._polymerSeed)
         if self.randomWalk:
             x, y, z = self.makeRandomWalk(self.nPolymerBeads)
         else:
             # Randomly select rosette length between 30kbp - 100kbp
-            rosette_length = random.randint(30,100) * 1000
-            beads_per_loop = rosette_length / self.basesPerBead
+            rosetteLength = random.randint(30,100) * 1000
+            beadsPerLoop = rosetteLength / self.basesPerBead
             # Randomly select number of loops per turn between 4 and 12
-            loops_per_turn = random.randint(4,12)
-            beads_per_turn = beads_per_loop * loops_per_turn
-            n_turns = self.nPolymerBeads / beads_per_turn
-
-            k = loops_per_turn / 2
-            vx = 0.38
-            theta = np.linspace(0, n_turns * 2 * np.pi, self.nPolymerBeads)
-            x = 12 * (vx + (1 - vx) * (np.cos(k * theta))**2 * np.cos(theta))
-            y = 12 * (vx + (1 - vx) * (np.cos(k * theta))**2 * np.sin(theta))
-            z = theta / (2 * np.pi)
+            loopsPerTurn = random.randint(4,12)
+            beadsPerTurn = beadsPerLoop * loopsPerTurn
+            logging.warning(f'Rosette Length: {rosetteLength}, Loops per turn {loopsPerTurn}')
+            k = loopsPerTurn / 2
+            x, y, z = self.getEqualSpacing(theta=0, k=k, vx=0.38, sep=1.0, error=0.05)
         for i in range(self.nPolymerBeads):
             sys.stdout.write(f'{self._beadID} 1 3 {x[i]} {y[i]} {z[i]} 0 0 0 # DNA\n')
             self._beadID += 1
@@ -173,13 +205,13 @@ class lammps:
         sys.stdout.write('\n')
 
 
-def main(nPolymerBeads: int, beadTypes: str, monomerSeed, polymerSeed, nMonomers, extrusion, basesPerBead, randomWalk,
+def main(nPolymerBeads: int, beadTypes: str, monomerSeed, polymerSeed, nMonomers, basesPerBead, randomWalk,
         xlo, xhi, ylo, yhi, zlo, zhi, **kwargs):
 
     dat = lammps(
         nPolymerBeads=nPolymerBeads, basesPerBead=basesPerBead, beadTypes=readJSON(beadTypes),
         nMonomers=nMonomers, monomerSeed=monomerSeed, polymerSeed=polymerSeed,
-        randomWalk=randomWalk, extrusion=extrusion)
+        randomWalk=randomWalk)
     dat.loadBox(xlo, xhi, ylo, yhi, zlo, zhi)
     dat.writeLammps()
 
@@ -241,11 +273,6 @@ def parse_arguments():
     custom.add_argument(
         '--nMonomers', default=0, type=int,
         help='Set number of monomers for simulation.')
-    custom.add_argument(
-        '--extrusion', default=False, action='store_true',
-        help='Process beads labelled F and R as CTCF sites. Each '
-             'bead is given a unique ID and convergent orientation '
-             'pair coeffs are output (default: %(default)s)')
     custom.add_argument(
         '--basesPerBead', required=True, type=int,
         help='Number of bases used to represent 1 bead.')
