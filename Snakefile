@@ -54,7 +54,7 @@ default_config = {
                        'timestep':       0.01 ,
                        'warmUp':         20000,
                        'simTime':        20000,
-                       'harmonicCoeff':  40   ,
+                       'harmonicCoeff':  2    ,
                        'TFswap':         100  ,},
     'HiC':            {'matrix' :    None    ,
                        'binsize':    None    ,
@@ -377,7 +377,6 @@ rule extractAtomTypes:
 
 def setBeadsToLammpsCmd():
     cmd = '{SCRIPTS}/generate_polymer.py '
-    cmd += '--extrusion ' if True else ''
     cmd += (
         '--polymerSeed {params.polymerSeed} '
         '--monomerSeed {params.monomerSeed} '
@@ -400,8 +399,8 @@ rule BeadsToLammps:
         nMonomers = config['monomers'],
         nBeads = lambda wc: details[wc.name]['nBeads'],
         basesPerBead = config['bases_per_bead'],
-        polymerSeed = 1, #lambda wc: seeds['initialConform'][int(wc.rep) - 1],
-        monomerSeed = 1, #lambda wc: seeds['monomerPositions'][int(wc.rep) - 1],
+        polymerSeed = 2, #lambda wc: seeds['initialConform'][int(wc.rep) - 1],
+        monomerSeed = 2, #lambda wc: seeds['monomerPositions'][int(wc.rep) - 1],
         xlo = config['box']['xlo'],
         xhi = config['box']['xhi'],
         ylo = config['box']['ylo'],
@@ -427,7 +426,6 @@ rule lammpsEquilibrate:
         equilInfo = '{name}/{nbases}/lammpsInit/warmUp.custom.gz',
         radiusGyration = '{name}/{nbases}/lammpsInit/radiusOfGyration.txt'
     params:
-        extrusion = '--extrusion' if True else '',
         writeInterval = config['lammps']['writeInterval'],
         timestep = config['lammps']['timestep'],
         seed = 1, # lambda wc: seeds['simulation'][int(wc.rep) - 1],
@@ -440,7 +438,7 @@ rule lammpsEquilibrate:
     shell:
         'python {SCRIPTS}/runLammpsEquilibrate.py {input} {output.equil} '
         '--timestep {params.timestep} --writeInterval {params.writeInterval} '
-        '--equilTime {params.equilTime} {params.extrusion} '
+        '--equilTime {params.equilTime} '
         '--seed {params.seed} --equilInfo {output.equilInfo} '
         '--cosinePotential {params.cosinePotential} '
         '--radiusGyrationOut {output.radiusGyration} &> {log}'
