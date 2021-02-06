@@ -49,8 +49,8 @@ class lammps:
 
     @property
     def nBondTypes(self):
-        # 1 for between bead FENE, 2 for strong/weak harmonic extrusion
-        return 3
+        # 1 for between bead FENE, 1 for cohesin harmonic
+        return 2
 
 
     def loadBox(self, xlo, xhi, ylo, yhi, zlo, zhi):

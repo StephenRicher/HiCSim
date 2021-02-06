@@ -42,7 +42,6 @@ def runEquilibrationLammps(
     lmp.command('bond_style harmonic')
     lmp.command('bond_coeff 1 100.0 1.1')
     lmp.command('bond_coeff 2 0.0 1.1')
-    lmp.command('bond_coeff 3 0.0 1.1')
 
     lmp.command('angle_style cosine')
     lmp.command(f'angle_coeff 1 {cosinePotential}')

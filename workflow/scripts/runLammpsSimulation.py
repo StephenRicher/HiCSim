@@ -22,8 +22,10 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
               timestep: float, TFswap: float, radiusGyrationOut: str,
               pairCoeffs: str, simOut: str, beadTypes: str, seed: int):
 
-    #random.seed(seed)
-    nIntervals = int(simTime / updateInterval)
+    random.seed(seed)
+
+    nBasesPerBead = 3000
+    offRate = computeOffRate(nBasesPerBead, extrusionRate, prob=0.5, distance=40_000)
     stepProb = updateInterval * extrusionRate # Advancement probability
     addProb  = updateInterval * onRate        # Attachment probability
     offProb  = updateInterval * offRate       # Dettachment probability
@@ -37,7 +39,7 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
 
     lmp.command(f'read_restart {equil}')
     lmp.command('reset_timestep 0')
-    lmp.command(f'timestep {timestep}')
+
     lmp.command('neigh_modify every 1 delay 1 check yes')
     lmp.command('fix 1 all nve')
     lmp.command(f'fix 2 all langevin 1.0 1.0 1.0 {seed}')
@@ -49,7 +51,7 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
     # Assign atom types
     beadTypes = readJSON(beadTypes)
     for type, typeID in beadTypes.items():
-        if type in ['TFa', 'TFi', 'N']:
+        if (type in ['TFa', 'TFi', 'N']) or (type not in atomGroups):
             continue
         lmp.command(f'set group {type} type {typeID}')
 
@@ -59,15 +61,16 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
 
     lmp.command('bond_style hybrid fene harmonic')
     lmp.command('special_bonds fene')
-    lmp.command('bond_coeff 1 fene 30 1.6 1.0 1.0')
-    harmonicCoeff = 1
-    lmp.command(f'bond_coeff 2 harmonic {harmonicCoeff} 1.5')
-    lmp.command(f'bond_coeff 3 harmonic {harmonicCoeff / 2} 1.5')
+    lmp.command('bond_coeff 1 fene 30 1.5 1.0 1.0')
+    lmp.command('bond_coeff 2 fene 30 7.0 1.0 1.0')
+    #lmp.command(f'bond_coeff 2 harmonic {harmonicCoeff} 1.5')
 
-    # Short equilibration before setting pair coeffs
-    logging.warning('Equil run')
-    lmp.command('run 10000')
-    logging.warning('Equil run done')
+    # Reduce timestep and run short equilibration before setting pair coeffs
+    lmp.command(f'timestep {timestep / 10}')
+    lmp.command('run 1000000')
+
+    # Increase timestep back
+    lmp.command(f'timestep {timestep}')
 
     if pairCoeffs:
         writePairCoeffs(pairCoeffs, beadTypes)
@@ -85,10 +88,10 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
     lmp.command(f'fix swap TU atom/swap {TFswapSteps} 5 {seed} 10 ke yes types 1 2')
 
     allStatus = {}
-    sepThresh = 3
     allExtruders = Extruders(
         nExtrudersPerBead, atomGroups, offProb, stepProb, addProb, sepThresh)
 
+    nIntervals = int(simTime / updateInterval)
     for step in range(nIntervals):
         if step > 5:
             allExtruders.updateExtrusion()
@@ -101,6 +104,18 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
         .reset_index().melt(id_vars='index'))
     allStatus.columns = ['beadID', 'time', 'tadStatus']
     allStatus.to_csv(TADStatus, header=True, index=False)
+
+
+def computeOffRate(nBasesPerBead, extrusionRate, prob=0.5, distance=40_000):
+    """ Compute per time offProb required such that extruded
+        distance is reached when the cumulative offProb reaches prob """
+    # Number of extruded beads to reach extrusion distance
+    extrusionBeads = distance / nBasesPerBead
+    # Number steps required to reach that distance, given stepProb
+    totalSteps = extrusionBeads / extrusionRate
+    # Compute offProb such that there is a 50% offRate after that step number
+    offProb = 1 - (prob ** (1 / totalSteps))
+    return offProb
 
 
 def writePairCoeffs(pairCoeffs, beadType):
@@ -163,7 +178,6 @@ class Extruder():
 
     def nextPosition(self, direction, N=1):
         assert direction in ['left', 'right']
-        move = {'left' : -1, 'right' : 1}
         if direction == 'left':
             return self.currentPosition(direction) - N
         else:
@@ -182,33 +196,33 @@ class Extruder():
 
     def attach(self, left, right, sepThresh):
         if self.isBound:
-            self.detach()
+            logging.warning(f'Extruding from {self.left}:{self.right} to {left}:{right}')
+            # Delete old bonds before creating new.
+            self.detach(message=False)
+        else:
+            logging.warning(f'Attaching to {left}:{right}')
         self.isBound = True
         self.left = left
         self.right = right
-        # Create strong harmonic between new bead pairs
-        lmp.command(f'group tmpUpdate id {self.left} {self.right}')
-        lmp.command(f'create_bonds many tmpUpdate tmpUpdate 2 0.0 {sepThresh}')
-        lmp.command('group tmpUpdate delete')
-        # Create weak haronmic between next bead pairs
-        lmp.command(f'group tmpUpdate id {self.nextPosition("left")} {self.nextPosition("right")}')
-        lmp.command(f'create_bonds many tmpUpdate tmpUpdate 3 0.0 {sepThresh}')
-        lmp.command('group tmpUpdate delete')
+        # Create harmonic between new bead pairs
+        name = f'{self.left}-{self.right}'
+        lmp.command(f'group {name} id {self.left} {self.right}')
+        lmp.command(f'create_bonds many {name} {name} 2 0.0 {sepThresh}')
 
 
-    def detach(self):
-        occupied = " ".join([str(i) for i in self.occupied()])
-        lmp.command(f'group newbond id {occupied}')
-        lmp.command('delete_bonds newbond bond 2,3 remove special')
-        lmp.command('group newbond delete')
+    def detach(self, message=True):
+        name = f'{self.left}-{self.right}'
+        lmp.command(f'delete_bonds {name} bond 2 remove special')
+        lmp.command(f'group {name} delete')
+        if message:
+            logging.warning(f'Detaching {self.left}:{self.right}')
         self.isBound = False
         self.left = None
         self.right = None
 
 
     def occupied(self):
-        return [self.left, self.nextPosition('left'),
-                self.right, self.nextPosition('right')]
+        return [self.left, self.right]
 
 
 class Extruders():
@@ -275,33 +289,17 @@ class Extruders():
         for extruder in self.boundExtruders():
             if beadID in extruder.occupied():
                 return True
-        else:
-            return False
+        return False
 
 
     def isValid(self, beadID):
         """ Return True if beadID is a valid cohesin binding position """
-        if self.isOccupied(beadID) or self.isCTCF(beadID) or self.outOfRange(beadID):
+        if (self.isOccupied(beadID)
+                or self.isCTCF(beadID)
+                or self.outOfRange(beadID)):
             return False
         else:
             return True
-
-
-    def canExtrude(self, extruder, direction):
-        """ Check if extruder can validly extrude in direction """
-        assert direction in ['left', 'right']
-        # Check if next position is already occupied
-        if (self.isOccupied(extruder.nextPosition(direction, 1))
-                or self.isOccupied(extruder.nextPosition(direction, 2))):
-            return False
-        currentPos = extruder.currentPosition(direction)
-        if direction == 'left' and self.isForwardCTCF(currentPos):
-            return False
-        if direction == 'right' and self.isReverseCTCF(currentPos):
-            return False
-        if random.random() > self.stepProb:
-            return False
-        return True
 
 
     def boundExtruders(self):
@@ -327,6 +325,23 @@ class Extruders():
             extruder.detach()
 
 
+    def canExtrude(self, extruder, direction):
+        """ Check if extruder can validly extrude in direction """
+        assert direction in ['left', 'right']
+        # Retrieve next position1 in relevant direction
+        nextPos = extruder.nextPosition(direction, 1)
+        if self.isOccupied(nextPos):
+            return False
+        currentPos = extruder.currentPosition(direction)
+        if direction == 'left' and self.isForwardCTCF(currentPos):
+            return False
+        if direction == 'right' and self.isReverseCTCF(currentPos):
+            return False
+        if random.random() > self.stepProb:
+            return False
+        return True
+
+
     def updateExtruders(self):
         for extruder in self.boundExtruders():
             next = {}
@@ -340,12 +355,11 @@ class Extruders():
             # Skip if no extrusion
             if not updated:
                 continue
-            # Should I also check the next set for weak harmonic?
-            if self.beadSeperation(next['left'], next['right']) > self.sepThresh:
-                continue
             # Detach extruder if the next position slides off edge of polymer
             if self.outOfRange(next['left']) or self.outOfRange(next['right']):
                 extruder.detach()
+                continue
+            if self.beadSeperation(next['left'], next['right']) > self.sepThresh:
                 continue
             extruder.attach(next["left"], next["right"], self.sepThresh)
 
@@ -355,14 +369,15 @@ class Extruders():
             if random.random() > self.addProb:
                 continue
             startPos = random.choice(self.beadIDs['DNA'])
+            endPos = startPos + 2
             # Check position before and position after strong bond
-            for pos in range(startPos - 1, startPos + 4):
+            for pos in range(startPos, endPos + 1):
                 if not self.isValid(pos):
                     break
             else:
-                if self.beadSeperation(startPos, startPos + 2) > self.sepThresh:
+                if self.beadSeperation(startPos, endPos) > self.sepThresh:
                     continue
-                extruder.attach(startPos, startPos + 2, self.sepThresh)
+                extruder.attach(startPos, endPos, self.sepThresh)
 
 
     def updateExtrusion(self):
@@ -436,7 +451,7 @@ def parseArgs():
         help='Rate at which extruders attach in inverse timesteps '
              '(default: %(default)s)')
     parser.add_argument(
-        '--offRate', type=float, default=(1.0 / 40000.0),
+        '--offRate', type=float, default=(1.0 / 40_000.0),
         help='Rate at which extruders detach in inverse timesteps '
              '(default: %(default)s)')
     parser.add_argument(
