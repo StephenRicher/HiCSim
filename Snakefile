@@ -409,7 +409,7 @@ rule BeadsToLammps:
         zhi = config['box']['zhi'],
         randomWalk = '--randomWalk' if config['random']['walk'] else ''
     group:
-        'lammps'
+        'lammpsEquilibrate'
     log:
         'logs/BeadsToLammps/{name}-{nbases}.log'
     conda:
@@ -431,6 +431,8 @@ rule lammpsEquilibrate:
         seed = 1, # lambda wc: seeds['simulation'][int(wc.rep) - 1],
         cosinePotential = lambda wc: 10000 / config['bases_per_bead'],
         equilTime = config['lammps']['warmUp']
+    group:
+        'lammpsEquilibrate'
     log:
         'logs/lammpsEquilibrate/{name}-{nbases}.log'
     conda:
