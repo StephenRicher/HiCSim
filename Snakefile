@@ -222,7 +222,7 @@ if config['ctcf'] is not None:
             maxProb = config['maxProb'],
             seed = lambda wc: seeds['sequence'][int(wc.rep) - 1]
         group:
-            'lammps'
+            'prepLammps'
         log:
             'logs/sampleBed/{rep}.log'
         conda:
@@ -239,7 +239,7 @@ if config['ctcf'] is not None:
             forward = 'tracks/{rep}/CTCF/CTCF-filtered-forward.bed',
             reversed = 'tracks/{rep}/CTCF/CTCF-filtered-reverse.bed'
         group:
-            'lammps'
+            'prepLammps'
         log:
             'logs/splitOrientation/{rep}.log'
         conda:
@@ -260,7 +260,7 @@ rule filterTracks:
         maxProb = config['maxProb'],
         seed = lambda wc: seeds['sequence'][int(wc.rep) - 1]
     group:
-        'lammps'
+        'prepLammps'
     log:
         'logs/filterTracks/{track}-{rep}.log'
     conda:
@@ -309,7 +309,7 @@ rule maskFasta:
         region = getRegion,
         seed = lambda wc: seeds['sequence'][int(wc.rep) - 1]
     group:
-        'lammps'
+        'prepLammps'
     log:
         'logs/maskFasta/maskFasta-{name}-{rep}.log'
     conda:
@@ -325,7 +325,7 @@ rule FastaToBeads:
     output:
         '{name}/{nbases}/reps/{rep}/{name}-beads-{rep}.txt'
     group:
-        'lammps'
+        'prepLammps'
     params:
         bases_per_bead = config['bases_per_bead'],
         seed = lambda wc: seeds['sequence'][int(wc.rep) - 1]
@@ -367,6 +367,8 @@ rule extractAtomTypes:
         allBeadsInput
     output:
         '{name}/{nbases}/beadTypeID.json'
+    group:
+        'lammpsEquilibrate'
     log:
         'logs/extractAtomTypes/{name}-{nbases}.log'
     conda:
@@ -493,7 +495,7 @@ rule lammpsSimulation:
         sim = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
         radiusGyration = '{name}/{nbases}/reps/{rep}/lammps/radius_of_gyration.txt'
     group:
-        'lammps'
+        'processAllLammps' if config['groupJobs'] else 'lammpsSimulation'
     log:
         'logs/lammps/{name}-{nbases}-{rep}.log'
     conda:
@@ -518,7 +520,7 @@ rule plotRG:
         confidence = config['plotRG']['confidence'],
         dpi = config['plotRG']['dpi']
     group:
-        'lammps' if config['groupJobs'] else 'plotRG'
+        'processAllLammps' if config['groupJobs'] else 'plotRG'
     log:
         'logs/plotRG/{name}-{nbases}.log'
     conda:
