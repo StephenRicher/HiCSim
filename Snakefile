@@ -150,7 +150,7 @@ if config['masking']:
 
 wildcard_constraints:
     all = r'[^\/]+',
-    stat = r'stats|pairStats',
+    stat = r'stats|pairStats|TADstatus',
     name = rf'{"|".join(details.keys())}',
     binsize = rf'{BINSIZE}',
     nbases = rf'{config["bases_per_bead"]}',
@@ -170,7 +170,7 @@ rule all:
                   'radiusGyration', 'TUreplicateCount',]),
          expand('{name}/{nbases}/merged/{name}-TU-{stat}.csv.gz',
             name=details.keys(), nbases=config['bases_per_bead'],
-            stat=['stats', 'pairStats']),
+            stat=['stats', 'pairStats', 'TADstatus']),
         expand('{name}/{nbases}/lammpsInit/simulation-equil',
             name=details.keys(), nbases=config['bases_per_bead'])]
 
@@ -489,6 +489,7 @@ rule lammpsSimulation:
         TFswap = config['lammps']['TFswap'],
         coeffs = config['coeffs'],
         timestep = config['lammps']['timestep'],
+        nBasesPerBead = config['bases_per_bead'],
         writeInterval = config['lammps']['writeInterval'],
         seed = lambda wc: seeds['simulation'][int(wc.rep) - 1],
         harmonicCoeff = config['lammps']['harmonicCoeff'],
@@ -507,6 +508,7 @@ rule lammpsSimulation:
         '--harmonicCoeff {params.harmonicCoeff} --TFswap {params.TFswap} '
         '--radiusGyrationOut {output.radiusGyration} --simOut {output.simOut} '
         '--timestep {params.timestep} {params.extrusion} '
+        '--nBasesPerBead {params.nBasesPerBead} '
         '--pairCoeffs {params.coeffs} --beadTypes {input.beadTypes} &> {log}'
 
 
@@ -560,8 +562,9 @@ rule reformatLammps:
 
 rule processTUinfo:
     input:
+        atomGroups = rules.getAtomGroups.output,
+        TADstatus = rules.lammpsSimulation.output.TADstatus,
         sim = rules.reformatLammps.output,
-        groups = rules.getAtomGroups.output
     output:
         '{name}/{nbases}/reps/{rep}/TU-info.csv.gz',
     params:
@@ -574,7 +577,23 @@ rule processTUinfo:
         f'{ENVS}/python3.yaml'
     shell:
         '{SCRIPTS}/processTUinfo.py --out {output} '
-        '--distance {params.distance} {input.groups} {input.sim} &> {log}'
+        '--distance {params.distance} {input.atomGroups} '
+        '{input.TADstatus} {input.sim} &> {log}'
+
+
+rule processTADstatus:
+    input:
+        rules.processTUinfo.output
+    output:
+        '{name}/{nbases}/reps/{rep}/TU-TADstatus.csv.gz',
+    group:
+        'processAllLammps' if config['groupJobs'] else 'processTUinfo'
+    log:
+        'logs/processTADstatus/{name}-{nbases}-{rep}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'python {SCRIPTS}/processTADstatus.py {input} --out {output} &> {log}'
 
 
 rule DBSCAN:
@@ -613,25 +632,9 @@ rule plotDBSCAN:
         '{SCRIPTS}/plotDBSCAN.py {output} {input} &> {log}'
 
 
-rule extractTADboundaries:
-    input:
-        rules.BeadsToLammps.output
-    output:
-        '{name}/{nbases}/reps/{rep}/beadTADstatus.json',
-    group:
-        'processAllLammps' if config['groupJobs'] else 'processTUinfo'
-    log:
-        'logs/extractTADboundaries/{name}-{nbases}-{rep}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        'python {SCRIPTS}/extractTADboundaries.py {input} > {output} 2> {log}'
-
-
 rule computeTUstats:
     input:
-        TUinfo = '{name}/{nbases}/reps/{rep}/TU-info.csv.gz',
-        TADboundaries = rules.extractTADboundaries.output
+        rules.processTUinfo.output
     output:
         TUstats = '{name}/{nbases}/reps/{rep}/TU-stats.csv.gz',
         TUpairStats = '{name}/{nbases}/reps/{rep}/TU-pairStats.csv.gz',
@@ -643,8 +646,7 @@ rule computeTUstats:
         f'{ENVS}/python3.yaml'
     shell:
         '{SCRIPTS}/computeTUstats.py --out {output.TUstats} '
-        '--TUpairStats {output.TUpairStats} '
-        '--TADboundaries {input.TADboundaries} {input.TUinfo} &> {log}'
+        '--TUpairStats {output.TUpairStats} {input} &> {log}'
 
 
 rule mergeByRep:
