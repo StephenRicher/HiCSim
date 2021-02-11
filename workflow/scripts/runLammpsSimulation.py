@@ -20,11 +20,11 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
               updateInterval: float, onRate: float, offRate: float,
               writeInterval: float, extrusion: bool, harmonicCoeff: float,
               timestep: float, TFswap: float, radiusGyrationOut: str,
-              pairCoeffs: str, simOut: str, beadTypes: str, seed: int):
+              pairCoeffs: str, simOut: str, beadTypes: str, nBasesPerBead: int,
+              seed: int):
 
     random.seed(seed)
 
-    nBasesPerBead = 3000
     offRate = computeOffRate(nBasesPerBead, extrusionRate, prob=0.5, distance=40_000)
     stepProb = updateInterval * extrusionRate # Advancement probability
     addProb  = updateInterval * onRate        # Attachment probability
@@ -87,22 +87,25 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
 
     lmp.command(f'fix swap TU atom/swap {TFswapSteps} 5 {seed} 10 ke yes types 1 2')
 
-    allStatus = {}
+    allStatus = []
     allExtruders = Extruders(
         nExtrudersPerBead, atomGroups, offProb, stepProb, addProb, sepThresh)
 
     nIntervals = int(simTime / updateInterval)
+    updateIntervalSteps = int(updateInterval / timestep)
     for step in range(nIntervals):
+        status = allExtruders.writeTADs()
+        status['timestep'] = step * updateIntervalSteps
+        allStatus.append(status)
         if step > 5:
             allExtruders.updateExtrusion()
-        time = step * updateInterval
-        allStatus[time] = allExtruders.writeTADs()
-        lmp.command(f'run {int(updateInterval / timestep)}')
-
-    allStatus = (pd.DataFrame(
-        allStatus, index=allExtruders.beadIDs['DNA'])
-        .reset_index().melt(id_vars='index'))
-    allStatus.columns = ['beadID', 'time', 'tadStatus']
+        lmp.command(f'run {updateIntervalSteps}')
+    # Update TAD status for last timestep
+    status = allExtruders.writeTADs()
+    status['timestep'] = (step + 1) * updateIntervalSteps
+    allStatus.append(status)
+    allStatus = pd.concat(allStatus)
+    allStatus['time'] = allStatus['timestep'] * timestep
     allStatus.to_csv(TADStatus, header=True, index=False)
 
 
@@ -409,16 +412,40 @@ class Extruders():
         return total ** 0.5
 
 
+    def getTADgroup(self, beadID):
+        """ Count how many extruder boundaries are
+            crossed to reach a beadID. BeadIDs with equal
+            values are in the same TAD/nonTAD group """
+        assert beadID in self.beadIDs['DNA']
+        if self.isOccupied(beadID):
+            return -1
+        group = 0
+        for bead in self.beadIDs['DNA']:
+            if self.isOccupied(bead):
+                group += 1
+            if bead == beadID:
+                return group
+
+
     def writeTADs(self):
-        """ Write per-bead TAD status """
-        allStatus = []
+        """ Write per-bead TAD status and section identifier
+            Section ID is unique per timepoint and groups beads
+            within a pair of extruder boundaries """
+        allStatus = {'ID': [], 'TADstatus': [], 'TADgroup': []}
         for bead in self.beadIDs['DNA']:
             if self.isOccupied(bead):
                 status = -1
+                group = -1
             else:
+                # Number of extrusion loops the bead overlaps
+                # Can be > 1 if an extruder binds to an extruded loop
                 status = self.inLoop(bead)
-            allStatus.append(status)
-        return allStatus
+                # Identifier unique to TAD group
+                group = self.getTADgroup(bead)
+            allStatus['ID'].append(bead)
+            allStatus['TADstatus'].append(status)
+            allStatus['TADgroup'].append(group)
+        return pd.DataFrame(allStatus)
 
 
 def parseArgs():
@@ -484,12 +511,15 @@ def parseArgs():
         help='Output file for radius of gyration data.')
     requiredNamed.add_argument(
         '--simOut', required=True, help='Output file for simulation.')
-    parser.add_argument(
+    requiredNamed.add_argument(
         '--timestep', type=float, required=True,
         help='Size of timestep in time units from equil.')
-    parser.add_argument(
+    requiredNamed.add_argument(
         '--beadTypes', required=True,
         help='Mapping of bead type to type ID from equil.')
+    requiredNamed.add_argument(
+        '--nBasesPerBead', type=int, required=True,
+        help='Number of bases that represent a single bead.')
     return setDefaults(parser)
 
 
