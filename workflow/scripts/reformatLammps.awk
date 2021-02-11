@@ -2,7 +2,7 @@
 
 BEGIN {
     OFS=","
-	print "time", "id", "type", "x", "y", "z", "ix", "iy", "iz"
+	print "timestep", "ID", "type", "x", "y", "z", "ix", "iy", "iz"
 }
 
 {
