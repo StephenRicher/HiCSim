@@ -7,35 +7,37 @@ import logging
 import argparse
 import numpy as np
 import pandas as pd
-from utilities import setDefaults, getAtomCount, readJSON
+from argUtils import setDefaults, createMainParent
+from utilities import getAtomCount, readJSON
 from scipy.spatial.distance import cdist
 
 __version__ = '1.0.0'
 
 
-def processTUinfo(file: str, atomGroups: str, distance: float, out: str):
+def processTUinfo(atomGroups: str, TADstatus: str, sim: str,
+                  distance: float, out: str):
 
     # Read atomGroup and retrieve TU atom indexes
-    atomGroupsDict = readJSON(atomGroups)
-    if ('TU' not in atomGroupsDict) or ('TF' not in atomGroupsDict):
+    atomGroups = readJSON(atomGroups)
+    if ('TU' not in atomGroups) or ('TF' not in atomGroups):
         logging.error('No TU-TF pairs to process in simulation.')
         return 1
 
-    atomCount = getAtomCount(atomGroupsDict)
+    atomCount = getAtomCount(atomGroups)
 
     # Read simulation file 1 timestep at a time
     info = pd.read_csv(
-        file, chunksize=atomCount,
-        usecols=['time', 'id', 'type', 'x', 'y', 'z'])
+        sim, chunksize=atomCount,
+        usecols=['timestep', 'ID', 'type', 'x', 'y', 'z'])
 
     allTUinfo = []
     for sim in info:
         # Extract data of only TUs
-        TUdata = sim.loc[sim['id'].isin(atomGroupsDict['TU'])]
+        TUdata = sim.loc[sim['ID'].isin(atomGroups['TU'])]
         TUs = TUdata[['x', 'y', 'z']].to_numpy()
 
         # Read TFs and exclude type 3 (inactive TF)
-        TFas = sim.loc[(sim['id'].isin(atomGroupsDict['TF']))
+        TFas = sim.loc[(sim['ID'].isin(atomGroups['TF']))
                        & (sim['type'] != '3'), ['x', 'y', 'z']].to_numpy()
 
         # Compute distance of active TFs to each TU bead
@@ -46,27 +48,37 @@ def processTUinfo(file: str, atomGroups: str, distance: float, out: str):
         TUdata['active'] = TUdata['TFnear'] < distance
         allTUinfo.append(TUdata)
 
-    pd.concat(allTUinfo).to_csv(out, index=False)
+    allTUinfo = pd.concat(allTUinfo)
+    # Read per-bead/timepoint TAD status
+    TADstatus = pd.read_csv(TADstatus)
+    # Exclude non-TU beads
+    TADstatus = TADstatus[TADstatus['ID'].isin(atomGroups['TU'])]
+    allTUinfo = pd.merge(allTUinfo, TADstatus)
+    allTUinfo.to_csv(out, index=False)
 
 
 def parseArgs():
 
     epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
-    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+    mainParent = createMainParent(verbose=False, version=__version__)
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[mainParent])
     parser.add_argument(
         'atomGroups', help='Atom group assignments in JSON format.')
     parser.add_argument(
-        'file', nargs='?', default=[],
-        help='Input custom lammps simulation file (default: stdin)')
+        'TADstatus', help='Per bead/timepoint TAD status.')
+    parser.add_argument(
+        'sim', help='Input custom lammps simulation file.')
     parser.add_argument(
         '--distance', default=1.8, type=float,
         help='Distance threshold for transcription (default: %(default)s)')
     parser.add_argument(
         '--out', default=sys.stdout, help='File to TU info (default: stdout)')
+    parser.set_defaults(function=processTUinfo)
 
-    return setDefaults(parser, verbose=False, version=__version__)
+    return setDefaults(parser)
 
 
 if __name__ == '__main__':
-    args = parseArgs()
-    sys.exit(processTUinfo(**vars(args)))
+    args, function = parseArgs()
+    sys.exit(function(**vars(args)))
