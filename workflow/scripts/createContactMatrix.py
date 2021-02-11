@@ -39,7 +39,7 @@ def createContactMatrix(
     sqdistance = distance**2
     contacts = 0
     for timestep in fullSim:
-        timestep = timestep[timestep['id'].isin(atomGroupsDict['DNA'])]
+        timestep = timestep[timestep['ID'].isin(atomGroupsDict['DNA'])]
         xyz = timestep[['x', 'y', 'z']].to_numpy()
         if periodic and dimensions:
             distance = pdistPeriodic(xyz, dimensions, sqeuclidean=True)
