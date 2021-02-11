@@ -23,8 +23,8 @@ __version__ = '1.0.0'
 def main(infile: str, out: str, outplot: str, eps: float, minSamples: float) -> None:
 
     fullSim = pd.read_csv(infile)
-    TUids = fullSim['id'].unique()
-    fullSim = fullSim.groupby('time')
+    TUids = fullSim['ID'].unique()
+    fullSim = fullSim.groupby('timestep')
     clusterLabels = []
     for time, timestep in fullSim:
         positions = timestep[['x','y','z']].to_numpy()
@@ -40,14 +40,15 @@ def main(infile: str, out: str, outplot: str, eps: float, minSamples: float) -> 
     fullSim.loc[fullSim.active == False, 'labels'] = -1
 
     # Filter time periods with no defined clusters
-    fullSim = fullSim.groupby('time').filter(lambda x: (x['labels'] != -1).any())
+    fullSim = fullSim.groupby('timestep').filter(lambda x: (x['labels'] != -1).any())
 
     if outplot:
         clusterLabels = fullSim[fullSim.labels != -1].labels.unique()
         nClusters = len(clusterLabels)
         cmap = sns.color_palette("Dark2", nClusters)
 
-        clusterGroups = fullSim.pivot(index='id', columns='time', values='labels')
+        clusterGroups = fullSim.pivot(
+            index='ID', columns='timestep', values='labels')
         if clusterGroups.empty:
             logging.error('No valid clusters - creating empty plot file.')
             Path(outplot).touch()
@@ -67,18 +68,18 @@ def main(infile: str, out: str, outplot: str, eps: float, minSamples: float) -> 
         clusterPairs[id1][id2] = 0
 
     # Count each time pairs occur in cluster
-    for (time, label), group in fullSim.groupby(['time', 'labels']):
+    for (time, label), group in fullSim.groupby(['timestep', 'labels']):
         if label == -1:
             continue
-        ids = sorted(list(group.id))
-        for id1, id2 in permutations(group.id, 2):
+        ids = sorted(list(group.ID))
+        for id1, id2 in permutations(group.ID, 2):
             clusterPairs[id1][id2] += 1
 
     clusterPairs = pd.concat(
         {k: pd.DataFrame(v, index=[0]).T for k, v in clusterPairs.items()}, axis=0)
     clusterPairs = clusterPairs.reset_index()
     clusterPairs.columns = ['TU1', 'TU2', 'count']
-    timesteps = len(fullSim.time.unique())
+    timesteps = len(fullSim.timestep.unique())
     clusterPairs['proportion'] =  clusterPairs['count'] / timesteps
     clusterPairs.to_csv(out, index=False)
 
