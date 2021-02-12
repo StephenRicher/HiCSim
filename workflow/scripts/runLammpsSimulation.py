@@ -239,6 +239,11 @@ class Extruders():
         self.sepThresh = sepThresh
         self.coords = None
         self.box = self.processBox(lmp.extract_box())
+        self.TADstatus = None
+        # Variables to track whether the previous status was updated
+        self.removed = False
+        self.updated = False
+        self.updated = False
 
 
     def processBox(self, lmpBox):
@@ -322,10 +327,13 @@ class Extruders():
 
 
     def removeExtruders(self):
+        rc = False
         for extruder in self.boundExtruders():
             if random.random() > self.removeProb:
                 continue
             extruder.detach()
+            rc = True
+        return rc
 
 
     def canExtrude(self, extruder, direction):
@@ -346,6 +354,7 @@ class Extruders():
 
 
     def updateExtruders(self):
+        rc = False
         for extruder in self.boundExtruders():
             next = {}
             updated = False
@@ -365,9 +374,12 @@ class Extruders():
             if self.beadSeperation(next['left'], next['right']) > self.sepThresh:
                 continue
             extruder.attach(next["left"], next["right"], self.sepThresh)
+            rc = True
+        return rc
 
 
     def attachExtruders(self):
+        rc = False
         for extruder in self.unboundExtruders():
             if random.random() > self.addProb:
                 continue
@@ -381,12 +393,20 @@ class Extruders():
                 if self.beadSeperation(startPos, endPos) > self.sepThresh:
                     continue
                 extruder.attach(startPos, endPos, self.sepThresh)
+                rc = True
+        return rc
 
 
     def updateExtrusion(self):
-        self.removeExtruders()
-        self.updateExtruders()
-        self.attachExtruders()
+        """ Perform extrusion and store whether changes were made """
+        self.removed = self.removeExtruders()
+        self.updated = self.updateExtruders()
+        self.attached = self.attachExtruders()
+
+
+    def anyUpdated(self):
+        """ Return True if any extruders were removed/updated or attached """
+        return self.removed or self.updated or self.attached
 
 
     def updateCoordinates(self):
@@ -412,40 +432,26 @@ class Extruders():
         return total ** 0.5
 
 
-    def getTADgroup(self, beadID):
-        """ Count how many extruder boundaries are
-            crossed to reach a beadID. BeadIDs with equal
-            values are in the same TAD/nonTAD group """
-        assert beadID in self.beadIDs['DNA']
-        if self.isOccupied(beadID):
-            return -1
-        group = 0
-        for bead in self.beadIDs['DNA']:
-            if self.isOccupied(bead):
-                group += 1
-            if bead == beadID:
-                return group
-
-
     def writeTADs(self):
         """ Write per-bead TAD status and section identifier
             Section ID is unique per timepoint and groups beads
             within a pair of extruder boundaries """
-        allStatus = {'ID': [], 'TADstatus': [], 'TADgroup': []}
-        for bead in self.beadIDs['DNA']:
-            if self.isOccupied(bead):
-                status = -1
-                group = -1
-            else:
-                # Number of extrusion loops the bead overlaps
-                # Can be > 1 if an extruder binds to an extruded loop
-                status = self.inLoop(bead)
-                # Identifier unique to TAD group
-                group = self.getTADgroup(bead)
-            allStatus['ID'].append(bead)
-            allStatus['TADstatus'].append(status)
-            allStatus['TADgroup'].append(group)
-        return pd.DataFrame(allStatus)
+        if (self.TADstatus is None) or (self.anyUpdated):
+            allStatus = {'ID': [], 'TADstatus': [], 'TADgroup': []}
+            TADgroup = 0 # Track number of boundaries crossed
+            for bead in self.beadIDs['DNA']:
+                if self.isOccupied(bead):
+                    status = -1
+                    TADgroup += 1
+                else:
+                    # Number of extrusion loops the bead overlaps
+                    # Can be > 1 if an extruder binds to an extruded loop
+                    status = self.inLoop(bead)
+                allStatus['ID'].append(bead)
+                allStatus['TADstatus'].append(status)
+                allStatus['TADgroup'].append(TADgroup)
+            self.TADstatus = allStatus
+        return pd.DataFrame(self.TADstatus)
 
 
 def parseArgs():
