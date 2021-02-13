@@ -761,7 +761,7 @@ rule mergeReplicates:
     params:
         method = config['method']
     group:
-        'processAllLammps' if config['groupJobs'] else 'createContactMatrix'
+        'processAllLammps' if config['groupJobs'] else 'mergeReplicates'
     log:
         'logs/mergeReplicates/{name}-{nbases}.log'
     conda:
