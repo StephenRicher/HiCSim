@@ -145,7 +145,7 @@ else:
 if config['lammps']['simTime'] < config['lammps']['writeInterval']:
     sys.exit('Simulation time less than writeInterval')
 
-if config['lammps']['threads'] > workflow.cores:
+if (workflow.cores is not None) and (config['lammps']['threads'] > workflow.cores):
     print(f'Lammps threads cannot be higher than provided workflow cores. '
           f'Adjusting lammps threads from {config["lammps"]["threads"]} '
           f'to {workflow.cores}.')
