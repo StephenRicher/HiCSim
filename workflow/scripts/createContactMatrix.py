@@ -32,7 +32,7 @@ def createContactMatrix(
     # Read atomGroup and retrieve TU atom indexes
     atomGroupsDict = readJSON(atomGroups)
     atomCount = getAtomCount(atomGroupsDict)
-    logging.error(f'{atomCount}')
+
     # Read simulation file 1 timestep at a time and filter as needed
     fullSim = pd.read_csv(file, chunksize=atomCount)
 
