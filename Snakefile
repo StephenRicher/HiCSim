@@ -3,6 +3,7 @@
 container: "docker://continuumio/miniconda3:4.7.12"
 
 import os
+import math
 import random
 import tempfile
 from set_config import set_config, read_paths, getNbeads, adjustCoordinates
@@ -55,7 +56,8 @@ default_config = {
                        'warmUp':         20000,
                        'simTime':        20000,
                        'harmonicCoeff':  2    ,
-                       'TFswap':         100  ,},
+                       'TFswap':         100  ,
+                       'nSplit':         10   ,},
     'HiC':            {'matrix' :    None    ,
                        'binsize':    None    ,
                        'log' :       True    ,
@@ -139,6 +141,9 @@ if config['HiC']['binsize'] is not None:
 else:
     MERGEBINS = 1
     BINSIZE = config['bases_per_bead']
+
+if config['lammps']['simTime'] < config['lammps']['writeInterval']:
+    sys.exit('Simulation time less than writeInterval')
 
 
 # Read track file basename and masking character into a dictionary
@@ -547,32 +552,47 @@ rule writeTUdistribution:
         '{SCRIPTS}/writeTUdistribution.py --out {output} {input} &> {log}'
 
 
+def getNsteps(wc):
+    """ Get number of simulation steps to write
+        per file to generate nSplit files"""
+    # Compute number of simulation write times
+    nWrites = math.floor(config['lammps']['simTime'] / config['lammps']['writeInterval']) + 1
+    # Number of steps per file to generate nSplit files
+    nSteps = math.ceil(nWrites / config['lammps']['nSplit'])
+    return nSteps
+
+
 rule reformatLammps:
     input:
         rules.lammpsSimulation.output.simOut
     output:
-        '{name}/{nbases}/reps/{rep}/lammps/simulation.csv.gz'
+        expand('{{name}}/{{nbases}}/reps/{{rep}}/lammps/simulation-split{split}.csv.gz',
+            split=range(config['lammps']['nSplit']))
+    params:
+        nSteps = getNsteps,
+        prefix = lambda wc: f'{wc.name}/{wc.nbases}/reps/{wc.rep}/lammps/simulation-split'
     group:
         'processAllLammps' if config['groupJobs'] else 'reformatLammps'
     log:
         'logs/reformatLammps/{name}-{nbases}-{rep}.log'
     shell:
-        '({SCRIPTS}/reformatLammps.awk <(zcat {input}) | gzip > {output}) &> {log}'
+        '{SCRIPTS}/reformatLammps.awk -v nSteps={params.nSteps} '
+        '-v prefix={params.prefix} <(zcat {input}) &> {log}'
 
 
 rule processTUinfo:
     input:
         atomGroups = rules.getAtomGroups.output,
         TADstatus = rules.lammpsSimulation.output.TADstatus,
-        sim = rules.reformatLammps.output,
+        sim = '{name}/{nbases}/reps/{rep}/lammps/simulation-split{split}.csv.gz',
     output:
-        '{name}/{nbases}/reps/{rep}/TU-info.csv.gz',
+        '{name}/{nbases}/reps/{rep}/TU-info-split{split}.csv.gz',
     params:
         distance = 1.8
     group:
         'processAllLammps' if config['groupJobs'] else 'processTUinfo'
     log:
-        'logs/processTUinfo/{name}-{nbases}-{rep}.log'
+        'logs/processTUinfo/{name}-{nbases}-{rep}-{split}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -581,9 +601,25 @@ rule processTUinfo:
         '{input.TADstatus} {input.sim} &> {log}'
 
 
+rule mergeTUinfo:
+    input:
+        expand('{{name}}/{{nbases}}/reps/{{rep}}/TU-info-split{split}.csv.gz',
+            split=range(config['lammps']['nSplit'])),
+    output:
+        '{name}/{nbases}/reps/{rep}/TU-info.csv.gz'
+    group:
+        'processAllLammps' if config['groupJobs'] else 'processTUinfo'
+    log:
+        'logs/mergeTUinfo/{name}-{nbases}-{rep}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/mergeByRep.py --noRep --out {output} {input} &> {log}'
+
+
 rule processTADstatus:
     input:
-        rules.processTUinfo.output
+        rules.mergeTUinfo.output
     output:
         '{name}/{nbases}/reps/{rep}/TU-TADstatus.csv.gz',
     group:
@@ -598,7 +634,7 @@ rule processTADstatus:
 
 rule DBSCAN:
     input:
-        rules.processTUinfo.output
+        rules.mergeTUinfo.output
     output:
         clusterPairs = '{name}/{nbases}/reps/{rep}/TU-clusterPair.csv.gz',
         clusterPlot = 'plots/DBSCAN/{name}/{name}-{nbases}-{rep}-cluster.png',
@@ -634,7 +670,7 @@ rule plotDBSCAN:
 
 rule computeTUstats:
     input:
-        rules.processTUinfo.output
+        rules.mergeTUinfo.output
     output:
         TUstats = '{name}/{nbases}/reps/{rep}/TU-stats.csv.gz',
         TUpairStats = '{name}/{nbases}/reps/{rep}/TU-pairStats.csv.gz',
@@ -728,10 +764,10 @@ rule plotTUcorrelation:
 
 rule createContactMatrix:
     input:
-        xyz = rules.reformatLammps.output,
+        xyz = '{name}/{nbases}/reps/{rep}/lammps/simulation-split{split}.csv.gz',
         groups = rules.getAtomGroups.output
     output:
-        '{name}/{nbases}/reps/{rep}/matrices/contacts.npz'
+        '{name}/{nbases}/reps/{rep}/matrices/contacts-split{split}.npz'
     params:
         distance = 3,
         periodic = '--periodic',
@@ -742,7 +778,7 @@ rule createContactMatrix:
     group:
         'processAllLammps' if config['groupJobs'] else 'createContactMatrix'
     log:
-        'logs/createContactMatrix/{name}-{nbases}-{rep}.log'
+        'logs/createContactMatrix/{name}-{nbases}-{rep}-{split}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -750,6 +786,25 @@ rule createContactMatrix:
         '--out {output} --distance {params.distance} --seed {params.seed} '
         '--dimensions {params.x} {params.y} {params.z} {input.groups} '
         '<(zcat -f {input.xyz}) &> {log}'
+
+
+rule mergeSplit:
+    input:
+        expand('{{name}}/{{nbases}}/reps/{{rep}}/matrices/contacts-split{split}.npz',
+            split=range(config['lammps']['nSplit']))
+    output:
+        '{name}/{nbases}/reps/{rep}/matrices/contacts.npz'
+    params:
+        method = 'sum'
+    group:
+        'processAllLammps' if config['groupJobs'] else 'createContactMatrix'
+    log:
+        'logs/mergeSplit/{name}-{nbases}-{rep}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/mergeMatrices.py --out {output} '
+        '--method {params.method} {input} &> {log}'
 
 
 rule mergeReplicates:
