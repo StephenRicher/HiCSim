@@ -13,12 +13,13 @@ from utilities import setDefaults
 __version__ = '1.0.0'
 
 
-def mergeByRep(infiles: List, out: str):
+def mergeByRep(infiles: List, out: str, noRep: bool):
 
     mergedDF = []
     for rep, file in enumerate(infiles):
         df = pd.read_csv(file)
-        df['rep'] = rep
+        if not noRep:
+            df['rep'] = rep
         mergedDF.append(df)
 
     pd.concat(mergedDF).to_csv(out, index=False)
@@ -31,6 +32,9 @@ def parseArgs():
     parser.add_argument('infiles', nargs='*', help='Input files to merge')
     parser.add_argument(
         '--out', default=sys.stdout, help='Merged output (default: stdout)')
+    parser.add_argument(
+        '--noRep', action='store_true',
+        help='Do not add rep column, just concat files (default: %(default)s)')
 
     return setDefaults(parser, verbose=False, version=__version__)
 
