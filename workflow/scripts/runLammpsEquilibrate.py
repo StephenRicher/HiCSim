@@ -4,6 +4,7 @@ import sys
 import random
 import logging
 import argparse
+from mpi4py import MPI
 from lammps import lammps
 from argUtils import setDefaults, createMainParent
 

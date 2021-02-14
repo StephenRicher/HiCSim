@@ -6,6 +6,7 @@ import random
 import logging
 import argparse
 import pandas as pd
+from mpi4py import MPI
 from lammps import lammps
 from utilities import readJSON
 from collections import namedtuple, defaultdict
@@ -100,6 +101,8 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
         if step > 5:
             allExtruders.updateExtrusion()
         lmp.command(f'run {updateIntervalSteps}')
+    lmp.command('undump 2')
+    lmp.command('unfix RG')
     # Update TAD status for last timestep
     status = allExtruders.writeTADs()
     status['timestep'] = (step + 1) * updateIntervalSteps

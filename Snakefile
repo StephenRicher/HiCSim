@@ -57,7 +57,8 @@ default_config = {
                        'simTime':        20000,
                        'harmonicCoeff':  2    ,
                        'TFswap':         100  ,
-                       'nSplit':         10   ,},
+                       'nSplit':         10   ,
+                       'threads':        1    ,},
     'HiC':            {'matrix' :    None    ,
                        'binsize':    None    ,
                        'log' :       True    ,
@@ -78,7 +79,6 @@ default_config = {
                        'delay':      10      ,
                        'loop':       0       ,},
     'groupJobs':      False,
-    'cluster':        False,
 }
 config = set_config(config, default_config)
 
@@ -145,6 +145,11 @@ else:
 if config['lammps']['simTime'] < config['lammps']['writeInterval']:
     sys.exit('Simulation time less than writeInterval')
 
+if config['lammps']['threads'] > workflow.cores:
+    print(f'Lammps threads cannot be higher than provided workflow cores. '
+          f'Adjusting lammps threads from {config["lammps"]["threads"]} '
+          f'to {workflow.cores}.')
+    config['lammps']['threads'] = workflow.cores
 
 # Read track file basename and masking character into a dictionary
 track_data = {}
@@ -424,6 +429,12 @@ rule BeadsToLammps:
     shell:
         setBeadsToLammpsCmd()
 
+def setLmpPrefix(wc):
+    """ Define Lammps command for mpi or not """
+    if config['lammps']['threads'] > 1:
+        return f'mpirun -np {config["lammps"]["threads"]}'
+    else:
+        return ''
 
 rule lammpsEquilibrate:
     input:
@@ -437,17 +448,20 @@ rule lammpsEquilibrate:
         timestep = config['lammps']['timestep'],
         seed = 1, # lambda wc: seeds['simulation'][int(wc.rep) - 1],
         cosinePotential = lambda wc: 10000 / config['bases_per_bead'],
-        equilTime = config['lammps']['warmUp']
+        equilTime = config['lammps']['warmUp'],
+        lmpPrefix = setLmpPrefix
     group:
         'lammpsEquilibrate'
     log:
         'logs/lammpsEquilibrate/{name}-{nbases}.log'
     conda:
         f'{ENVS}/lammps.yaml'
+    threads:
+        config['lammps']['threads']
     shell:
-        'python {SCRIPTS}/runLammpsEquilibrate.py {input} {output.equil} '
-        '--timestep {params.timestep} --writeInterval {params.writeInterval} '
-        '--equilTime {params.equilTime} '
+        '{params.lmpPrefix} python {SCRIPTS}/runLammpsEquilibrate.py {input} '
+        '{output.equil} --timestep {params.timestep} '
+        '--writeInterval {params.writeInterval} --equilTime {params.equilTime} '
         '--seed {params.seed} --equilInfo {output.equilInfo} '
         '--cosinePotential {params.cosinePotential} '
         '--radiusGyrationOut {output.radiusGyration} &> {log}'
@@ -499,21 +513,24 @@ rule lammpsSimulation:
         seed = lambda wc: seeds['simulation'][int(wc.rep) - 1],
         harmonicCoeff = config['lammps']['harmonicCoeff'],
         sim = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
-        radiusGyration = '{name}/{nbases}/reps/{rep}/lammps/radius_of_gyration.txt'
+        radiusGyration = '{name}/{nbases}/reps/{rep}/lammps/radius_of_gyration.txt',
+        lmpPrefix = setLmpPrefix
     group:
         'processAllLammps' if config['groupJobs'] else 'lammpsSimulation'
     log:
         'logs/lammps/{name}-{nbases}-{rep}.log'
     conda:
         f'{ENVS}/lammps.yaml'
+    threads:
+        config['lammps']['threads']
     shell:
-        'python {SCRIPTS}/runLammpsSimulation.py {input.equil} {input.groups} '
-        '--TADStatus {output.TADstatus} --simTime {params.simTime} '
-        '--writeInterval {params.writeInterval} --seed {params.seed} '
-        '--harmonicCoeff {params.harmonicCoeff} --TFswap {params.TFswap} '
-        '--radiusGyrationOut {output.radiusGyration} --simOut {output.simOut} '
-        '--timestep {params.timestep} {params.extrusion} '
-        '--nBasesPerBead {params.nBasesPerBead} '
+        '{params.lmpPrefix} python {SCRIPTS}/runLammpsSimulation.py '
+        '{input.equil} {input.groups} --TADStatus {output.TADstatus} '
+        '--simTime {params.simTime} --writeInterval {params.writeInterval} '
+        '--seed {params.seed} --harmonicCoeff {params.harmonicCoeff} '
+        '--TFswap {params.TFswap} --radiusGyrationOut {output.radiusGyration} '
+        '--simOut {output.simOut} --timestep {params.timestep} '
+        '{params.extrusion} --nBasesPerBead {params.nBasesPerBead} '
         '--pairCoeffs {params.coeffs} --beadTypes {input.beadTypes} &> {log}'
 
 
@@ -854,8 +871,6 @@ rule homer2H5:
         'logs/homer2H5/{name}-{nbases}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
-    threads:
-        workflow.cores
     shell:
         'hicConvertFormat --matrices {input} --outFileName {output} '
         '--inputFormat homer --outputFormat h5 &> {log}'
@@ -994,8 +1009,6 @@ if config['syntheticSequence'] is None:
             resolutions = '1000'
         resources:
              mem_mb = 16000
-        threads:
-            workflow.cores
         conda:
             f'{ENVS}/openjdk.yaml'
         shell:
