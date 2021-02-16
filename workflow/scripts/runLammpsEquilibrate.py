@@ -19,7 +19,8 @@ def runEquilibrationLammps(
 
     # Convert time unit to timesteps
     writeIntervalSteps = int(writeInterval / timestep)
-    equilSteps = int(equilTime / timestep)
+    # Equil steps divided into 4 for different equilibration stages
+    equilSteps = int(equilTime / (timestep * 4))
     startTimestep = -(equilSteps + writeIntervalSteps)
 
     global lmp
@@ -65,9 +66,25 @@ def runEquilibrationLammps(
 
     lmp.command(f'dump 1 all custom {writeIntervalSteps} {equilInfo} id type x y z ix iy iz')
     lmp.command("dump_modify 1 format line '%d %d %.5f %.5f %.5f %d %d %d' sort 1")
-
-    lmp.command(f'run {equilSteps}')
+    # Run initial equilibration for half of total time (2/4)
+    lmp.command(f'run {equilSteps * 2}')
     lmp.command('unfix pushapart')
+
+    # Turn on fene bonds and run equilibrium
+    lmp.command('bond_style hybrid fene harmonic')
+    lmp.command('special_bonds fene')
+    lmp.command('bond_coeff 1 fene 30 1.5 1.0 1.0')
+    lmp.command('bond_coeff 2 fene 30 7.0 1.0 1.0')
+    # Run fene equilibration for quarter of total time (1/4)
+    lmp.command(f'run {equilSteps * 1}')
+
+    # Turn on repulsive pairCoeffs and run equilibrium
+    lmp.command('pair_style lj/cut 1.12246')
+    lmp.command('pair_modify shift yes')
+    lmp.command('pair_coeff * *  1.0 1.0 1.12246')
+    # Run pair coeff equilibration for quarter of total time (1/4)
+    lmp.command(f'run {equilSteps * 1}')
+
     lmp.command('undump 1')
     lmp.command('unfix RG')
 
