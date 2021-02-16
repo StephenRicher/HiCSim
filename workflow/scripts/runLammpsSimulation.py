@@ -5,6 +5,7 @@ import json
 import random
 import logging
 import argparse
+import numpy as np
 import pandas as pd
 from mpi4py import MPI
 from lammps import lammps
@@ -62,16 +63,17 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
 
     lmp.command('bond_style hybrid fene harmonic')
     lmp.command('special_bonds fene')
-    lmp.command('bond_coeff 1 fene 30 1.5 1.0 1.0')
     lmp.command('bond_coeff 2 fene 30 7.0 1.0 1.0')
     #lmp.command(f'bond_coeff 2 harmonic {harmonicCoeff} 1.5')
 
-    # Reduce timestep and run short equilibration before setting pair coeffs
-    lmp.command(f'timestep {timestep / 10}')
-    lmp.command('run 1000000')
-
-    # Increase timestep back
-    lmp.command(f'timestep {timestep}')
+    # Run progressive equilibration
+    equilTime = 1000000
+    maxFeneLength = 1.5
+    initialFeneLength = 7
+    nSteps = 10
+    for bond in numpy.linspace(initialFeneLength, maxFeneLength, nSteps):
+        lmp.command(f'bond_coeff 1 fene 30 {bond} 1.0 1.0')
+        lmp.command(f'run {equilTime /  nSteps}')
 
     if pairCoeffs:
         writePairCoeffs(pairCoeffs, beadTypes)
