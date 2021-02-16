@@ -71,7 +71,7 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
     maxFeneLength = 1.5
     initialFeneLength = 7
     nSteps = 10
-    for bond in numpy.linspace(initialFeneLength, maxFeneLength, nSteps):
+    for bond in np.linspace(initialFeneLength, maxFeneLength, nSteps):
         lmp.command(f'bond_coeff 1 fene 30 {bond} 1.0 1.0')
         lmp.command(f'run {equilTime /  nSteps}')
 
