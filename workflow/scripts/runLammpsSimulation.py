@@ -73,7 +73,7 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
     nSteps = 10
     for bond in np.linspace(initialFeneLength, maxFeneLength, nSteps):
         lmp.command(f'bond_coeff 1 fene 30 {bond} 1.0 1.0')
-        lmp.command(f'run {equilTime /  nSteps}')
+        lmp.command(f'run {int(equilTime /  nSteps)}')
 
     if pairCoeffs:
         writePairCoeffs(pairCoeffs, beadTypes)
