@@ -56,10 +56,6 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
             continue
         lmp.command(f'set group {type} type {typeID}')
 
-    lmp.command('pair_style lj/cut 1.12246')
-    lmp.command('pair_modify shift yes')
-    lmp.command('pair_coeff * *  1.0 1.0 1.12246') # Repulsive - everything with everything
-
     # Reduce timestep and run short equilibration before setting pair coeffs
     lmp.command(f'timestep {timestep / 10}')
 
@@ -71,6 +67,10 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
     lmp.command('bond_coeff 2 fene 30 7.0 1.0 1.0')
     #lmp.command(f'bond_coeff 2 harmonic {harmonicCoeff} 1.5')
 
+    lmp.command('pair_style lj/cut 1.12246')
+    lmp.command('pair_modify shift yes')
+    lmp.command('pair_coeff * *  1.0 1.0 1.12246') # Repulsive - everything with everything
+    
     lmp.command('run 100000') # step 2
 
     # Increase timestep back
