@@ -60,7 +60,10 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
     lmp.command('pair_modify shift yes')
     lmp.command('pair_coeff * *  1.0 1.0 1.12246') # Repulsive - everything with everything
 
-    lmp.command('run 1000000') # step 1
+    # Reduce timestep and run short equilibration before setting pair coeffs
+    lmp.command(f'timestep {timestep / 10}')
+
+    lmp.command('run 100000') # step 1
 
     lmp.command('bond_style hybrid fene harmonic')
     lmp.command('special_bonds fene')
@@ -68,9 +71,7 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
     lmp.command('bond_coeff 2 fene 30 7.0 1.0 1.0')
     #lmp.command(f'bond_coeff 2 harmonic {harmonicCoeff} 1.5')
 
-    # Reduce timestep and run short equilibration before setting pair coeffs
-    lmp.command(f'timestep {timestep / 10}')
-    lmp.command('run 1000000') # step 2
+    lmp.command('run 100000') # step 2
 
     # Increase timestep back
     lmp.command(f'timestep {timestep}')
