@@ -68,11 +68,10 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
 
     # Run progressive equilibration
     equilTime = 1000000
-    maxFeneLength = 1.5
-    initialFeneLength = 7
-    nSteps = 10
-    for bond in np.linspace(initialFeneLength, maxFeneLength, nSteps):
-        lmp.command(f'bond_coeff 1 fene 30 {bond} 1.0 1.0')
+    feneStength = 1.5
+    nSteps = 100
+    for bond in np.linspace(0, feneStength, nSteps):
+        lmp.command(f'bond_coeff 1 fene {feneStength} 1.5 1.0 1.0')
         lmp.command(f'run {int(equilTime /  nSteps)}')
 
     if pairCoeffs:
