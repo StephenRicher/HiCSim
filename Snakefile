@@ -111,7 +111,7 @@ else:
     config['genome']['sequence'] = []
     for name in config['syntheticSequence'].keys():
         nBeads = getNbeads(config['syntheticSequence'][name])
-        end = (length * config['bases_per_bead'])
+        end = (nBeads * config['bases_per_bead'])
         details[name] = {'chr':    name,
                          'start':  1,
                          'end':    end,
@@ -182,7 +182,10 @@ rule all:
             name=details.keys(), nbases=config['bases_per_bead'],
             stat=['stats', 'pairStats', 'TADstatus']),
         expand('{name}/{nbases}/lammpsInit/simulation-equil',
-            name=details.keys(), nbases=config['bases_per_bead'])]
+            name=details.keys(), nbases=config['bases_per_bead']),
+        expand('{name}/{nbases}/reps/{rep}/lammps/config/atomGroups-{monomers}.json',
+            name=details.keys(), nbases=config['bases_per_bead'],
+            rep=REPS, monomers=config['monomers'])]
 
 
 rule unzipGenome:
@@ -478,7 +481,7 @@ rule getAtomGroups:
     input:
         beadsInput
     output:
-        '{name}/{nbases}/reps/{rep}/lammps/config/atomGroups.json'
+        f'{{name}}/{{nbases}}/reps/{{rep}}/lammps/config/atomGroups-{config["monomers"]}.json'
     params:
         TUs = ['P', 'p'],
         nMonomers = config['monomers'],
