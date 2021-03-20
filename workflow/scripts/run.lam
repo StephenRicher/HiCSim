@@ -82,6 +82,13 @@ run ${warmUp}
 
 unfix pushapart  # STOP DISPLACING WITH SOFT
 
+undump 1         # Close warm_up dump
+
+unfix RG
+
+# Write restart after equilibration
+write_restart "${equilibrationRestart}"
+
 ######################################
 ####    LENNARD JONES INTERACTIONS ###
 ######################################
@@ -95,9 +102,6 @@ special_bonds fene
 bond_coeff 1 fene 30 1.5 1.0 1.0
 # EXTRUSION # bond_coeff 2 harmonic ${harmonicCoeff} 1.0
 
-undump 1         # Close warm_up dump
-
-unfix RG
 fix RG DNA print ${writeInterval} "$(step) ${RG}" append ${radiusGyrationOut}
 
 dump 2 all custom ${writeInterval} ${simOut} id type x y z ix iy iz
