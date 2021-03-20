@@ -39,7 +39,6 @@ def processTUinfo(atomGroups: str, TADstatus: str, sim: str,
         # Read TFs and exclude type 2 (inactive TF)
         TFas = sim.loc[(sim['ID'].isin(atomGroups['TF']))
                        & (sim['type'] != '2'), ['x', 'y', 'z']].to_numpy()
-
         # Compute distance of active TFs to each TU bead
         result = cdist(TUs, TFas, 'euclidean')
 
