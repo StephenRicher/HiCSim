@@ -74,7 +74,7 @@ def getNbeads(file):
     nBeads = 0
     with open(file) as fh:
         for line in fh:
-            nBeads += len(line.strip())
+            nBeads += 1
     return nBeads
 
 
