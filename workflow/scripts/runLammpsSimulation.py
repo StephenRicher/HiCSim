@@ -86,7 +86,9 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
     lmp.command('reset_timestep 0')
     lmp.command('neighbor 5 bin')
 
-    lmp.command(f'fix swap TU atom/swap {TFswapSteps} 5 {seed} 10 ke yes types 1 2')
+    nTFs = len(atomGroups['TF'])
+    print(nTFs)
+    lmp.command(f'fix swap TU atom/swap {TFswapSteps} {nTFs} {seed} 10 ke yes types 1 2')
 
     allStatus = []
     allExtruders = Extruders(
@@ -179,47 +181,38 @@ class Extruder():
     def right(self, right):
         self._right = right
 
+    @property
+    def name(self):
+        return f'{self.left}-{self.right}'
+
     def loopIDs(self):
         return range(self.left, self.right + 1)
 
-    def nextPosition(self, direction, N=1):
-        assert direction in ['left', 'right']
-        if direction == 'left':
-            return self.currentPosition(direction) - N
-        else:
-            return self.currentPosition(direction) + N
-
-
-    def currentPosition(self, direction):
+    def position(self, direction, N=0):
         assert direction in ['left', 'right']
         if not self.isBound:
             return None
         elif direction == 'left':
-            return self.left
+            return self.left - N
         else:
-            return self.right
-
+            return self.right + N
 
     def attach(self, left, right, sepThresh):
         if self.isBound:
             logging.warning(f'Extruding from {self.left}:{self.right} to {left}:{right}')
-            # Delete old bonds before creating new.
-            self.detach(message=False)
+            self.detach(message=False) # Delete old bonds before creating new.
         else:
             logging.warning(f'Attaching to {left}:{right}')
         self.isBound = True
         self.left = left
         self.right = right
-        # Create harmonic between new bead pairs
-        name = f'{self.left}-{self.right}'
-        lmp.command(f'group {name} id {self.left} {self.right}')
-        lmp.command(f'create_bonds many {name} {name} 2 0.0 {sepThresh}')
+        lmp.command(f'group {self.name} id {self.left} {self.right}')
+        lmp.command(f'create_bonds many {self.name} {self.name} 2 0.0 {sepThresh}')
 
 
     def detach(self, message=True):
-        name = f'{self.left}-{self.right}'
-        lmp.command(f'delete_bonds {name} bond 2 remove special')
-        lmp.command(f'group {name} delete')
+        lmp.command(f'delete_bonds {self.name} bond 2 remove special')
+        lmp.command(f'group {self.name} delete')
         if message:
             logging.warning(f'Detaching {self.left}:{self.right}')
         self.isBound = False
@@ -342,16 +335,16 @@ class Extruders():
     def canExtrude(self, extruder, direction):
         """ Check if extruder can validly extrude in direction """
         assert direction in ['left', 'right']
+        if random.random() > self.stepProb:
+            return False
         # Retrieve next position1 in relevant direction
-        nextPos = extruder.nextPosition(direction, 1)
+        nextPos = extruder.position(direction, 1)
         if self.isOccupied(nextPos):
             return False
-        currentPos = extruder.currentPosition(direction)
+        currentPos = extruder.position(direction, 0)
         if direction == 'left' and self.isForwardCTCF(currentPos):
             return False
         if direction == 'right' and self.isReverseCTCF(currentPos):
-            return False
-        if random.random() > self.stepProb:
             return False
         return True
 
@@ -363,10 +356,10 @@ class Extruders():
             updated = False
             for direction in ['left', 'right']:
                 if self.canExtrude(extruder, direction):
-                    next[direction] = extruder.nextPosition(direction)
+                    next[direction] = extruder.position(direction, 1)
                     updated = True
                 else:
-                    next[direction] = extruder.currentPosition(direction)
+                    next[direction] = extruder.position(direction, 0)
             # Skip if no extrusion
             if not updated:
                 continue
