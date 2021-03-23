@@ -55,11 +55,14 @@ def main(infile: str, out: str, outplot: str, eps: float, minSamples: float) -> 
         else:
             fig, ax = plt.subplots()
             ax = sns.heatmap(clusterGroups, ax=ax, mask=(clusterGroups==-1), cmap=cmap)
+            ax.set_facecolor('lightgrey')
             colorbar = ax.collections[0].colorbar
             r = colorbar.vmax - colorbar.vmin
             colorbar.set_ticks(
                 [colorbar.vmin + r / nClusters * (0.5 + i) for i in range(nClusters)])
             colorbar.set_ticklabels(clusterLabels)
+            fig.set_size_inches(16, 9)
+            fig.tight_layout()
             fig.savefig(outplot, dpi=300, bbox_inches='tight')
 
     clusterPairs = defaultdict(lambda: defaultdict(int))
