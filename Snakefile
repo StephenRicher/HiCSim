@@ -178,6 +178,9 @@ rule all:
             nbases=config['bases_per_bead'], name=details.keys(),
             plot=['pairCluster', 'meanVariance','TUcorrelation', 'TUcircos',
                   'radiusGyration', 'TUreplicateCount',]),
+         expand('plots/{plot}/{name}-{nbases}-{rep}-{plot}.png',
+            nbases=config['bases_per_bead'], name=details.keys(), rep=REPS,
+            plot=['TADstructure']),
          expand('{name}/{nbases}/merged/{name}-TU-{stat}.csv.gz',
             name=details.keys(), nbases=config['bases_per_bead'],
             stat=['stats', 'pairStats', 'TADstatus']),
@@ -409,7 +412,7 @@ rule BeadsToLammps:
     input:
         rules.extractAtomTypes.output
     output:
-        '{name}/{nbases}/lammpsInit/lammps_input.dat',
+        f'{{name}}/{{nbases}}/lammpsInit/lammps_input-{config["monomers"]}.dat'
     params:
         nMonomers = config['monomers'],
         nBeads = lambda wc: details[wc.name]['nBeads'],
@@ -555,6 +558,24 @@ rule plotRG:
     shell:
         '{SCRIPTS}/plotRG.py --out {output} --dpi {params.dpi} '
         '--confidence {params.confidence} {input} 2> {log}'
+
+
+rule plotTADstucture:
+    input:
+        rules.lammpsSimulation.output.TADstatus
+    output:
+        'plots/TADstructure/{name}-{nbases}-{rep}-TADstructure.png'
+    params:
+        dpi = config['plotRG']['dpi']
+    group:
+        'processAllLammps' if config['groupJobs'] else 'plotTADstucture'
+    log:
+        'logs/plotTADstucture/{name}-{nbases}-{rep}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'python {SCRIPTS}/plotTADstructure.py --dpi {params.dpi} '
+        '--out {output} {input} &> {log}'
 
 
 rule writeTUdistribution:
