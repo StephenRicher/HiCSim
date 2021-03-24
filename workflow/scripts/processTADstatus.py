@@ -57,13 +57,10 @@ def setPairStatus(row):
         else:
             return 'sameNotTAD'
     elif seperation == 1:
-        if TU1_inTAD == TU2_inTAD:
-            if TU1_inTAD:
-                return 'adjacentTAD'
-            else:
-                return 'adjacentNotTAD'
-        else:
+        if TU1_inTAD != TU2_inTAD:
             return 'adjacentBoundary'
+        else:
+            return 'adjacentNestedTAD'
     else:
         return 'other'
 
