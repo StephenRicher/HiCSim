@@ -22,9 +22,8 @@ def plotTADstructure(beadTADstatus: str, dpi: int, out: str):
 
     fig, ax = plt.subplots()
     statuses = dat['TADstatus'].unique()
-    cmap = sns.mpl_palette('Dark2', len(statuses) - 2)
+    cmap = sns.mpl_palette('Dark2', len(statuses) - 1)
     cmap.insert(0, ('#d3d3d3'))
-    cmap.insert(0, ('#000000'))
     sns.heatmap(data, cmap=cmap, xticklabels='auto', cbar=False,
                 vmin=min(statuses)-0.5, vmax=max(statuses)+0.5, ax=ax)
     ax.set_xlabel('Time')
