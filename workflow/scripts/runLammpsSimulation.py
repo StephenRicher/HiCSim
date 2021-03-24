@@ -5,6 +5,7 @@ import json
 import random
 import logging
 import argparse
+import numpy as np
 import pandas as pd
 from mpi4py import MPI
 from lammps import lammps
@@ -26,7 +27,10 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
 
     random.seed(seed)
 
-    offRate = computeOffRate(nBasesPerBead, extrusionRate, prob=0.5, distance=40_000)
+    offRates = np.linspace(0, 1, 100_000, endpoint=False)[1:]
+    offRate = convergeRate(
+        40_000, nBasesPerBead, extrusionRate,
+        updateInterval, offRates, reps=1000)
     stepProb = updateInterval * extrusionRate # Advancement probability
     addProb  = updateInterval * onRate        # Attachment probability
     offProb  = updateInterval * offRate       # Dettachment probability
@@ -126,6 +130,43 @@ def computeOffRate(nBasesPerBead, extrusionRate, prob=0.5, distance=40_000):
     return offProb
 
 
+def computeSizeAtDetach(nBasesPerBead, extrusionRate,
+                        updateInterval, offRate, reps=1000):
+    """ Simulate extrusion and compute median TAD size across time """
+    offProb = updateInterval * offRate
+    stepProb = updateInterval * extrusionRate
+    sizeOnDetach = []
+    for rep in range(reps):
+        # Set initial TAD state immediately after attachment
+        nSteps = updateInterval
+        currentTADsize = nBasesPerBead
+        cumulativeSize = currentTADsize * updateInterval
+        while True:
+            if random.random() < offProb:
+                break
+            for direction in ['left', 'right']:
+                if random.random() < stepProb:
+                    currentTADsize += nBasesPerBead
+            cumulativeSize += currentTADsize * updateInterval
+            nSteps += updateInterval
+        sizeOnDetach.append(cumulativeSize / nSteps)
+    return np.median(sizeOnDetach)
+
+
+def convergeRate(targetSize, nBasesPerBead, extrusionRate,
+                 updateInterval, offRates, reps=1000):
+    """ Loop through array of offRates and return offRate with smallest error.
+        Stops search once error rate begins to increase. """
+    for i, rate in enumerate(np.sort(offRates)):
+        size = computeSizeAtDetach(
+            nBasesPerBead, extrusionRate, updateInterval, rate, reps)
+        absError = abs((size - targetSize) / targetSize)
+        if (i > 0) and (prevError <= absError):
+            return offRates[i - 1]
+        prevError = absError
+    return rate # Will only return if final rate is best
+
+
 def writePairCoeffs(pairCoeffs, beadType):
     """ Define typeID pairCoeffs from beadType mappings"""
     with open(pairCoeffs) as fh:
@@ -220,8 +261,13 @@ class Extruder():
         self.right = None
 
 
-    def occupied(self):
-        return [self.left, self.right]
+    def occupied(self, beadID):
+        if beadID == self.left:
+            return 'left'
+        elif beadID == self.right:
+            return 'right'
+        else:
+            return False
 
 
 class Extruders():
@@ -291,14 +337,15 @@ class Extruders():
     def isOccupied(self, beadID):
         """ Check if beadID corresponds to an occupied bead """
         for extruder in self.boundExtruders():
-            if beadID in extruder.occupied():
-                return True
+            occupied = extruder.occupied(beadID)
+            if occupied is not False:
+                return occupied
         return False
 
 
     def isValid(self, beadID):
         """ Return True if beadID is a valid cohesin binding position """
-        if (self.isOccupied(beadID)
+        if (    self.isOccupied(beadID)
                 or self.isCTCF(beadID)
                 or self.outOfRange(beadID)):
             return False
@@ -433,19 +480,27 @@ class Extruders():
             Section ID is unique per timepoint and groups beads
             within a pair of extruder boundaries """
         if (self.TADstatus is None) or (self.anyUpdated):
+            prevBoundary = False
             allStatus = {'ID': [], 'TADstatus': [], 'TADgroup': []}
             TADgroup = 0 # Track number of boundaries crossed
             for bead in self.beadIDs['DNA']:
-                if self.isOccupied(bead):
-                    status = -1
+                occupied = self.isOccupied(bead)
+                # If 'left' then increment TAD group before updating.
+                # prevBoundary prevents TADgroup being update twice in a row
+                # if a right boundary is followed immediately by a left
+                if (occupied == 'left') and (prevBoundary == False):
                     TADgroup += 1
-                else:
-                    # Number of extrusion loops the bead overlaps
-                    # Can be > 1 if an extruder binds to an extruded loop
-                    status = self.inLoop(bead)
+                prevBoundary = False
+                # Number of extrusion loops the bead overlaps
+                # Can be > 1 if an extruder binds to an extruded loop
+                status = self.inLoop(bead)
                 allStatus['ID'].append(bead)
                 allStatus['TADstatus'].append(status)
                 allStatus['TADgroup'].append(TADgroup)
+                # If 'right' then increment TAD group after updating
+                if occupied == 'right':
+                    TADgroup += 1
+                    prevBoundary = True
             self.TADstatus = allStatus
         return pd.DataFrame(self.TADstatus)
 
