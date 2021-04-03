@@ -580,7 +580,8 @@ rule plotTADstucture:
 
 rule writeTUdistribution:
     input:
-        expand('{{name}}/{{nbases}}/reps/{rep}/lammps/config/atomGroups.json', rep=REPS)
+        expand('{{name}}/{{nbases}}/reps/{rep}/lammps/config/atomGroups-{monomers}.json',
+            rep=REPS, monomers=config["monomers"])
     output:
         '{name}/{nbases}/merged/info/{name}-TU-distribution.csv.gz'
     group:
