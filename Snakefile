@@ -171,7 +171,7 @@ wildcard_constraints:
 rule all:
     input:
         expand('{name}/{nbases}/lammpsInit/simulation-equil',
-            name=details.keys(), nbases=config['bases_per_bead'])
+            name=details.keys(), nbases=config['bases_per_bead']),
         ([expand('vmd/{name}-{nbases}-1-simulation.gif',
             nbases=config['bases_per_bead'],
             name=details.keys()) if config['GIF']['create'] else [],
