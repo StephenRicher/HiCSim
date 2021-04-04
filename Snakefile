@@ -38,6 +38,7 @@ default_config = {
     'method':         'mean',
     'coeffs':         '',
     'reps':           5,
+    'equilibrateOnly': False,
     'random':         {'seed':             42,
                        'walk':             False,
                        'sequence':         True ,
@@ -169,7 +170,9 @@ wildcard_constraints:
 
 rule all:
     input:
-        [expand('vmd/{name}-{nbases}-1-simulation.gif',
+        expand('{name}/{nbases}/lammpsInit/simulation-equil',
+            name=details.keys(), nbases=config['bases_per_bead'])
+        ([expand('vmd/{name}-{nbases}-1-simulation.gif',
             nbases=config['bases_per_bead'],
             name=details.keys()) if config['GIF']['create'] else [],
          expand('plots/contactMatrix/{name}-{nbases}-{binsize}-contactMatrix.png',
@@ -184,11 +187,11 @@ rule all:
          expand('{name}/{nbases}/merged/{name}-TU-{stat}.csv.gz',
             name=details.keys(), nbases=config['bases_per_bead'],
             stat=['stats', 'pairStats', 'TADstatus']),
-        expand('{name}/{nbases}/lammpsInit/simulation-equil',
-            name=details.keys(), nbases=config['bases_per_bead']),
         expand('{name}/{nbases}/reps/{rep}/lammps/config/atomGroups-{monomers}.json',
             name=details.keys(), nbases=config['bases_per_bead'],
             rep=REPS, monomers=config['monomers'])]
+        if not config['equilibrateOnly'] else [])
+
 
 
 rule unzipGenome:
