@@ -362,6 +362,8 @@ rule sampleSynthetic:
         lambda wc: config['syntheticSequence'][wc.name]
     output:
         '{name}/{nbases}/reps/{rep}/sampledSynthetic-{rep}.txt'
+    group:
+        'lammpsEquilibrate'
     params:
         seed = lambda wc: seeds['sequence'][int(wc.rep) - 1],
     log:
