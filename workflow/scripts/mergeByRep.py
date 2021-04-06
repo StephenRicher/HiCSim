@@ -15,15 +15,14 @@ __version__ = '1.0.0'
 
 def mergeByRep(infiles: List, out: str, noRep: bool):
 
-    mergedDF = []
     for rep, file in enumerate(infiles):
         df = pd.read_csv(file)
         if not noRep:
             df['rep'] = rep
-        mergedDF.append(df)
-
-    pd.concat(mergedDF).to_csv(out, index=False)
-
+        if rep == 0:
+            df.to_csv(out, index=False)
+        else:
+            df.to_csv(out, mode='a', header=False, index=False)
 
 def parseArgs():
 
