@@ -46,9 +46,6 @@ def main():
         '--flip',  action='store_true',
         help='Plot a copy of the HiC map inverted.')
     parser.add_argument(
-        '--compare', default=False, action='store_true',
-        help='Generate .ini file for HiC compare.')
-    parser.add_argument(
         '--insulations', nargs = '*', default = None,
         help='Insulation score outputs of hicFindTADs (ending "tad_score.bm").')
     parser.add_argument(
@@ -80,7 +77,7 @@ def main():
 
 
 def make_config(insulations, matrix, logMatrix1, matrix2, logMatrix2, tads,
-                ctcfs, compare, ctcfOrient, genes, depth,
+                ctcfs, ctcfOrient, genes, depth,
                 colourMap, vMin, vMax, vMin2, vMax2, flip):
 
     print('[spacer]')

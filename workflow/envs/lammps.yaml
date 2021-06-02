@@ -5,5 +5,5 @@ dependencies :
   - python=3
   - pip:
       - pandas
-  - lammps
+  - lammps=2020.10.29
   - mpi4py

@@ -6,6 +6,7 @@ import os
 import math
 import random
 import tempfile
+from itertools import combinations
 from set_config import set_config, read_paths, getNbeads, adjustCoordinates
 
 BASE = workflow.basedir
@@ -103,20 +104,30 @@ if not config['syntheticSequence']:
             config['genome']['end'],
             config['bases_per_bead'])
         scaledRegion = f"{config['genome']['chr']}-{start}-{end}"
-        print(f'Adjusting {name} positions to {scaledRegion}')
+        print(f'Adjusting {name} positions to {scaledRegion}', file=sys.stderr)
         details[name] = {'chr':   config['genome']['chr'],
                          'start': start,
                          'end': end,
                          'nBeads': nBeads}
+    # Subtraction matrix not yet supported for 'real' sequences
+    COMPARES = []
 else:
     config['genome']['sequence'] = []
+    allBeadLengths = []
     for name in config['syntheticSequence'].keys():
         nBeads = getNbeads(config['syntheticSequence'][name])
+        allBeadLengths.append(nBeads)
         end = (nBeads * config['bases_per_bead'])
-        details[name] = {'chr':    name,
+        details[name] = {'chr':    'synthetic',
                          'start':  1,
                          'end':    end,
                          'nBeads': nBeads}
+    if len(set(allBeadLengths)) != 1:
+        print('Subtraction matrices only support of all synthetic '
+              'sequences are the same length', file=sys.stderr)
+        COMPARES = []
+    else:
+        COMPARES = [f'{i[0]}-vs-{i[1]}' for i in combinations(details, 2)]
 
 BUILD = config['genome']['build']
 
@@ -149,7 +160,7 @@ if config['lammps']['simTime'] < config['lammps']['writeInterval']:
 if (workflow.cores is not None) and (config['lammps']['threads'] > workflow.cores):
     print(f'Lammps threads cannot be higher than provided workflow cores. '
           f'Adjusting lammps threads from {config["lammps"]["threads"]} '
-          f'to {workflow.cores}.')
+          f'to {workflow.cores}.', file=sys.stderr)
     config['lammps']['threads'] = workflow.cores
 
 # Read track file basename and masking character into a dictionary
@@ -189,9 +200,10 @@ rule all:
             stat=['stats', 'pairStats', 'TADstatus']),
         expand('{name}/{nbases}/reps/{rep}/lammps/config/atomGroups-{monomers}.json',
             name=details.keys(), nbases=config['bases_per_bead'],
-            rep=REPS, monomers=config['monomers'])]
+            rep=REPS, monomers=config['monomers']),
+        expand('comparison/{nbases}/{compare}-{nbases}-{binsize}-logFC.png',
+            nbases=config['bases_per_bead'], compare=COMPARES, binsize=BINSIZE)]
         if not config['equilibrateOnly'] else [])
-
 
 
 rule unzipGenome:
@@ -290,9 +302,13 @@ rule filterTracks:
 
 
 def getRegion(wc):
-    chrom = details[wc.name]['chr']
-    start = details[wc.name]['start']
-    end = details[wc.name]['end']
+    try:
+        name = wc.name
+    except AttributeError:
+        name = wc.name1
+    chrom = details[name]['chr']
+    start = details[name]['start']
+    end = details[name]['end']
     return f'{chrom}:{start}-{end}'
 
 
@@ -955,7 +971,11 @@ def getCTCFOrient(wc):
         return []
 
 def getDepth(wc):
-    return details[wc.name]['end'] - details[wc.name]['start'] + 1
+    try:
+        name = wc.name
+    except AttributeError:
+        name = wc.name1
+    return details[name]['end'] - details[name]['start'] + 1
 
 
 rule createConfig:
@@ -998,11 +1018,64 @@ rule plotHiC:
     conda:
         f'{ENVS}/pygenometracks.yaml'
     shell:
-        'pyGenomeTracks --tracks {input} '
-        '--region {params.region} '
-        '--outFileName {output} '
-        '--title {params.title} '
-        '--dpi {params.dpi} &> {log}'
+        'pyGenomeTracks --tracks {input} --region {params.region} '
+        '--outFileName {output} --title {params.title} --dpi {params.dpi} '
+        '&> {log}'
+
+
+rule compareMatrices:
+    input:
+        m1 = '{name1}/{nbases}/merged/matrices/{name1}-{binsize}.h5',
+        m2 = '{name2}/{nbases}/merged/matrices/{name2}-{binsize}.h5'
+    output:
+        'comparison/{nbases}/{name1}-vs-{name2}-{nbases}-{binsize}-logFC.h5'
+    params:
+    log:
+        'logs/compareMatrices/{name1}-vs-{name2}-{nbases}-{binsize}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'hicCompareMatrices --matrices {input} --outFileName {output} '
+        '--operation log2ratio &> {log}'
+
+
+rule createCompareConfig:
+    input:
+        rules.compareMatrices.output
+    output:
+        'comparison/{nbases}/{name1}-vs-{name2}-{nbases}-{binsize}-logFC.ini'
+    params:
+        depth = getDepth,
+    log:
+        'logs/creatCompareConfig/{name1}-vs-{name2}-{nbases}-{binsize}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/generate_config.py --matrix {input} --depth {params.depth} '
+        '--vMin -2 --vMax 2 --colourMap bwr > {output} 2> {log}'
+
+
+def getCompareTitle(wc):
+    return f'"{wc.name1} vs. {wc.name2}: {getRegion(wc)}"'
+
+
+rule plotSubtractionMatrix:
+    input:
+        rules.createCompareConfig.output
+    output:
+        'comparison/{nbases}/{name1}-vs-{name2}-{nbases}-{binsize}-logFC.png'
+    params:
+        region = getRegion,
+        title = getCompareTitle,
+        dpi = config['HiC']['dpi']
+    log:
+        'logs/plotSubtractionMatrix/{name1}-vs-{name2}-{nbases}-{binsize}.log'
+    conda:
+        f'{ENVS}/pygenometracks.yaml'
+    shell:
+        'pyGenomeTracks --tracks {input} --region {params.region} '
+        '--outFileName {output} --title {params.title} --dpi {params.dpi} '
+        '&> {log}'
 
 
 if config['syntheticSequence'] is None:

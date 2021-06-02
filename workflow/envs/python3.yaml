@@ -1,15 +1,13 @@
 channels :
-  - bioconda
   - conda-forge
-  - anaconda
 dependencies :
   - python=3
+  - pip
   - pip :
     - numpy
     - pandas
     - seaborn
     - matplotlib
-    - requests
     - networkx
     - lxml
     - sklearn
