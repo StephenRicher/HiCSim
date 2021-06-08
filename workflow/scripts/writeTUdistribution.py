@@ -20,8 +20,9 @@ def writeTUdistribution(infiles: List, out: str):
         if i == 0:
             for atom in beads['DNA']:
                 allBeadDistribution[atom] = 0
-        for TU in beads['TU']:
-            allBeadDistribution[TU] += 1
+        if 'TU' in beads:
+            for TU in beads['TU']:
+                allBeadDistribution[TU] += 1
 
     allBeadDistribution = pd.DataFrame(allBeadDistribution, index=[0])
     allBeadDistribution.to_csv(out, index=False)
@@ -33,7 +34,7 @@ def parseArgs():
     parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
     parser.add_argument('infiles', nargs='+', help='Atom JSON file.')
     parser.add_argument('--out', default=sys.stdout, help='Output filename')
-    
+
     return setDefaults(parser, verbose=False, version=__version__)
 
 
