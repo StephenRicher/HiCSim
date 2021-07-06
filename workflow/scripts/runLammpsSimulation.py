@@ -542,13 +542,16 @@ class TranscriptionalUnits:
 
 
     def setTUactivity(self):
-        """ Set TUs to active if within distance to active TU """
+        """ Set TUs to active if within distance to active TU and
+            execute relevant Lammps commands """
         TFcoordinates = self.gatherTFcoordinates()
         for beadID, TU in self.TUs.items():
             TUcoordinate = [np.array(TU.coordinates)]
             distances = cdist(TUcoordinate, TFcoordinates, 'euclidean')
             if distances.min() < self.activationDistance:
-                TU.active = True
+                TU.processActive()
+            else:
+                TU.processInactive()
 
 
     def updateAll(self):
@@ -556,7 +559,6 @@ class TranscriptionalUnits:
         self.updateTFactivity()
         self.updateCoordinates()
         self.setTUactivity()
-        # Function to call relevant lammps commands on active TU
 
 
 class TranscriptionalUnit:
@@ -587,6 +589,12 @@ class TranscriptionalUnit:
     @coordinates.setter
     def coordinates(self, coordinates):
         self._coordinates = coordinates
+
+    def processActive(self):
+        pass
+
+    def processInactive(self):
+        pass
 
 
 class TranscriptionFactor:
