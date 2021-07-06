@@ -7,9 +7,11 @@ import logging
 import argparse
 import numpy as np
 import pandas as pd
+from ctypes import c_double
 from mpi4py import MPI
 from lammps import lammps
 from utilities import readJSON
+from scipy.spatial.distance import cdist
 from collections import namedtuple, defaultdict
 from argUtils import setDefaults, createMainParent
 
@@ -90,6 +92,9 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
     allExtruders = Extruders(
         nExtrudersPerBead, atomGroups, offProb, stepProb, addProb, sepThresh)
 
+    allTranscriptionalUnits = TranscriptionalUnits(
+        atomGroups, activationDistance=1.8)
+
     nIntervals = int(simTime / updateInterval)
     updateIntervalSteps = int(updateInterval / timestep)
     for step in range(nIntervals):
@@ -98,6 +103,7 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
         allStatus.append(status)
         if step > 5:
             allExtruders.updateExtrusion()
+            allTranscriptionalUnits.updateAll()
         lmp.command(f'run {updateIntervalSteps}')
     lmp.command('undump 2')
     lmp.command('unfix RG')
@@ -448,8 +454,9 @@ class Extruders():
         """ Store all Atom coordinates keyed by atom ID """
         pos = namedtuple('pos', 'x y z')
         allPos = {}
-        coords = iter(lmp.gather_atoms("x", 1, 3))
-        for ID, (x, y, z) in enumerate(zip(coords, coords, coords), 1):
+        coords = lmp.gather_atoms("x", 1, 3)
+        coords = np.array(coords, dtype=c_double).reshape(-1, 3)
+        for ID, (x, y, z) in enumerate(coords, 1):
             allPos[ID] = pos(x, y, z)
         self.coords = allPos
 
@@ -495,6 +502,112 @@ class Extruders():
                     prevBoundary = True
             self.TADstatus = allStatus
         return pd.DataFrame(self.TADstatus)
+
+
+class TranscriptionalUnits:
+    def __init__(self, atomGroups, activationDistance=1.8):
+        self.beadIDs = defaultdict(list, atomGroups)
+        self.activationDistance = activationDistance
+        self.TUs = {ID: TranscriptionalUnit(ID) for ID in self.beadIDs['TU']}
+        self.TFs = {ID: TranscriptionFactor(ID) for ID in self.beadIDs['TF']}
+
+
+    def updateTFactivity(self):
+        """ Update TF (active / inactive) """
+        types = iter(lmp.gather_atoms('type', 0, 1))
+        for ID, type in enumerate(types, 1):
+            if ID in self.TFs:
+                self.TFs[ID].active = type == 1
+
+
+    def updateCoordinates(self):
+        """ Update coordinates for TF and TUs """
+        pos = namedtuple('pos', 'x y z')
+        coords = lmp.gather_atoms("x", 1, 3)
+        coords = np.array(coords, dtype=c_double).reshape(-1, 3)
+        for ID, (x, y, z) in enumerate(coords, 1):
+            if ID in self.TUs:
+                self.TUs[ID].coordinates = pos(x, y, z)
+            elif ID in self.TFs:
+                self.TFs[ID].coordinates = pos(x, y, z)
+
+
+    def gatherTFcoordinates(self):
+        """ Return all current active TF coordinates """
+        activeTFs = []
+        for breadID, TF in self.TFs.items():
+            if TF.active:
+                activeTFs.append(list(TF.coordinates))
+        return np.array(activeTFs)
+
+
+    def setTUactivity(self):
+        """ Set TUs to active if within distance to active TU """
+        TFcoordinates = self.gatherTFcoordinates()
+        for beadID, TU in self.TUs.items():
+            TUcoordinate = [np.array(TU.coordinates)]
+            distances = cdist(TUcoordinate, TFcoordinates, 'euclidean')
+            if distances.min() < self.activationDistance:
+                TU.active = True
+
+
+    def updateAll(self):
+        """ Wrapper for updating TF / TU positions and setting activation """
+        self.updateTFactivity()
+        self.updateCoordinates()
+        self.setTUactivity()
+        # Function to call relevant lammps commands on active TU
+
+
+class TranscriptionalUnit:
+    def __init__(self, beadID):
+        self.beadID = beadID
+        self.active = False
+
+    @property
+    def active(self):
+        return self._active
+
+    @active.setter
+    def active(self, active):
+        self._active = active
+
+    @property
+    def type(self):
+        return self._type
+
+    @type.setter
+    def type(self, type):
+        self._type = type
+
+    @property
+    def coordinates(self):
+        return self._coordinates
+
+    @coordinates.setter
+    def coordinates(self, coordinates):
+        self._coordinates = coordinates
+
+
+class TranscriptionFactor:
+    def __init__(self, beadID):
+        self.beadID = beadID
+
+    @property
+    def active(self):
+        return self._active
+
+    @active.setter
+    def active(self, active):
+        self._active = active
+
+    @property
+    def coordinates(self):
+        return self._coordinates
+
+    @coordinates.setter
+    def coordinates(self, coordinates):
+        self._coordinates = coordinates
 
 
 def parseArgs():

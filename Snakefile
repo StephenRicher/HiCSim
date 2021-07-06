@@ -52,15 +52,16 @@ default_config = {
                        'yhi':         50,
                        'zlo':        -50,
                        'zhi':         50,},
-    'lammps':         {'restart':        0    ,
-                       'writeInterval':  10   ,
-                       'timestep':       0.01 ,
-                       'warmUp':         20000,
-                       'simTime':        20000,
-                       'harmonicCoeff':  2    ,
-                       'TFswap':         100  ,
-                       'nSplit':         10   ,
-                       'threads':        1    ,},
+    'lammps':         {'restart':          0    ,
+                       'writeInterval':    10   ,
+                       'timestep':         0.01 ,
+                       'warmUp':           20000,
+                       'simTime':          20000,
+                       'harmonicCoeff':    2    ,
+                       'TFswap':           100  ,
+                       'extrudersPerBead': 30 / 5000,
+                       'nSplit':           10   ,
+                       'threads':          1    ,},
     'HiC':            {'matrix' :    None    ,
                        'binsize':    None    ,
                        'log' :       True    ,
@@ -188,16 +189,18 @@ rule all:
             name=details.keys()) if config['GIF']['create'] else [],
          expand('plots/contactMatrix/{name}-{nbases}-{binsize}-contactMatrix.png',
             nbases=config['bases_per_bead'], name=details.keys(), binsize=BINSIZE),
-         expand('plots/{plot}/{name}-{nbases}-{plot}.png',
-            nbases=config['bases_per_bead'], name=details.keys(),
-            plot=['pairCluster', 'meanVariance','TUcorrelation', 'TUcircos',
-                  'radiusGyration', 'TUreplicateCount',]),
+         expand('plots/radiusGyration/{name}-{nbases}-radiusGyration.png',
+            nbases=config['bases_per_bead'], name=details.keys()),
          expand('plots/{plot}/{name}-{nbases}-{rep}-{plot}.png',
             nbases=config['bases_per_bead'], name=details.keys(), rep=REPS,
             plot=['TADstructure']),
-         expand('{name}/{nbases}/merged/{name}-TU-{stat}.csv.gz',
-            name=details.keys(), nbases=config['bases_per_bead'],
-            stat=['stats', 'pairStats', 'TADstatus']),
+         #expand('plots/{plot}/{name}-{nbases}-{plot}.png',
+            #nbases=config['bases_per_bead'], name=details.keys(),
+            #plot=['pairCluster', 'meanVariance','TUcorrelation', 'TUcircos',
+            #      'radiusGyration', 'TUreplicateCount',]),
+         #expand('{name}/{nbases}/merged/{name}-TU-{stat}.csv.gz',
+        #    name=details.keys(), nbases=config['bases_per_bead'],
+        #    stat=['stats', 'pairStats', 'TADstatus']),
         expand('{name}/{nbases}/reps/{rep}/lammps/config/atomGroups-{monomers}.json',
             name=details.keys(), nbases=config['bases_per_bead'],
             rep=REPS, monomers=config['monomers']),
@@ -536,6 +539,7 @@ rule lammpsSimulation:
         coeffs = config['coeffs'],
         timestep = config['lammps']['timestep'],
         nBasesPerBead = config['bases_per_bead'],
+        extrudersPerBead = config['lammps']['extrudersPerBead'],
         writeInterval = config['lammps']['writeInterval'],
         seed = lambda wc: seeds['simulation'][int(wc.rep) - 1],
         harmonicCoeff = config['lammps']['harmonicCoeff'],
@@ -551,14 +555,15 @@ rule lammpsSimulation:
     threads:
         config['lammps']['threads']
     shell:
-        '{params.lmpPrefix} python {SCRIPTS}/runLammpsSimulation.py '
+        '{params.lmpPrefix} python {SCRIPTS}/runLammpsSimulation.py --verbose '
         '{input.equil} {input.groups} --TADStatus {output.TADstatus} '
         '--simTime {params.simTime} --writeInterval {params.writeInterval} '
         '--seed {params.seed} --harmonicCoeff {params.harmonicCoeff} '
         '--TFswap {params.TFswap} --radiusGyrationOut {output.radiusGyration} '
         '--simOut {output.simOut} --timestep {params.timestep} '
         '{params.extrusion} --nBasesPerBead {params.nBasesPerBead} '
-        '--pairCoeffs {params.coeffs} --beadTypes {input.beadTypes} &> {log}'
+        '--pairCoeffs {params.coeffs} --beadTypes {input.beadTypes} '
+        '--nExtrudersPerBead {params.extrudersPerBead} &> {log}'
 
 
 rule plotRG:
