@@ -4,6 +4,7 @@
 
 import sys
 import random
+import logging
 import argparse
 import fileinput
 from utilities import setDefaults, bedHeader
@@ -12,35 +13,49 @@ from utilities import setDefaults, bedHeader
 __version__ = '1.0.0'
 
 
-def filterBed(file: str, seed: float, maxProb: float):
+def filterBed(bed: str, char: list, seed: float, maxProb: float):
 
     random.seed(seed)
-    with fileinput.input(file) as fh:
+    assert len(char) <= 2, "Maximum 2 characters."
+    pairChar = len(char) == 2
+    with open(bed) as fh:
         for line in fh:
-            if bedHeader(line): continue
+            if bedHeader(line):
+                continue
             columns = line.strip().split()
             try:
-                score = float(line.split()[4])
-                assert 0 <= score <= 1, "Score not between 0 and 1"
+                score = float(columns[4])
+                score = min(maxProb, score)
             except IndexError:
                 score = maxProb
+            except ValueError:
+                logging.error('Non-numeric value in score column')
+                raise ValueError
+            assert 0 <= score <= 1, 'Score not between 0 and 1'
             if random.random() < score:
-                print('\t'.join(columns))
+                if (pairChar) and (len(columns) >=6) and (columns[5] == '-'):
+                    c = char[1]
+                else:
+                    c = char[0]
+                print(columns[0], columns[1], columns[2], c)
 
 
 def parseArgs():
     epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
     parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
     parser.add_argument(
-        'file', metavar='BED', nargs='?', default=[],
-        help='Input BED file (default: stdin)')
+        'bed', metavar='BED', help='Input BED file')
+    parser.add_argument(
+        'char', nargs='+',
+        help='Masking character for BED intervals. If 2 provided, they will '
+             'be used for forward / reverse orientation respectively.')
     parser.add_argument(
         '--seed', default=None, type=float,
         help='Initialize the random number generator (default: %(default)s)')
     parser.add_argument(
         '--maxProb', default=1.0, type=float,
-        help='If no score column then set retention probability '
-             'for all entries (default: %(default)s)')
+        help='Set maximum retention probability for '
+             'interval (default: %(default)s)')
 
     return setDefaults(parser, verbose=False, version=__version__)
 

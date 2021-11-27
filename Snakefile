@@ -25,13 +25,13 @@ default_config = {
     'workdir':        workflow.basedir,
     'ctcf':           None,
     'masking':        {},
-    'genome' :        {'build':    'genome',
-                       'sequence':  None,
-                       'name':      None,
-                       'genes':     None,
-                       'chr':       None,
-                       'start':     None,
-                       'end':       None,},
+    'genome' :        {'build':     'genome',
+                       'chromSizes': None,
+                       'name':       None,
+                       'genes':      None,
+                       'chr':        None,
+                       'start':      None,
+                       'end':        None,},
     'maxProb':        0.9,
     'syntheticSequence' : {}              ,
     'bases_per_bead': 1000,
@@ -39,6 +39,7 @@ default_config = {
     'method':         'mean',
     'coeffs':         '',
     'reps':           5,
+    'maxReps':        0,
     'equilibrateOnly': False,
     'random':         {'seed':             42,
                        'walk':             False,
@@ -91,7 +92,7 @@ details = {}
 if not config['syntheticSequence']:
     # If no synthetic sequence ensure genome information is provided.
     invalid = False
-    for key in ['sequence', 'name', 'chr', 'start', 'end']:
+    for key in ['chromSizes', 'name', 'chr', 'start', 'end']:
         if config['genome'][key] is None:
             sys.stderr.write(
                 f'\033[31mNo synthetic sequence provided and '
@@ -113,7 +114,7 @@ if not config['syntheticSequence']:
     # Subtraction matrix not yet supported for 'real' sequences
     COMPARES = []
 else:
-    config['genome']['sequence'] = []
+    config['genome']['chromSizes'] = []
     allBeadLengths = []
     for name in config['syntheticSequence'].keys():
         nBeads = getNbeads(config['syntheticSequence'][name])
@@ -124,7 +125,7 @@ else:
                          'end':    end,
                          'nBeads': nBeads}
     if len(set(allBeadLengths)) != 1:
-        print('Subtraction matrices only support of all synthetic '
+        print('Subtraction matrices only supported if all synthetic '
               'sequences are the same length', file=sys.stderr)
         COMPARES = []
     else:
@@ -135,14 +136,16 @@ BUILD = config['genome']['build']
 # Define list of N reps from 1 to N
 REPS = list(range(1, config['reps'] + 1))
 
+MAXREPS = list(range(1, max(config['maxReps'], config['reps']) + 1))
+
 # Set seeds for different parts of workflow.
 seeds = {}
 for type in ['sequence', 'initialConform', 'monomerPositions', 'simulation']:
     random.seed(config['random']['seed'])
     if config['random'][type]:
-        seeds[type] = [random.randint(1, (2**16) - 1) for rep in REPS]
+        seeds[type] = [random.randint(1, (2**16) - 1) for rep in MAXREPS]
     else:
-        seeds[type] = [random.randint(1, (2**16) - 1)] * config['reps']
+        seeds[type] = [random.randint(1, (2**16) - 1)] * len(MAXREPS)
 
 if config['HiC']['binsize'] is not None:
     BINSIZE = int(config['HiC']['binsize'])
@@ -177,7 +180,7 @@ wildcard_constraints:
     name = rf'{"|".join(details.keys())}',
     binsize = rf'{BINSIZE}',
     nbases = rf'{config["bases_per_bead"]}',
-    rep = rf'{"|".join([str(rep) for rep in REPS])}'
+    rep = rf'{"|".join([str(rep) for rep in MAXREPS])}'
 
 
 rule all:
@@ -194,10 +197,10 @@ rule all:
          expand('plots/{plot}/{name}-{nbases}-{rep}-{plot}.png',
             nbases=config['bases_per_bead'], name=details.keys(), rep=REPS,
             plot=['TADstructure']),
-         #expand('plots/{plot}/{name}-{nbases}-{plot}.png',
-            #nbases=config['bases_per_bead'], name=details.keys(),
-            #plot=['pairCluster', 'meanVariance','TUcorrelation', 'TUcircos',
-            #      'radiusGyration', 'TUreplicateCount',]),
+         expand('plots/{plot}/{name}-{nbases}-{plot}.png',
+            nbases=config['bases_per_bead'], name=details.keys(),
+            plot=['pairCluster', 'meanVariance','TUcorrelation', 'TUcircos',
+                  'radiusGyration', 'TUreplicateCount',]),
          #expand('{name}/{nbases}/merged/{name}-TU-{stat}.csv.gz',
         #    name=details.keys(), nbases=config['bases_per_bead'],
         #    stat=['stats', 'pairStats', 'TADstatus']),
@@ -209,50 +212,14 @@ rule all:
         if not config['equilibrateOnly'] else [])
 
 
-rule unzipGenome:
-    input:
-        config['genome']['sequence']
-    output:
-        temp(f'genome/{BUILD}.fa')
-    log:
-        f'logs/unzipGenome/{BUILD}.log'
-    shell:
-        'zcat -f {input} > {output} 2> {log}'
-
-
-rule indexGenome:
-    input:
-        rules.unzipGenome.output
-    output:
-        f'{rules.unzipGenome.output}.fai'
-    log:
-        f'logs/indexGenome/{BUILD}.log'
-    conda:
-        f'{ENVS}/samtools.yaml'
-    shell:
-        'samtools faidx {input} &> {log}'
-
-
-rule getChromSizes:
-    input:
-        rules.indexGenome.output
-    output:
-        f'genome/{BUILD}-chrom.sizes'
-    log:
-        f'logs/getChromSizes/{BUILD}.log'
-    shell:
-        'cut -f 1,2 {input} > {output} 2> {log}'
-
-
 if config['ctcf'] is not None:
 
     rule filterCTCF:
         input:
             config['ctcf']
         output:
-            'tracks/{rep}/CTCF/CTCF-filtered.bed'
+            'tracks/{rep}/CTCF/CTCF-filtered.bed.gz'
         params:
-            rep = REPS,
             maxProb = config['maxProb'],
             seed = lambda wc: seeds['sequence'][int(wc.rep) - 1]
         group:
@@ -262,37 +229,19 @@ if config['ctcf'] is not None:
         conda:
             f'{ENVS}/python3.yaml'
         shell:
-            '{SCRIPTS}/filterBedScore.py --seed {params.seed} '
-            '--maxProb {params.maxProb} {input} > {output} 2> {log}'
-
-
-    rule splitOrientation:
-        input:
-            rules.filterCTCF.output
-        output:
-            forward = 'tracks/{rep}/CTCF/CTCF-filtered-forward.bed',
-            reversed = 'tracks/{rep}/CTCF/CTCF-filtered-reverse.bed'
-        group:
-            'prepLammps'
-        log:
-            'logs/splitOrientation/{rep}.log'
-        conda:
-            f'{ENVS}/python3.yaml'
-        shell:
-            '{SCRIPTS}/splitOrientation.py '
-            '--forward {output.forward} --reverse {output.reversed} '
-            '{input} &> {log}'
+            '({SCRIPTS}/filterBedScore.py {input} F R --seed {params.seed} '
+            '--maxProb {params.maxProb} | gzip > {output}) 2> {log}'
 
 
 rule filterTracks:
     input:
         lambda wc: track_data[wc.track]['source']
     output:
-        'tracks/{rep}/other/{track}'
+        'tracks/{rep}/other/{track}.gz'
     params:
-        rep = REPS,
         maxProb = config['maxProb'],
-        seed = lambda wc: seeds['sequence'][int(wc.rep) - 1]
+        seed = lambda wc: seeds['sequence'][int(wc.rep) - 1],
+        character = lambda wc: track_data[wc.track]['character']
     group:
         'prepLammps'
     log:
@@ -300,8 +249,9 @@ rule filterTracks:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/filterBedScore.py --seed {params.seed} '
-        '--maxProb {params.maxProb} {input} > {output} 2> {log}'
+        '({SCRIPTS}/filterBedScore.py {input} {params.character} '
+        '--seed {params.seed} --maxProb {params.maxProb} '
+        '| gzip > {output}) 2> {log}'
 
 
 def getRegion(wc):
@@ -315,65 +265,34 @@ def getRegion(wc):
     return f'{chrom}:{start}-{end}'
 
 
-def getMasking(wc):
-    """ Build masking command for maskFasta for track data """
-    command = ''
-    for track in track_data:
-        character = track_data[track]['character']
-        command += f'--bed tracks/{wc.rep}/other/{track},{character} '
-    if config['ctcf'] is not None:
-        command += (f'--bed tracks/{wc.rep}/CTCF/CTCF-filtered-forward.bed,F '
-                    f'--bed tracks/{wc.rep}/CTCF/CTCF-filtered-reverse.bed,R ')
-    return command
-
-
-def getSplitOrient(wc):
+def getCTCF(wc):
     """ Return rule output only if used. """
     if config['ctcf'] is not None:
-        return rules.splitOrientation.output
+        return rules.filterCTCF.output
     else:
         return []
 
 
 rule maskFasta:
     input:
-        getSplitOrient,
-        expand('tracks/{{rep}}/other/{track}', track=track_data.keys()),
-        chromSizes = rules.getChromSizes.output
-    output:
-        '{name}/reps/{name}-{rep}-masked.fa'
-    params:
-        masking = getMasking,
-        region = getRegion,
-        seed = lambda wc: seeds['sequence'][int(wc.rep) - 1]
-    group:
-        'prepLammps'
-    log:
-        'logs/maskFasta/maskFasta-{name}-{rep}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/maskFasta.py {input.chromSizes} {params.masking} '
-        '--region {params.region} --seed {params.seed} > {output} 2> {log}'
-
-
-rule FastaToBeads:
-    input:
-        rules.maskFasta.output
+        getCTCF,
+        expand('tracks/{{rep}}/other/{track}.gz', track=track_data.keys()),
     output:
         '{name}/{nbases}/reps/{rep}/{name}-beads-{rep}.txt'
+    params:
+        region = getRegion,
+        nBases = config['bases_per_bead'],
+        seed = lambda wc: seeds['sequence'][int(wc.rep) - 1]
     group:
         'prepLammps'
-    params:
-        bases_per_bead = config['bases_per_bead'],
-        seed = lambda wc: seeds['sequence'][int(wc.rep) - 1]
     log:
-        'logs/sequenceToBeads/{name}-{nbases}-{rep}.log'
+        'logs/maskFasta/{name}-{nbases}-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/FastaToBeads.py --nbases {params.bases_per_bead} '
-        '--seed {params.seed} {input} > {output} 2> {log}'
+        '{SCRIPTS}/maskFasta.py {params.region} {input} '
+        '--seed {params.seed} --nBases {params.nBases} '
+        '> {output} 2> {log}'
 
 
 rule sampleSynthetic:
@@ -397,9 +316,9 @@ rule sampleSynthetic:
 def allBeadsInput(wc):
     if config['syntheticSequence']:
         return expand(
-            '{{name}}/{{nbases}}/reps/{rep}/sampledSynthetic-{rep}.txt', rep=REPS)
+            '{{name}}/{{nbases}}/reps/{rep}/sampledSynthetic-{rep}.txt', rep=MAXREPS)
     else:
-        return expand('{{name}}/{{nbases}}/reps/{rep}/{{name}}-beads-{rep}.txt', rep=REPS)
+        return expand('{{name}}/{{nbases}}/reps/{rep}/{{name}}-beads-{rep}.txt', rep=MAXREPS)
 
 
 rule extractAtomTypes:
@@ -466,13 +385,14 @@ def setLmpPrefix(wc):
     else:
         return ''
 
+
 rule lammpsEquilibrate:
     input:
         rules.BeadsToLammps.output
     output:
         equil = '{name}/{nbases}/lammpsInit/simulation-equil',
         equilInfo = '{name}/{nbases}/lammpsInit/warmUp.custom.gz',
-        radiusGyration = '{name}/{nbases}/lammpsInit/radiusOfGyration.txt'
+        radiusGyration = '{name}/{nbases}/lammpsInit/radiusOfGyration.txt.gz'
     params:
         writeInterval = config['lammps']['writeInterval'],
         timestep = config['lammps']['timestep'],
@@ -501,7 +421,7 @@ def beadsInput(wc):
     if config['syntheticSequence']:
         return rules.sampleSynthetic.output
     else:
-        return rules.FastaToBeads.output
+        return rules.maskFasta.output
 
 
 rule getAtomGroups:
@@ -544,7 +464,6 @@ rule lammpsSimulation:
         seed = lambda wc: seeds['simulation'][int(wc.rep) - 1],
         harmonicCoeff = config['lammps']['harmonicCoeff'],
         sim = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
-        radiusGyration = '{name}/{nbases}/reps/{rep}/lammps/radius_of_gyration.txt',
         lmpPrefix = setLmpPrefix
     group:
         'processAllLammps' if config['groupJobs'] else 'lammpsSimulation'
@@ -1107,7 +1026,7 @@ if config['syntheticSequence'] is None:
     rule juicerPre:
         input:
             tsv = rules.matrix2pre.output,
-            chrom_sizes = rules.getChromSizes.output
+            chrom_sizes = config['genome']['chromSizes']
         output:
             '{name}/{nbases}/merged/matrices/contacts.hic'
         log:

@@ -3,111 +3,79 @@
 """ Mask a genome with relevant bases """
 
 import sys
+import gzip
 import random
 import logging
 import argparse
 import fileinput
 from collections import defaultdict
-from utilities import setDefaults, coordinates, bedHeader
+from utilities import setDefaults, coordinates
 
 
 __version__ = '1.0.0'
 
 
-def main(chromSizes, bed, region, seed):
-
+def main(region, beds, nBases: int, seed: float):
     random.seed(seed)
-    tracks = processBed(bed)
-    chromosomes = readChromosomes(chromSizes)
+    tracks = processBed(beds, region['chr'])
+    bases = []
+    for i in range(region['start'], region['end']):
+        if i in tracks:
+            base = tracks[i]
+            if len(base) > 1:
+                base = random.choice(base)
+            else:
+                base = 'N'
+            bases.append(base)
+            if len(bases) == nBases:
+                sys.stdout.write(f'{getBead(bases)}\n')
+                bases = []
+    if len(bases) > 0:
+        sys.stdout.write(f'{getBead(bases)}\n')
 
-    writeMaskedFasta(tracks, chromosomes, region)
 
-
-def readChromosomes(file):
-    chromosomes = {}
-    with fileinput.input(file) as fh:
-        for line in fh:
-            name, length = line.split()
-            chromosomes[name] = int(length)
-    return chromosomes
-
-
-def processBed(beds):
-
-    regions = defaultdict(lambda: defaultdict(str))
-    invalid_maskings = ['N', 'B']
-    for bed, mask in beds:
-        if mask in invalid_maskings:
-            logging.error(f'Invalid masking character {mask}. '
-                          f'Character must not be in {invalid_maskings}.')
-            sys.exit(1)
-        with open(bed) as fh:
+def processBed(beds, chrom):
+    regions = defaultdict(str)
+    invalidMaskings = {'N', 'B'}
+    for bed in beds:
+        with gzip.open(bed, 'rt') as fh:
             for line in fh:
-                if bedHeader(line): continue
-                ref, mid = findMidpoint(line)
-                regions[ref][mid] += mask
-
+                ref, start, end, mask = line.split()
+                if ref != chrom:
+                    continue
+                mid = round((int(start) + int(end)) / 2)
+                regions[mid] += mask
+    if set(regions.values()) & invalidMaskings:
+        logging.error(f'Invalid masking characters {invalidMaskings}.')
+        raise ValueError
     return regions
 
 
-def findMidpoint(line):
-    """ Return ref and mid coordinate of BED entry """
-
-    ref, start, end = line.split()[:3]
-    mid = round((int(start) + int(end)) / 2)
-
-    return ref, mid
-
-
-def writeMaskedFasta(tracks, chromosomes, region=None):
-
-    for chromosome, length in chromosomes.items():
-        if not region:
-            indexes = range(length)
-        elif region['chr'] == chromosome:
-            indexes = range(region['start'], region['end'])
-        else:
-            continue
-
-        sys.stdout.write(f'>{chromosome}\n')
-        for index in indexes:
-            chrTracks = tracks[chromosome]
-            if index in chrTracks:
-                base = chrTracks[index]
-                if len(base) > 1:
-                    base = random.choice(base)
-            else:
-                base = 'N'
-            sys.stdout.write(base)
-        sys.stdout.write('\n')
-
-
-def commaPair(value):
-    """ Split command seperated pair and return as tuple """
-
-    # Split on last occurence of comma
-    bed, maskChar = value.rsplit(',', 1)
-    if len(maskChar) != 1:
-        raise argparse.ArgumentTypeError(
-            f'Masking character {maskChar} must single character.')
+def getBead(bases):
+    # Remove any 'N' bases from list
+    bases = [base for base in bases if base != 'N']
+    if len(bases) == 0:
+        bead = 'N'
     else:
-        return (bed, maskChar)
+        # If both CTCF orientations exist create a bead 'B' to represent both
+        if 'F' in bases and 'R' in bases:
+            bases = ['B' if base in ['F', 'R'] else base for base in bases]
+        bead = random.choice(bases)
+    return bead
+
 
 
 def parseArgs():
 
     epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
     parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
-    parser.add_argument('chromSizes', nargs='?', default=[],
-        help='Chromosome sizes file (default: stdin)')
     parser.add_argument(
-        '--region', metavar='CHR:START-END', default=None, type=coordinates,
+        'region', metavar='CHR:START-END', type=coordinates,
         help='Genomic region (0-based) to operate on.')
+    parser.add_argument('beds', nargs='+', help='BED files of regions to mask')
     parser.add_argument(
-        '--bed', metavar='BED,CHAR', default=[],
-        type=commaPair, action='append',
-        help='BED file of regions to mask, paired with masking character.'
-             'Call multiple times to add more files.')
+        '--nBases', default=1000, type=int,
+        help='Number of bases to represent 1 bead.')
     parser.add_argument(
         '--seed', default=None, type=float,
         help='Seed for random number generator.')
