@@ -19,18 +19,17 @@ def main(region, beds, nBases: int, seed: float):
     random.seed(seed)
     tracks = processBed(beds, region['chr'])
     bases = []
+    n = 0
     for i in range(region['start'], region['end']):
         if i in tracks:
-            base = tracks[i]
-            if len(base) > 1:
-                base = random.choice(base)
-            else:
-                base = 'N'
+            base = random.choice(tracks[i])
             bases.append(base)
-            if len(bases) == nBases:
-                sys.stdout.write(f'{getBead(bases)}\n')
-                bases = []
-    if len(bases) > 0:
+        n += 1
+        if n == nBases:
+            sys.stdout.write(f'{getBead(bases)}\n')
+            bases = []
+            n = 0
+    if n > 0:
         sys.stdout.write(f'{getBead(bases)}\n')
 
 
@@ -52,8 +51,6 @@ def processBed(beds, chrom):
 
 
 def getBead(bases):
-    # Remove any 'N' bases from list
-    bases = [base for base in bases if base != 'N']
     if len(bases) == 0:
         bead = 'N'
     else:
