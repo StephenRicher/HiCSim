@@ -57,7 +57,7 @@ def parseArgs():
         help='Set maximum retention probability for '
              'interval (default: %(default)s)')
 
-    return setDefaults(parser, verbose=False, version=__version__)
+    return setDefaults(parser)
 
 
 if __name__ == '__main__':

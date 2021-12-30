@@ -7,9 +7,8 @@ import json
 import argparse
 import fileinput
 from typing import List
-from utilities import setDefaults
 from collections import defaultdict
-
+from utilities import setDefaults, createMainParent
 
 __version__ = '1.0.0'
 
@@ -39,7 +38,10 @@ def getAtomGroups(beads: str, nMonomers: int, TUs: List):
 def parseArgs():
 
     epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
-    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+    mainParent = createMainParent(verbose=False, version=__version__)
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[mainParent])
+    parser.set_defaults(function=getAtomGroups)
     parser.add_argument(
         'beads', nargs='?', default=[], help='Beads file. (default: stdin)')
     parser.add_argument(
@@ -49,9 +51,9 @@ def parseArgs():
         '--TUs', nargs='*', default=[],
         help='Bead types that should be treated as transcriptional units.')
 
-    return setDefaults(parser, verbose=False, version=__version__)
+    return setDefaults(parser)
 
 
 if __name__ == '__main__':
-    args = parseArgs()
-    sys.exit(getAtomGroups(**vars(args)))
+    args, function = parseArgs()
+    sys.exit(function(**vars(args)))

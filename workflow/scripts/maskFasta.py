@@ -77,7 +77,7 @@ def parseArgs():
         '--seed', default=None, type=float,
         help='Seed for random number generator.')
 
-    return setDefaults(parser, verbose=False, version=__version__)
+    return setDefaults(parser)
 
 
 if __name__ == '__main__':

@@ -6,7 +6,7 @@ import sys
 import argparse
 import numpy as np
 from typing import List
-from utilities import setDefaults
+from utilities import setDefaults, createMainParent
 from scipy.sparse import save_npz, load_npz, csc_matrix
 
 
@@ -45,8 +45,11 @@ def compute_mean(matrices: List):
 
 def parseArgs():
 
-    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
-    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+    epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+    mainParent = createMainParent(verbose=False, version=__version__)
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[mainParent])
+    parser.set_defaults(function=mergeMatrices)
     parser.add_argument('matrices', nargs='+', help='Input contact matrices')
     parser.add_argument(
         '--method', default='sum', choices=['mean', 'median', 'sum'],
@@ -55,9 +58,9 @@ def parseArgs():
     requiredNamed.add_argument(
         '--out', required=True, help='Summed contact matrix.')
 
-    return setDefaults(parser, verbose=False, version=__version__)
+    return setDefaults(parser)
 
 
 if __name__ == '__main__':
-    args = parseArgs()
-    sys.exit(mergeMatrices(**vars(args)))
+    args, function = parseArgs()
+    sys.exit(function(**vars(args)))

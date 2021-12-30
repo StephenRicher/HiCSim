@@ -197,10 +197,10 @@ rule all:
          expand('plots/{plot}/{name}-{nbases}-{rep}-{plot}.png',
             nbases=config['bases_per_bead'], name=details.keys(), rep=REPS,
             plot=['TADstructure']),
-         expand('plots/{plot}/{name}-{nbases}-{plot}.png',
-            nbases=config['bases_per_bead'], name=details.keys(),
-            plot=['pairCluster', 'meanVariance','TUcorrelation', 'TUcircos',
-                  'radiusGyration', 'TUreplicateCount',]),
+         #expand('plots/{plot}/{name}-{nbases}-{plot}.png',
+        #    nbases=config['bases_per_bead'], name=details.keys(),
+        #    plot=['pairCluster', 'meanVariance','TUcorrelation', 'TUcircos',
+        #          'radiusGyration', 'TUreplicateCount',]),
          #expand('{name}/{nbases}/merged/{name}-TU-{stat}.csv.gz',
         #    name=details.keys(), nbases=config['bases_per_bead'],
         #    stat=['stats', 'pairStats', 'TADstatus']),
@@ -553,8 +553,8 @@ rule reformatLammps:
     input:
         rules.lammpsSimulation.output.simOut
     output:
-        expand('{{name}}/{{nbases}}/reps/{{rep}}/lammps/simulation-split{split}.csv.gz',
-            split=range(config['lammps']['nSplit']))
+        temp(expand('{{name}}/{{nbases}}/reps/{{rep}}/lammps/simulation-split{split}.csv.gz',
+            split=range(config['lammps']['nSplit'])))
     params:
         nSteps = getNsteps,
         prefix = lambda wc: f'{wc.name}/{wc.nbases}/reps/{wc.rep}/lammps/simulation-split'
@@ -947,20 +947,31 @@ rule plotHiC:
         '&> {log}'
 
 
+rule distanceNormalise:
+    input:
+        '{name}/{nbases}/merged/matrices/{name}-{binsize}.h5'
+    output:
+        '{name}/{nbases}/merged/matrices/{name}-{binsize}-obsExp.h5'
+    log:
+        'logs/distanceNormalise/{name}-{nbases}-{binsize}.log'
+    conda:
+        f'{ENVS}/hicexplorer.yaml'
+    shell:
+        'hicTransform -m {input} --method obs_exp -o {output} &> {log}'
+
+
 rule compareMatrices:
     input:
-        m1 = '{name1}/{nbases}/merged/matrices/{name1}-{binsize}.h5',
-        m2 = '{name2}/{nbases}/merged/matrices/{name2}-{binsize}.h5'
+        '{name1}/{nbases}/merged/matrices/{name1}-{binsize}.h5',
+        '{name2}/{nbases}/merged/matrices/{name2}-{binsize}.h5'
     output:
-        'comparison/{nbases}/{name1}-vs-{name2}-{nbases}-{binsize}-logFC.h5'
-    params:
+        'comparison/{nbases}/{name1}-vs-{name2}-{nbases}-{binsize}.h5'
     log:
         'logs/compareMatrices/{name1}-vs-{name2}-{nbases}-{binsize}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
-        'hicCompareMatrices --matrices {input} --outFileName {output} '
-        '--operation log2ratio &> {log}'
+        'python {SCRIPTS}/compareHiC.py {input} --outMatrix {output} &> {log}'
 
 
 rule createCompareConfig:

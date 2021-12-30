@@ -9,7 +9,7 @@ import numpy as np
 from scipy import stats
 from typing import List
 import matplotlib.pyplot as plt
-from utilities import setDefaults
+from utilities import setDefaults, createMainParent
 
 
 __version__ = '1.0.0'
@@ -70,7 +70,10 @@ def CI(x):
 def parseArgs():
 
     epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
-    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+    mainParent = createMainParent(verbose=False, version=__version__)
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[mainParent])
+    parser.set_defaults(function=plotRG)
     parser.add_argument(
         'files', nargs='*',
         help='Radius of Gyration output from LAMMPS.')
@@ -84,9 +87,9 @@ def parseArgs():
     requiredNamed.add_argument(
         '--out', required=True, help='Output plot filename.')
 
-    return setDefaults(parser, verbose=False, version=__version__)
+    return setDefaults(parser)
 
 
 if __name__ == '__main__':
-    args = parseArgs()
-    sys.exit(plotRG(**vars(args)))
+    args, function = parseArgs()
+    sys.exit(function(**vars(args)))

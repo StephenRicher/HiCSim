@@ -142,7 +142,7 @@ def parseArgs():
         '--vmax', type=coeff, default=0.3,
         help='Maximum value of colour scale. (default: %(default)s)')
 
-    return setDefaults(parser, verbose=False, version=__version__)
+    return setDefaults(parser)
 
 
 if __name__ == '__main__':

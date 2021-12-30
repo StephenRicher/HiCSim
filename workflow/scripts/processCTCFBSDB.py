@@ -37,7 +37,7 @@ def parseArgs():
         '--threshold', default=3, type=int,
         help='Minimum valid motif score (default: %(default)s)')
 
-    return setDefaults(parser, verbose=False, version=__version__)
+    return setDefaults(parser)
 
 
 if __name__ == '__main__':

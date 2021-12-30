@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+''#!/usr/bin/env python3
 
 import sys
 import json
@@ -84,9 +84,9 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
 
     lmp.command('reset_timestep 0')
     lmp.command('neighbor 5 bin')
-
-    nTFs = len(atomGroups['TF'])
-    lmp.command(f'fix swap TF atom/swap {TFswapSteps} {nTFs} {seed} 10 ke yes types 1 2')
+    if 'TF' in atomGroups:
+        nTFs = len(atomGroups['TF'])
+        lmp.command(f'fix swap TF atom/swap {TFswapSteps} {nTFs} {seed} 10 ke yes types 1 2')
 
     allStatus = []
     allExtruders = Extruders(

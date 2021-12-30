@@ -5,7 +5,7 @@
 import sys
 import argparse
 import fileinput
-from utilities import setDefaults
+from utilities import setDefaults, createMainParent
 
 __version__ = '1.0.0'
 
@@ -47,14 +47,17 @@ def nAtomHeader(line):
 def parseArgs():
 
     epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
-    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+    mainParent = createMainParent(verbose=False, version=__version__)
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[mainParent])
+    parser.set_defaults(function=custom2XYZ)
     parser.add_argument(
         'file', metavar='FILE', nargs='?', default=[],
         help='Lammps custom output (default: stdin)')
 
-    return setDefaults(parser, verbose=False, version=__version__)
+    return setDefaults(parser)
 
 
 if __name__ == '__main__':
-    args = parseArgs()
-    sys.exit(custom2XYZ(**vars(args)))
+    args, function = parseArgs()
+    sys.exit(function(**vars(args)))

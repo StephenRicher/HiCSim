@@ -32,7 +32,7 @@ def parseArgs():
         'file', metavar='BED', nargs='?', default=[],
         help='BED file (default: stdin)')
 
-    return setDefaults(parser, verbose=False, version=__version__)
+    return setDefaults(parser)
 
 
 if __name__ == '__main__':

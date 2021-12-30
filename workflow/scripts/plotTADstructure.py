@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from utilities import setDefaults
+from utilities import setDefaults, createMainParent
 
 
 __version__ = '1.0.0'
@@ -36,7 +36,10 @@ def plotTADstructure(beadTADstatus: str, dpi: int, out: str):
 def parseArgs():
 
     epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
-    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+    mainParent = createMainParent(verbose=False, version=__version__)
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[mainParent])
+    parser.set_defaults(function=plotTADstructure)
     parser.add_argument(
         'beadTADstatus', help='TADstatus output of runLammpsSimulation.')
     parser.add_argument(
@@ -46,9 +49,9 @@ def parseArgs():
     requiredNamed.add_argument(
         '--out', required=True, help='Output plot filename.')
 
-    return setDefaults(parser, verbose=False, version=__version__)
+    return setDefaults(parser)
 
 
 if __name__ == '__main__':
-    args = parseArgs()
-    sys.exit(plotTADstructure(**vars(args)))
+    args, function = parseArgs()
+    sys.exit(function(**vars(args)))

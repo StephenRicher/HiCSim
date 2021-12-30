@@ -51,7 +51,7 @@ def parseArgs():
         '--transform', default='none', choices=['log', 'sqrt', 'none'],
         help='Transform to apply to BED scores (default: %(default)s)')
 
-    return setDefaults(parser, verbose=False, version=__version__)
+    return setDefaults(parser)
 
 
 if __name__ == '__main__':

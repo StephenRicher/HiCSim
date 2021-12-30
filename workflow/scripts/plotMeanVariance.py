@@ -39,7 +39,7 @@ def parseArgs():
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument(
         '--out', required=True, help='Output plot filename.')
-    return setDefaults(parser, verbose=False, version=__version__)
+    return setDefaults(parser)
 
 
 if __name__ == '__main__':

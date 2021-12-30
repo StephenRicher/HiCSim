@@ -12,7 +12,8 @@ from typing import List
 from scipy.sparse import save_npz, csc_matrix
 from scipy.spatial.distance import pdist, squareform
 from argUtils import positiveInt
-from utilities import getAtomCount, readJSON, pdistPeriodic, setDefaults
+from utilities import getAtomCount, readJSON, pdistPeriodic
+from utilities import setDefaults, createMainParent
 
 
 __version__ = '1.0.0'
@@ -59,7 +60,10 @@ def createContactMatrix(
 def parseArgs():
 
     epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
-    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+    mainParent = createMainParent(verbose=False, version=__version__)
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[mainParent])
+    parser.set_defaults(function=createContactMatrix)
     parser.add_argument(
         'atomGroups',
         help='Atom group assignments in JSON format.')
@@ -85,9 +89,9 @@ def parseArgs():
     requiredNamed.add_argument(
         '--out', required=True, help='Output contact NPZ matrix.')
 
-    return setDefaults(parser, verbose=False, version=__version__)
+    return setDefaults(parser)
 
 
 if __name__ == '__main__':
-    args = parseArgs()
-    sys.exit(createContactMatrix(**vars(args)))
+    args, function = parseArgs()
+    sys.exit(function(**vars(args)))

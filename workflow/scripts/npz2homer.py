@@ -6,7 +6,7 @@
 import sys
 import argparse
 import pandas as pd
-from utilities import setDefaults
+from utilities import setDefaults, createMainParent
 from scipy.sparse import load_npz
 
 
@@ -28,7 +28,10 @@ def npz2homer(npz: str, binsize: int, chromosome: str, start: int) -> None:
 def parseArgs():
 
     epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
-    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+    mainParent = createMainParent(verbose=False, version=__version__)
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[mainParent])
+    parser.set_defaults(function=npz2homer)
     parser.add_argument('npz', metavar='NPZ', help='Input numpy matrix.')
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument(
@@ -40,9 +43,9 @@ def parseArgs():
         '--start', type=int, required=True,
         help='Start coordinate of matrix.')
 
-    return setDefaults(parser, verbose=False, version=__version__)
+    return setDefaults(parser)
 
 
 if __name__ == '__main__':
-    args = parseArgs()
-    sys.exit(npz2homer(**vars(args)))
+    args, function = parseArgs()
+    sys.exit(function(**vars(args)))

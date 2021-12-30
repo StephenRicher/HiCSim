@@ -47,7 +47,7 @@ def parseArgs():
         '--forward', required=True,
         help='Forward strand BED output.')
 
-    return setDefaults(parser, verbose=False, version=__version__)
+    return setDefaults(parser)
 
 
 if __name__ == '__main__':
