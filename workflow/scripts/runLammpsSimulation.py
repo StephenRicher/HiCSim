@@ -20,7 +20,7 @@ __version__ = '1.0.0'
 
 
 def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
-              sepThresh: float, nExtrudersPerBead: float, extrusionRate: float,
+              sepThresh: float, nExtrudersPerMb: float, extrusionRate: float,
               updateInterval: float, onRate: float, offRate: float,
               writeInterval: float, extrusion: bool, harmonicCoeff: float,
               timestep: float, TFswap: float, radiusGyrationOut: str,
@@ -30,8 +30,9 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
     random.seed(seed)
 
     offRates = np.linspace(0, 1, 100_000, endpoint=False)[1:]
+    # UPDATE: MODIFIED FROM 40kb
     offRate = convergeRate(
-        40_000, nBasesPerBead, extrusionRate,
+        120_000, nBasesPerBead, extrusionRate,
         updateInterval, offRates, reps=1000)
     stepProb = updateInterval * extrusionRate # Advancement probability
     addProb  = updateInterval * onRate        # Attachment probability
@@ -57,6 +58,7 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
     writeGroups(atomGroups)
     # Assign atom types
     beadTypes = readJSON(beadTypes)
+
     for type, typeID in beadTypes.items():
         if (type in ['TFa', 'TFi', 'N']) or (type not in atomGroups):
             continue
@@ -89,8 +91,12 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
         lmp.command(f'fix swap TF atom/swap {TFswapSteps} {nTFs} {seed} 10 ke yes types 1 2')
 
     allStatus = []
+    nExtrudersPerBead = (nExtrudersPerMb / 1e6) * nBasesPerBead
+    nExtruders = int(len(atomGroups['DNA']) * nExtrudersPerBead)
+    # Total extruders limited due to maximum allowed greoups
+    nExtruders = min(31 - len(atomGroups), nExtruders)
     allExtruders = Extruders(
-        nExtrudersPerBead, atomGroups, offProb, stepProb, addProb, sepThresh)
+        nExtruders, atomGroups, offProb, stepProb, addProb, sepThresh)
 
     allTranscriptionalUnits = TranscriptionalUnits(
         atomGroups, activationDistance=1.8)
@@ -269,9 +275,10 @@ class Extruder():
 
 
 class Extruders():
-    def __init__(self, nExtrudersPerBead, atomGroups, removeProb, stepProb, addProb, sepThresh):
+    def __init__(self, nExtruders, atomGroups, removeProb, stepProb,
+                 addProb, sepThresh):
         self.beadIDs = defaultdict(list, atomGroups)
-        self.nExtruders = int(len(self.beadIDs['DNA']) * nExtrudersPerBead)
+        self.nExtruders = nExtruders
         self.extruders = [Extruder() for i in range(self.nExtruders)]
         self.removeProb = removeProb
         self.stepProb = stepProb
@@ -284,7 +291,7 @@ class Extruders():
         self.removed = False
         self.updated = False
         self.updated = False
-
+        print('nExtruders', self.nExtruders, addProb, stepProb, removeProb)
 
     def processBox(self, lmpBox):
         """ Convert output of extract_box() to box dimensions """
@@ -546,12 +553,15 @@ class TranscriptionalUnits:
             execute relevant Lammps commands """
         TFcoordinates = self.gatherTFcoordinates()
         for beadID, TU in self.TUs.items():
-            TUcoordinate = [np.array(TU.coordinates)]
-            distances = cdist(TUcoordinate, TFcoordinates, 'euclidean')
-            if distances.min() < self.activationDistance:
-                TU.processActive()
-            else:
+            if len(TFcoordinates) == 0:
                 TU.processInactive()
+            else:
+                TUcoordinate = [np.array(TU.coordinates)]
+                distances = cdist(TUcoordinate, TFcoordinates, 'euclidean')
+                if distances.min() < self.activationDistance:
+                    TU.processActive()
+                else:
+                    TU.processInactive()
 
 
     def updateAll(self):
@@ -634,7 +644,7 @@ def parseArgs():
         '--sepThresh', type=float, default=6.0,
         help='Max distance for bond creation (default: %(default)s)')
     parser.add_argument(
-        '--nExtrudersPerBead', type=float, default=(30.0 / 5000.0),
+        '--nExtrudersPerMb', type=float, default=8,
         help='Number of extruders per polymer bead (default: %(default)s)')
     parser.add_argument(
         '--extrusionRate', type=float, default=(1 / 500),

@@ -34,7 +34,7 @@ default_config = {
                        'end':        None,},
     'maxProb':        0.9,
     'syntheticSequence' : {}              ,
-    'bases_per_bead': 1000,
+    'basesPerBead':   2000,
     'monomers':       100,
     'method':         'mean',
     'coeffs':         '',
@@ -60,7 +60,7 @@ default_config = {
                        'simTime':          20000,
                        'harmonicCoeff':    2    ,
                        'TFswap':           100  ,
-                       'extrudersPerBead': 30 / 5000,
+                       'extrudersPerMb':   8,
                        'nSplit':           10   ,
                        'threads':          1    ,},
     'HiC':            {'matrix' :    None    ,
@@ -104,7 +104,7 @@ if not config['syntheticSequence']:
         start, end, nBeads = adjustCoordinates(
             config['genome']['start'],
             config['genome']['end'],
-            config['bases_per_bead'])
+            config['basesPerBead'])
         scaledRegion = f"{config['genome']['chr']}-{start}-{end}"
         print(f'Adjusting {name} positions to {scaledRegion}', file=sys.stderr)
         details[name] = {'chr':   config['genome']['chr'],
@@ -119,7 +119,7 @@ else:
     for name in config['syntheticSequence'].keys():
         nBeads = getNbeads(config['syntheticSequence'][name])
         allBeadLengths.append(nBeads)
-        end = (nBeads * config['bases_per_bead'])
+        end = (nBeads * config['basesPerBead'])
         details[name] = {'chr':    'synthetic',
                          'start':  1,
                          'end':    end,
@@ -149,14 +149,14 @@ for type in ['sequence', 'initialConform', 'monomerPositions', 'simulation']:
 
 if config['HiC']['binsize'] is not None:
     BINSIZE = int(config['HiC']['binsize'])
-    MERGEBINS, REMAINDER = divmod(BINSIZE, config['bases_per_bead'])
+    MERGEBINS, REMAINDER = divmod(BINSIZE, config['basesPerBead'])
     if REMAINDER:
         sys.exit(
             f'\033[31Binsize {config["HiC"]["binsize"]} is not divisible by '
-            f'bases per bead {config["bases_per_bead"]}.\033[m\n')
+            f'bases per bead {config["basesPerBead"]}.\033[m\n')
 else:
     MERGEBINS = 1
-    BINSIZE = config['bases_per_bead']
+    BINSIZE = config['basesPerBead']
 
 if config['lammps']['simTime'] < config['lammps']['writeInterval']:
     sys.exit('Simulation time less than writeInterval')
@@ -179,36 +179,38 @@ wildcard_constraints:
     stat = r'stats|pairStats|TADstatus',
     name = rf'{"|".join(details.keys())}',
     binsize = rf'{BINSIZE}',
-    nbases = rf'{config["bases_per_bead"]}',
+    nbases = rf'{config["basesPerBead"]}',
     rep = rf'{"|".join([str(rep) for rep in MAXREPS])}'
 
 
 rule all:
     input:
         expand('{name}/{nbases}/lammpsInit/simulation-equil',
-            name=details.keys(), nbases=config['bases_per_bead']),
+            name=details.keys(), nbases=config['basesPerBead']),
         ([expand('vmd/{name}-{nbases}-1-simulation.gif',
-            nbases=config['bases_per_bead'],
+            nbases=config['basesPerBead'],
             name=details.keys()) if config['GIF']['create'] else [],
          expand('plots/contactMatrix/{name}-{nbases}-{binsize}-contactMatrix.png',
-            nbases=config['bases_per_bead'], name=details.keys(), binsize=BINSIZE),
+            nbases=config['basesPerBead'], name=details.keys(), binsize=BINSIZE),
          expand('plots/radiusGyration/{name}-{nbases}-radiusGyration.png',
-            nbases=config['bases_per_bead'], name=details.keys()),
+            nbases=config['basesPerBead'], name=details.keys()),
          expand('plots/{plot}/{name}-{nbases}-{rep}-{plot}.png',
-            nbases=config['bases_per_bead'], name=details.keys(), rep=REPS,
+            nbases=config['basesPerBead'], name=details.keys(), rep=REPS,
             plot=['TADstructure']),
-         #expand('plots/{plot}/{name}-{nbases}-{plot}.png',
-        #    nbases=config['bases_per_bead'], name=details.keys(),
-        #    plot=['pairCluster', 'meanVariance','TUcorrelation', 'TUcircos',
-        #          'radiusGyration', 'TUreplicateCount',]),
-         #expand('{name}/{nbases}/merged/{name}-TU-{stat}.csv.gz',
-        #    name=details.keys(), nbases=config['bases_per_bead'],
-        #    stat=['stats', 'pairStats', 'TADstatus']),
+         expand('plots/{plot}/{name}-{nbases}-{plot}.png',
+            nbases=config['basesPerBead'], name=details.keys(),
+            plot=['meanVariance','TUcorrelation', 'TUcircos',
+                  'radiusGyration', 'TUreplicateCount',]),
+         #expand('plots/pairCluster/{name}-{nbases}-{plot}.png',
+    #        nbases=config['basesPerBead'], name=details.keys()),
+         expand('{name}/{nbases}/merged/{name}-TU-{stat}.csv.gz',
+            name=details.keys(), nbases=config['basesPerBead'],
+            stat=['stats', 'pairStats', 'TADstatus']),
         expand('{name}/{nbases}/reps/{rep}/lammps/config/atomGroups-{monomers}.json',
-            name=details.keys(), nbases=config['bases_per_bead'],
+            name=details.keys(), nbases=config['basesPerBead'],
             rep=REPS, monomers=config['monomers']),
         expand('comparison/{nbases}/{compare}-{nbases}-{binsize}-logFC.png',
-            nbases=config['bases_per_bead'], compare=COMPARES, binsize=BINSIZE)]
+            nbases=config['basesPerBead'], compare=COMPARES, binsize=BINSIZE)]
         if not config['equilibrateOnly'] else [])
 
 
@@ -281,7 +283,7 @@ rule maskFasta:
         '{name}/{nbases}/reps/{rep}/{name}-beads-{rep}.txt'
     params:
         region = getRegion,
-        nBases = config['bases_per_bead'],
+        nBases = config['basesPerBead'],
         seed = lambda wc: seeds['sequence'][int(wc.rep) - 1]
     group:
         'prepLammps'
@@ -359,7 +361,7 @@ rule BeadsToLammps:
     params:
         nMonomers = config['monomers'],
         nBeads = lambda wc: details[wc.name]['nBeads'],
-        basesPerBead = config['bases_per_bead'],
+        basesPerBead = config['basesPerBead'],
         polymerSeed = 2, #lambda wc: seeds['initialConform'][int(wc.rep) - 1],
         monomerSeed = 2, #lambda wc: seeds['monomerPositions'][int(wc.rep) - 1],
         xlo = config['box']['xlo'],
@@ -397,7 +399,7 @@ rule lammpsEquilibrate:
         writeInterval = config['lammps']['writeInterval'],
         timestep = config['lammps']['timestep'],
         seed = 1, # lambda wc: seeds['simulation'][int(wc.rep) - 1],
-        cosinePotential = lambda wc: 10000 / config['bases_per_bead'],
+        cosinePotential = lambda wc: 10000 / config['basesPerBead'],
         equilTime = config['lammps']['warmUp'],
         lmpPrefix = setLmpPrefix
     group:
@@ -430,7 +432,7 @@ rule getAtomGroups:
     output:
         f'{{name}}/{{nbases}}/reps/{{rep}}/lammps/config/atomGroups-{config["monomers"]}.json'
     params:
-        TUs = ['P', 'p'],
+        TUs = ['P'],
         nMonomers = config['monomers'],
     group:
         'processAllLammps' if config['groupJobs'] else 'getAtomGroups'
@@ -458,8 +460,8 @@ rule lammpsSimulation:
         TFswap = config['lammps']['TFswap'],
         coeffs = config['coeffs'],
         timestep = config['lammps']['timestep'],
-        nBasesPerBead = config['bases_per_bead'],
-        extrudersPerBead = config['lammps']['extrudersPerBead'],
+        nBasesPerBead = config['basesPerBead'],
+        extrudersPerMb = config['lammps']['extrudersPerMb'],
         writeInterval = config['lammps']['writeInterval'],
         seed = lambda wc: seeds['simulation'][int(wc.rep) - 1],
         harmonicCoeff = config['lammps']['harmonicCoeff'],
@@ -482,7 +484,7 @@ rule lammpsSimulation:
         '--simOut {output.simOut} --timestep {params.timestep} '
         '{params.extrusion} --nBasesPerBead {params.nBasesPerBead} '
         '--pairCoeffs {params.coeffs} --beadTypes {input.beadTypes} '
-        '--nExtrudersPerBead {params.extrudersPerBead} &> {log}'
+        '--nExtrudersPerMb {params.extrudersPerMb} &> {log}'
 
 
 rule plotRG:
@@ -821,7 +823,7 @@ rule matrix2homer:
     params:
         chr = lambda wc: details[wc.name]['chr'],
         start = lambda wc: details[wc.name]['start'],
-        binsize = config['bases_per_bead']
+        binsize = config['basesPerBead']
     log:
         'logs/matrix2homer/{name}-{nbases}.log'
     conda:
@@ -1023,7 +1025,7 @@ if config['syntheticSequence'] is None:
         params:
             chr = lambda wc: details[wc.name]['chr'],
             start = lambda wc: details[wc.name]['start'],
-            binsize = config['bases_per_bead']
+            binsize = config['basesPerBead']
         log:
             'logs/matrix2pre/{name}-{nbases}.log'
         conda:

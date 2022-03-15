@@ -9,13 +9,13 @@ import logging
 import argparse
 import fileinput
 from collections import defaultdict
-from utilities import setDefaults, coordinates
+from utilities import setDefaults, createMainParent, coordinates
 
 
 __version__ = '1.0.0'
 
 
-def main(region, beds, nBases: int, seed: float):
+def maskFasta(region, beds, nBases: int, seed: float):
     random.seed(seed)
     tracks = processBed(beds, region['chr'])
     bases = []
@@ -64,8 +64,11 @@ def getBead(bases):
 
 def parseArgs():
 
-    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
-    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+    epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+    mainParent = createMainParent(verbose=False, version=__version__)
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[mainParent])
+    parser.set_defaults(function=maskFasta)
     parser.add_argument(
         'region', metavar='CHR:START-END', type=coordinates,
         help='Genomic region (0-based) to operate on.')
@@ -81,5 +84,5 @@ def parseArgs():
 
 
 if __name__ == '__main__':
-    args = parseArgs()
-    sys.exit(main(**vars(args)))
+    args, function = parseArgs()
+    sys.exit(function(**vars(args)))

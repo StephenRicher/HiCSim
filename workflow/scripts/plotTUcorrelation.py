@@ -9,7 +9,7 @@ import pandas as pd
 import seaborn as sns
 import networkx as nx
 import matplotlib.pyplot as plt
-from utilities import setDefaults
+from utilities import setDefaults, createMainParent
 
 __version__ = '1.0.0'
 
@@ -104,8 +104,11 @@ def coeff(value):
 
 def parseArgs():
 
-    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
-    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+    epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+    mainParent = createMainParent(verbose=False, version=__version__)
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[mainParent])
+    parser.set_defaults(function=main)
     parser.add_argument('beadDistribution',
         help='Bead distribution output of writeTUdistribution.')
     parser.add_argument(
@@ -146,5 +149,5 @@ def parseArgs():
 
 
 if __name__ == '__main__':
-    args = parseArgs()
-    sys.exit(main(**vars(args)))
+    args, function = parseArgs()
+    sys.exit(function(**vars(args)))

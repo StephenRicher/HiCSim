@@ -7,7 +7,7 @@ import random
 import logging
 import argparse
 import fileinput
-from utilities import setDefaults, bedHeader
+from utilities import setDefaults, createMainParent, bedHeader
 
 
 __version__ = '1.0.0'
@@ -41,8 +41,12 @@ def filterBed(bed: str, char: list, seed: float, maxProb: float):
 
 
 def parseArgs():
-    epilog='Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
-    parser = argparse.ArgumentParser(epilog=epilog, description=__doc__)
+
+    epilog = 'Stephen Richer, University of Bath, Bath, UK (sr467@bath.ac.uk)'
+    mainParent = createMainParent(verbose=False, version=__version__)
+    parser = argparse.ArgumentParser(
+        epilog=epilog, description=__doc__, parents=[mainParent])
+    parser.set_defaults(function=filterBed)
     parser.add_argument(
         'bed', metavar='BED', help='Input BED file')
     parser.add_argument(
@@ -61,5 +65,5 @@ def parseArgs():
 
 
 if __name__ == '__main__':
-    args = parseArgs()
-    sys.exit(filterBed(**vars(args)))
+    args, function = parseArgs()
+    sys.exit(function(**vars(args)))

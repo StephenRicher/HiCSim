@@ -63,6 +63,7 @@ def parseArgs():
     mainParent = createMainParent(verbose=False, version=__version__)
     parser = argparse.ArgumentParser(
         epilog=epilog, description=__doc__, parents=[mainParent])
+    parser.set_defaults(function=processTUinfo)
     parser.add_argument(
         'atomGroups', help='Atom group assignments in JSON format.')
     parser.add_argument(
@@ -74,7 +75,7 @@ def parseArgs():
         help='Distance threshold for transcription (default: %(default)s)')
     parser.add_argument(
         '--out', default=sys.stdout, help='File to TU info (default: stdout)')
-    parser.set_defaults(function=processTUinfo)
+
 
     return setDefaults(parser)
 
