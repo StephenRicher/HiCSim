@@ -32,7 +32,7 @@ default_config = {
                        'chr':        None,
                        'start':      None,
                        'end':        None,},
-    'maxProb':        0.9,
+    'retentionProb':   [0.5],
     'syntheticSequence' : {}              ,
     'basesPerBead':   2000,
     'monomers':       100,
@@ -64,7 +64,6 @@ default_config = {
                        'nSplit':           10   ,
                        'threads':          1    ,},
     'HiC':            {'matrix' :    None    ,
-                       'binsize':    None    ,
                        'log' :       True    ,
                        'colourMap': 'Purples',
                        'dpi':        300     ,
@@ -147,17 +146,6 @@ for type in ['sequence', 'initialConform', 'monomerPositions', 'simulation']:
     else:
         seeds[type] = [random.randint(1, (2**16) - 1)] * len(MAXREPS)
 
-if config['HiC']['binsize'] is not None:
-    BINSIZE = int(config['HiC']['binsize'])
-    MERGEBINS, REMAINDER = divmod(BINSIZE, config['basesPerBead'])
-    if REMAINDER:
-        sys.exit(
-            f'\033[31Binsize {config["HiC"]["binsize"]} is not divisible by '
-            f'bases per bead {config["basesPerBead"]}.\033[m\n')
-else:
-    MERGEBINS = 1
-    BINSIZE = config['basesPerBead']
-
 if config['lammps']['simTime'] < config['lammps']['writeInterval']:
     sys.exit('Simulation time less than writeInterval')
 
@@ -178,39 +166,50 @@ wildcard_constraints:
     all = r'[^\/]+',
     stat = r'stats|pairStats|TADstatus',
     name = rf'{"|".join(details.keys())}',
-    binsize = rf'{BINSIZE}',
     nbases = rf'{config["basesPerBead"]}',
     rep = rf'{"|".join([str(rep) for rep in MAXREPS])}'
 
 
 rule all:
     input:
-        expand('{name}/{nbases}/lammpsInit/simulation-equil',
-            name=details.keys(), nbases=config['basesPerBead']),
-        ([expand('vmd/{name}-{nbases}-1-simulation.gif',
-            nbases=config['basesPerBead'],
+        expand('{name}/{nbases}/lammpsInit/simulation-equil-{prob}',
+            name=details.keys(), nbases=config['basesPerBead'],
+            prob=config['retentionProb']),
+        ([expand('vmd/{name}-{nbases}-{prob}-1-simulation.gif',
+            nbases=config['basesPerBead'], prob=config['retentionProb'],
             name=details.keys()) if config['GIF']['create'] else [],
-         expand('plots/contactMatrix/{name}-{nbases}-{binsize}-contactMatrix.png',
-            nbases=config['basesPerBead'], name=details.keys(), binsize=BINSIZE),
-         expand('plots/radiusGyration/{name}-{nbases}-radiusGyration.png',
-            nbases=config['basesPerBead'], name=details.keys()),
-         expand('plots/{plot}/{name}-{nbases}-{rep}-{plot}.png',
+         expand('plots/contactMatrix/{name}-{nbases}-{prob}-contactMatrix.svg',
+            nbases=config['basesPerBead'], name=details.keys(),
+            prob=config['retentionProb']),
+         expand('plots/radiusGyration/{name}-{nbases}-{prob}-radiusGyration.png',
+            nbases=config['basesPerBead'], name=details.keys(),
+            prob=config['retentionProb']),
+         expand('plots/{plot}/{name}-{nbases}-{prob}-{rep}-{plot}.png',
             nbases=config['basesPerBead'], name=details.keys(), rep=REPS,
-            plot=['TADstructure']),
-         expand('plots/{plot}/{name}-{nbases}-{plot}.png',
+            plot=['TADstructure'], prob=config['retentionProb']),
+         expand('plots/{plot}/{name}-{nbases}-{prob}-{plot}.png',
             nbases=config['basesPerBead'], name=details.keys(),
             plot=['meanVariance','TUcorrelation', 'TUcircos',
-                  'radiusGyration', 'TUreplicateCount',]),
-         #expand('plots/pairCluster/{name}-{nbases}-{plot}.png',
-    #        nbases=config['basesPerBead'], name=details.keys()),
-         expand('{name}/{nbases}/merged/{name}-TU-{stat}.csv.gz',
+                  'radiusGyration', 'TUreplicateCount'],
+            prob=config['retentionProb']),
+         #expand('plots/pairCluster/{name}-{nbases}-{prob}.png',
+         #       nbases=config['basesPerBead'], name=details.keys(),
+         #       prob=config['retentionProb']),
+         expand('{name}/{nbases}/merged/{name}-TU-{stat}-{prob}.csv.gz',
             name=details.keys(), nbases=config['basesPerBead'],
-            stat=['stats', 'pairStats', 'TADstatus']),
-        expand('{name}/{nbases}/reps/{rep}/lammps/config/atomGroups-{monomers}.json',
+            stat=['stats', 'pairStats', 'TADstatus'],
+            prob=config['retentionProb']),
+        expand('{name}/{nbases}/reps/{rep}/lammps/config/atomGroups-{monomers}-{prob}.json',
             name=details.keys(), nbases=config['basesPerBead'],
-            rep=REPS, monomers=config['monomers']),
-        expand('comparison/{nbases}/{compare}-{nbases}-{binsize}-logFC.png',
-            nbases=config['basesPerBead'], compare=COMPARES, binsize=BINSIZE)]
+            rep=REPS, monomers=config['monomers'],
+            prob=config['retentionProb']),
+        expand('comparison/{nbases}/{compare}-{nbases}-{prob}-logFC.svg',
+            nbases=config['basesPerBead'], compare=COMPARES,
+            prob=config['retentionProb']),
+        (expand('HiCRep/{name}/{name}-{nbases}-{prob}-vs-experimental.csv',
+            name=details.keys(), nbases=config['basesPerBead'],
+            prob=config['retentionProb'])
+            if config['HiC']['matrix'] else [])]
         if not config['equilibrateOnly'] else [])
 
 
@@ -220,39 +219,37 @@ if config['ctcf'] is not None:
         input:
             config['ctcf']
         output:
-            'tracks/{rep}/CTCF/CTCF-filtered.bed.gz'
+            'tracks/{rep}/CTCF/CTCF-filtered-{prob}.bed.gz'
         params:
-            maxProb = config['maxProb'],
             seed = lambda wc: seeds['sequence'][int(wc.rep) - 1]
         group:
             'prepLammps'
         log:
-            'logs/sampleBed/{rep}.log'
+            'logs/sampleBed/{rep}-{prob}.log'
         conda:
             f'{ENVS}/python3.yaml'
         shell:
             '({SCRIPTS}/filterBedScore.py {input} F R --seed {params.seed} '
-            '--maxProb {params.maxProb} | gzip > {output}) 2> {log}'
+            '--retentionProb {wildcards.prob} | gzip > {output}) 2> {log}'
 
 
 rule filterTracks:
     input:
         lambda wc: track_data[wc.track]['source']
     output:
-        'tracks/{rep}/other/{track}.gz'
+        'tracks/{rep}/other/{track}-{prob}.gz'
     params:
-        maxProb = config['maxProb'],
         seed = lambda wc: seeds['sequence'][int(wc.rep) - 1],
         character = lambda wc: track_data[wc.track]['character']
     group:
         'prepLammps'
     log:
-        'logs/filterTracks/{track}-{rep}.log'
+        'logs/filterTracks/{track}-{prob}-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
         '({SCRIPTS}/filterBedScore.py {input} {params.character} '
-        '--seed {params.seed} --maxProb {params.maxProb} '
+        '--seed {params.seed} --retentionProb {wildcards.prob} '
         '| gzip > {output}) 2> {log}'
 
 
@@ -278,9 +275,9 @@ def getCTCF(wc):
 rule maskFasta:
     input:
         getCTCF,
-        expand('tracks/{{rep}}/other/{track}.gz', track=track_data.keys()),
+        expand('tracks/{{rep}}/other/{track}-{{prob}}.gz', track=track_data.keys()),
     output:
-        '{name}/{nbases}/reps/{rep}/{name}-beads-{rep}.txt'
+        '{name}/{nbases}/reps/{rep}/{name}-{prob}-beads-{rep}.txt'
     params:
         region = getRegion,
         nBases = config['basesPerBead'],
@@ -288,7 +285,7 @@ rule maskFasta:
     group:
         'prepLammps'
     log:
-        'logs/maskFasta/{name}-{nbases}-{rep}.log'
+        'logs/maskFasta/{name}-{nbases}-{prob}-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -320,18 +317,18 @@ def allBeadsInput(wc):
         return expand(
             '{{name}}/{{nbases}}/reps/{rep}/sampledSynthetic-{rep}.txt', rep=MAXREPS)
     else:
-        return expand('{{name}}/{{nbases}}/reps/{rep}/{{name}}-beads-{rep}.txt', rep=MAXREPS)
+        return expand('{{name}}/{{nbases}}/reps/{rep}/{{name}}-{{prob}}-beads-{rep}.txt', rep=MAXREPS)
 
 
 rule extractAtomTypes:
     input:
         allBeadsInput
     output:
-        '{name}/{nbases}/beadTypeID.json'
+        '{name}/{nbases}/beadTypeID-{prob}.json'
     group:
         'lammpsEquilibrate'
     log:
-        'logs/extractAtomTypes/{name}-{nbases}.log'
+        'logs/extractAtomTypes/{name}-{nbases}-{prob}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -357,7 +354,7 @@ rule BeadsToLammps:
     input:
         rules.extractAtomTypes.output
     output:
-        f'{{name}}/{{nbases}}/lammpsInit/lammps_input-{config["monomers"]}.dat'
+        f'{{name}}/{{nbases}}/lammpsInit/lammps_input-{config["monomers"]}-{{prob}}.dat'
     params:
         nMonomers = config['monomers'],
         nBeads = lambda wc: details[wc.name]['nBeads'],
@@ -374,7 +371,7 @@ rule BeadsToLammps:
     group:
         'lammpsEquilibrate'
     log:
-        'logs/BeadsToLammps/{name}-{nbases}.log'
+        'logs/BeadsToLammps/{name}-{nbases}-{prob}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -392,20 +389,20 @@ rule lammpsEquilibrate:
     input:
         rules.BeadsToLammps.output
     output:
-        equil = '{name}/{nbases}/lammpsInit/simulation-equil',
-        equilInfo = '{name}/{nbases}/lammpsInit/warmUp.custom.gz',
-        radiusGyration = '{name}/{nbases}/lammpsInit/radiusOfGyration.txt.gz'
+        equil = '{name}/{nbases}/lammpsInit/simulation-equil-{prob}',
+        equilInfo = '{name}/{nbases}/lammpsInit/warmUp-{prob}.custom.gz',
+        radiusGyration = '{name}/{nbases}/lammpsInit/radiusOfGyration-{prob}.txt'
     params:
         writeInterval = config['lammps']['writeInterval'],
         timestep = config['lammps']['timestep'],
-        seed = 1, # lambda wc: seeds['simulation'][int(wc.rep) - 1],
+        seed = 1,
         cosinePotential = lambda wc: 10000 / config['basesPerBead'],
         equilTime = config['lammps']['warmUp'],
         lmpPrefix = setLmpPrefix
     group:
         'lammpsEquilibrate'
     log:
-        'logs/lammpsEquilibrate/{name}-{nbases}.log'
+        'logs/lammpsEquilibrate/{name}-{nbases}-{prob}.log'
     conda:
         f'{ENVS}/lammps.yaml'
     threads:
@@ -430,14 +427,14 @@ rule getAtomGroups:
     input:
         beadsInput
     output:
-        f'{{name}}/{{nbases}}/reps/{{rep}}/lammps/config/atomGroups-{config["monomers"]}.json'
+        f'{{name}}/{{nbases}}/reps/{{rep}}/lammps/config/atomGroups-{config["monomers"]}-{{prob}}.json'
     params:
-        TUs = ['P'],
+        TUs = ['P','p'],
         nMonomers = config['monomers'],
     group:
         'processAllLammps' if config['groupJobs'] else 'getAtomGroups'
     log:
-        'logs/getAtomGroups/{name}-{nbases}-{rep}.log'
+        'logs/getAtomGroups/{name}-{nbases}-{prob}-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -451,9 +448,9 @@ rule lammpsSimulation:
         groups = rules.getAtomGroups.output,
         beadTypes = rules.extractAtomTypes.output
     output:
-        simOut = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
-        TADstatus = '{name}/{nbases}/reps/{rep}/beadTADstatus.csv.gz',
-        radiusGyration = '{name}/{nbases}/reps/{rep}/lammps/radius_of_gyration.txt',
+        simOut = '{name}/{nbases}/reps/{rep}/lammps/simulation-{prob}.custom.gz',
+        TADstatus = '{name}/{nbases}/reps/{rep}/beadTADstatus-{prob}.csv.gz',
+        radiusGyration = '{name}/{nbases}/reps/{rep}/lammps/radiusOfGyration-{prob}.txt',
     params:
         simTime = config['lammps']['simTime'],
         extrusion = '--extrusion' if True else '',
@@ -470,36 +467,37 @@ rule lammpsSimulation:
     group:
         'processAllLammps' if config['groupJobs'] else 'lammpsSimulation'
     log:
-        'logs/lammps/{name}-{nbases}-{rep}.log'
+        'logs/lammps/{name}-{nbases}-{prob}-{rep}.log'
     conda:
         f'{ENVS}/lammps.yaml'
     threads:
         config['lammps']['threads']
     shell:
-        '{params.lmpPrefix} python {SCRIPTS}/runLammpsSimulation.py --verbose '
-        '{input.equil} {input.groups} --TADStatus {output.TADstatus} '
+        '({params.lmpPrefix} python {SCRIPTS}/runLammpsSimulation.py --verbose '
+        '{input.equil} {input.groups} '
         '--simTime {params.simTime} --writeInterval {params.writeInterval} '
         '--seed {params.seed} --harmonicCoeff {params.harmonicCoeff} '
         '--TFswap {params.TFswap} --radiusGyrationOut {output.radiusGyration} '
         '--simOut {output.simOut} --timestep {params.timestep} '
         '{params.extrusion} --nBasesPerBead {params.nBasesPerBead} '
         '--pairCoeffs {params.coeffs} --beadTypes {input.beadTypes} '
-        '--nExtrudersPerMb {params.extrudersPerMb} &> {log}'
+        '--nExtrudersPerMb {params.extrudersPerMb} | gzip > {output.TADstatus}) &> {log}'
 
 
 rule plotRG:
     input:
-        expand('{{name}}/{{nbases}}/reps/{rep}/lammps/radius_of_gyration.txt',
+        '{name}/{nbases}/lammpsInit/radiusOfGyration-{prob}.txt',
+        expand('{{name}}/{{nbases}}/reps/{rep}/lammps/radiusOfGyration-{{prob}}.txt',
             rep=REPS)
     output:
-        'plots/radiusGyration/{name}-{nbases}-radiusGyration.png'
+        'plots/radiusGyration/{name}-{nbases}-{prob}-radiusGyration.png'
     params:
         confidence = config['plotRG']['confidence'],
         dpi = config['plotRG']['dpi']
     group:
         'processAllLammps' if config['groupJobs'] else 'plotRG'
     log:
-        'logs/plotRG/{name}-{nbases}.log'
+        'logs/plotRG/{name}-{nbases}-{prob}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -511,13 +509,13 @@ rule plotTADstucture:
     input:
         rules.lammpsSimulation.output.TADstatus
     output:
-        'plots/TADstructure/{name}-{nbases}-{rep}-TADstructure.png'
+        'plots/TADstructure/{name}-{nbases}-{prob}-{rep}-TADstructure.png'
     params:
         dpi = config['plotRG']['dpi']
     group:
         'processAllLammps' if config['groupJobs'] else 'plotTADstucture'
     log:
-        'logs/plotTADstucture/{name}-{nbases}-{rep}.log'
+        'logs/plotTADstucture/{name}-{nbases}-{prob}-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -527,14 +525,14 @@ rule plotTADstucture:
 
 rule writeTUdistribution:
     input:
-        expand('{{name}}/{{nbases}}/reps/{rep}/lammps/config/atomGroups-{monomers}.json',
+        expand('{{name}}/{{nbases}}/reps/{rep}/lammps/config/atomGroups-{monomers}-{{prob}}.json',
             rep=REPS, monomers=config["monomers"])
     output:
-        '{name}/{nbases}/merged/info/{name}-TU-distribution.csv.gz'
+        '{name}/{nbases}/merged/info/{name}-{prob}-TU-distribution.csv.gz'
     group:
         'processAllLammps' if config['groupJobs'] else 'writeTUdistribution'
     log:
-        'logs/writeTUdistribution/{name}-{nbases}.log'
+        'logs/writeTUdistribution/{name}-{nbases}-{prob}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -555,15 +553,15 @@ rule reformatLammps:
     input:
         rules.lammpsSimulation.output.simOut
     output:
-        temp(expand('{{name}}/{{nbases}}/reps/{{rep}}/lammps/simulation-split{split}.csv.gz',
+        temp(expand('{{name}}/{{nbases}}/reps/{{rep}}/lammps/simulation-{{prob}}-split{split}.csv.gz',
             split=range(config['lammps']['nSplit'])))
     params:
         nSteps = getNsteps,
-        prefix = lambda wc: f'{wc.name}/{wc.nbases}/reps/{wc.rep}/lammps/simulation-split'
+        prefix = lambda wc: f'{wc.name}/{wc.nbases}/reps/{wc.rep}/lammps/simulation-{wc.prob}-split'
     group:
         'processAllLammps' if config['groupJobs'] else 'reformatLammps'
     log:
-        'logs/reformatLammps/{name}-{nbases}-{rep}.log'
+        'logs/reformatLammps/{name}-{nbases}-{prob}-{rep}.log'
     shell:
         '{SCRIPTS}/reformatLammps.awk -v nSteps={params.nSteps} '
         '-v prefix={params.prefix} <(zcat {input}) &> {log}'
@@ -573,15 +571,15 @@ rule processTUinfo:
     input:
         atomGroups = rules.getAtomGroups.output,
         TADstatus = rules.lammpsSimulation.output.TADstatus,
-        sim = '{name}/{nbases}/reps/{rep}/lammps/simulation-split{split}.csv.gz',
+        sim = '{name}/{nbases}/reps/{rep}/lammps/simulation-{prob}-split{split}.csv.gz',
     output:
-        '{name}/{nbases}/reps/{rep}/TU-info-split{split}.csv.gz',
+        '{name}/{nbases}/reps/{rep}/TU-info-{prob}-split{split}.csv.gz',
     params:
         distance = 1.8
     group:
         'processAllLammps' if config['groupJobs'] else 'processTUinfo'
     log:
-        'logs/processTUinfo/{name}-{nbases}-{rep}-{split}.log'
+        'logs/processTUinfo/{name}-{nbases}-{prob}-{rep}-{split}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -592,14 +590,14 @@ rule processTUinfo:
 
 rule mergeTUinfo:
     input:
-        expand('{{name}}/{{nbases}}/reps/{{rep}}/TU-info-split{split}.csv.gz',
+        expand('{{name}}/{{nbases}}/reps/{{rep}}/TU-info-{{prob}}-split{split}.csv.gz',
             split=range(config['lammps']['nSplit'])),
     output:
-        '{name}/{nbases}/reps/{rep}/TU-info.csv.gz'
+        '{name}/{nbases}/reps/{rep}/TU-info-{prob}.csv.gz'
     group:
         'processAllLammps' if config['groupJobs'] else 'processTUinfo'
     log:
-        'logs/mergeTUinfo/{name}-{nbases}-{rep}.log'
+        'logs/mergeTUinfo/{name}-{nbases}-{prob}-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -610,11 +608,11 @@ rule processTADstatus:
     input:
         rules.mergeTUinfo.output
     output:
-        '{name}/{nbases}/reps/{rep}/TU-TADstatus.csv.gz',
+        '{name}/{nbases}/reps/{rep}/TU-TADstatus-{prob}.csv.gz',
     group:
         'processAllLammps' if config['groupJobs'] else 'processTUinfo'
     log:
-        'logs/processTADstatus/{name}-{nbases}-{rep}.log'
+        'logs/processTADstatus/{name}-{nbases}-{prob}-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -625,15 +623,15 @@ rule DBSCAN:
     input:
         rules.mergeTUinfo.output
     output:
-        clusterPairs = '{name}/{nbases}/reps/{rep}/TU-clusterPair.csv.gz',
-        clusterPlot = 'plots/DBSCAN/{name}/{name}-{nbases}-{rep}-cluster.png',
+        clusterPairs = '{name}/{nbases}/reps/{rep}/TU-clusterPair-{prob}.csv.gz',
+        clusterPlot = 'plots/DBSCAN/{name}/{name}-{nbases}-{prob}-{rep}-cluster.png',
     params:
         eps = 6,
         minSamples = 2
     group:
         'DBSCAN_all' if config['groupJobs'] else 'DBSCAN'
     log:
-        'logs/DBSCAN/{name}-{nbases}-{rep}.log'
+        'logs/DBSCAN/{name}-{nbases}-{prob}-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -644,13 +642,13 @@ rule DBSCAN:
 
 rule plotDBSCAN:
     input:
-        expand('{{name}}/{{nbases}}/reps/{rep}/TU-clusterPair.csv.gz', rep=REPS),
+        expand('{{name}}/{{nbases}}/reps/{rep}/TU-clusterPair-{{prob}}.csv.gz', rep=REPS),
     output:
-         'plots/pairCluster/{name}-{nbases}-pairCluster.png'
+         'plots/pairCluster/{name}-{nbases}-{prob}-pairCluster.png'
     group:
         'DBSCAN_all' if config['groupJobs'] else 'plotDBSCAN'
     log:
-        'logs/plotDBSCAN/{name}-{nbases}.log'
+        'logs/plotDBSCAN/{name}-{nbases}-{prob}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -661,12 +659,12 @@ rule computeTUstats:
     input:
         rules.mergeTUinfo.output
     output:
-        TUstats = '{name}/{nbases}/reps/{rep}/TU-stats.csv.gz',
-        TUpairStats = '{name}/{nbases}/reps/{rep}/TU-pairStats.csv.gz',
+        TUstats = '{name}/{nbases}/reps/{rep}/TU-stats-{prob}.csv.gz',
+        TUpairStats = '{name}/{nbases}/reps/{rep}/TU-pairStats-{prob}.csv.gz',
     group:
         'processAllLammps' if config['groupJobs'] else 'computeTUstats'
     log:
-        'logs/computeTUstats/{name}-{nbases}-{rep}.log'
+        'logs/computeTUstats/{name}-{nbases}-{prob}-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -676,13 +674,13 @@ rule computeTUstats:
 
 rule mergeByRep:
     input:
-        expand('{{name}}/{{nbases}}/reps/{rep}/TU-{{stat}}.csv.gz', rep=REPS),
+        expand('{{name}}/{{nbases}}/reps/{rep}/TU-{{stat}}-{{prob}}.csv.gz', rep=REPS),
     output:
-        '{name}/{nbases}/merged/{name}-TU-{stat}.csv.gz'
+        '{name}/{nbases}/merged/{name}-TU-{stat}-{prob}.csv.gz'
     group:
         'processAllLammps' if config['groupJobs'] else 'mergeByRep'
     log:
-        'logs/mergeByRep/{name}-{nbases}-{stat}.log'
+        'logs/mergeByRep/{name}-{nbases}-{prob}-{stat}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -691,15 +689,15 @@ rule mergeByRep:
 
 rule plotMeanVariance:
     input:
-        '{name}/{nbases}/merged/{name}-TU-stats.csv.gz'
+        '{name}/{nbases}/merged/{name}-TU-stats-{prob}.csv.gz'
     output:
-        'plots/meanVariance/{name}-{nbases}-meanVariance.png'
+        'plots/meanVariance/{name}-{nbases}-{prob}-meanVariance.png'
     params:
         fontSize = config['plotTU']['fontSize']
     group:
         'processAllLammps' if config['groupJobs'] else 'plotMeanVariance'
     log:
-        'logs/plotMeanVariance/{name}-{nbases}.log'
+        'logs/plotMeanVariance/{name}-{nbases}-{prob}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -709,13 +707,13 @@ rule plotMeanVariance:
 
 rule computeTUcorrelation:
     input:
-        '{name}/{nbases}/merged/{name}-TU-stats.csv.gz'
+        '{name}/{nbases}/merged/{name}-TU-stats-{prob}.csv.gz'
     output:
-        '{name}/{nbases}/merged/{name}-TU-correlation.csv.gz'
+        '{name}/{nbases}/merged/{name}-TU-correlation-{prob}.csv.gz'
     group:
         'processAllLammps' if config['groupJobs'] else 'computeTUcorrelation'
     log:
-        'logs/computeTUcorrelation/{name}-{nbases}.log'
+        'logs/computeTUcorrelation/{name}-{nbases}-{prob}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -727,9 +725,9 @@ rule plotTUcorrelation:
         correlations = rules.computeTUcorrelation.output,
         beadDistribution = rules.writeTUdistribution.output
     output:
-        meanHeatmap = 'plots/TUcorrelation/{name}-{nbases}-TUcorrelation.png',
-        sumHeatmap = 'plots/TUreplicateCount/{name}-{nbases}-TUreplicateCount.png',
-        circos = 'plots/TUcircos/{name}-{nbases}-TUcircos.png'
+        meanHeatmap = 'plots/TUcorrelation/{name}-{nbases}-{prob}-TUcorrelation.png',
+        sumHeatmap = 'plots/TUreplicateCount/{name}-{nbases}-{prob}-TUreplicateCount.png',
+        circos = 'plots/TUcircos/{name}-{nbases}-{prob}-TUcircos.png'
     params:
         pvalue = config['plotTU']['pvalue'],
         vMin = config['plotTU']['vMin'],
@@ -739,7 +737,7 @@ rule plotTUcorrelation:
     group:
         'processAllLammps' if config['groupJobs'] else 'plotTUcorrelation'
     log:
-        'logs/plotTUcorrelation/{name}-{nbases}.log'
+        'logs/plotTUcorrelation/{name}-{nbases}-{prob}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -753,10 +751,10 @@ rule plotTUcorrelation:
 
 rule createContactMatrix:
     input:
-        xyz = '{name}/{nbases}/reps/{rep}/lammps/simulation-split{split}.csv.gz',
+        xyz = '{name}/{nbases}/reps/{rep}/lammps/simulation-{prob}-split{split}.csv.gz',
         groups = rules.getAtomGroups.output
     output:
-        '{name}/{nbases}/reps/{rep}/matrices/contacts-split{split}.npz'
+        '{name}/{nbases}/reps/{rep}/matrices/contacts-{prob}-split{split}.npz'
     params:
         distance = 3,
         periodic = '--periodic',
@@ -767,7 +765,7 @@ rule createContactMatrix:
     group:
         'processAllLammps' if config['groupJobs'] else 'createContactMatrix'
     log:
-        'logs/createContactMatrix/{name}-{nbases}-{rep}-{split}.log'
+        'logs/createContactMatrix/{name}-{nbases}-{prob}-{rep}-{split}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -779,16 +777,16 @@ rule createContactMatrix:
 
 rule mergeSplit:
     input:
-        expand('{{name}}/{{nbases}}/reps/{{rep}}/matrices/contacts-split{split}.npz',
+        expand('{{name}}/{{nbases}}/reps/{{rep}}/matrices/contacts-{{prob}}-split{split}.npz',
             split=range(config['lammps']['nSplit']))
     output:
-        '{name}/{nbases}/reps/{rep}/matrices/contacts.npz'
+        '{name}/{nbases}/reps/{rep}/matrices/contacts-{prob}.npz'
     params:
         method = 'sum'
     group:
         'processAllLammps' if config['groupJobs'] else 'createContactMatrix'
     log:
-        'logs/mergeSplit/{name}-{nbases}-{rep}.log'
+        'logs/mergeSplit/{name}-{nbases}-{prob}-{rep}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -798,16 +796,16 @@ rule mergeSplit:
 
 rule mergeReplicates:
     input:
-        expand('{{name}}/{{nbases}}/reps/{rep}/matrices/contacts.npz',
+        expand('{{name}}/{{nbases}}/reps/{rep}/matrices/contacts-{{prob}}.npz',
             rep=REPS)
     output:
-        '{name}/{nbases}/merged/matrices/{name}.npz'
+        '{name}/{nbases}/merged/matrices/{name}-{prob}.npz'
     params:
         method = config['method']
     group:
         'processAllLammps' if config['groupJobs'] else 'mergeReplicates'
     log:
-        'logs/mergeReplicates/{name}-{nbases}.log'
+        'logs/mergeReplicates/{name}-{nbases}-{prob}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -815,53 +813,45 @@ rule mergeReplicates:
         '--method {params.method} {input} &> {log}'
 
 
+def set_expHiC(wc):
+    if config['HiC']['matrix']:
+        return f'--expHiC {config["HiC"]["matrix"]}'
+    else:
+        return ''
+
+
 rule matrix2homer:
     input:
-        '{name}/{nbases}/merged/matrices/{name}.npz'
+        '{name}/{nbases}/merged/matrices/{name}-{prob}.npz'
     output:
-        '{name}/{nbases}/merged/matrices/{name}.homer'
+        '{name}/{nbases}/merged/matrices/{name}-{prob}.homer'
     params:
         chr = lambda wc: details[wc.name]['chr'],
         start = lambda wc: details[wc.name]['start'],
-        binsize = config['basesPerBead']
+        binSize = config['basesPerBead'],
+        expHiC = set_expHiC
     log:
-        'logs/matrix2homer/{name}-{nbases}.log'
+        'logs/matrix2homer/{name}-{nbases}-{prob}log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
         '{SCRIPTS}/npz2homer.py --chromosome {params.chr} '
-        '--start {params.start} --binsize {params.binsize} '
-        '{input} > {output} 2> {log}'
+        '{params.expHiC} --start {params.start} '
+        '--binSize {params.binSize} {input} > {output} 2> {log}'
 
 
 rule homer2H5:
     input:
         rules.matrix2homer.output
     output:
-        '{name}/{nbases}/merged/matrices/{name}.h5'
+        '{name}/{nbases}/merged/matrices/{name}-{prob}.h5'
     log:
-        'logs/homer2H5/{name}-{nbases}.log'
+        'logs/homer2H5/{name}-{nbases}-{prob}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
         'hicConvertFormat --matrices {input} --outFileName {output} '
         '--inputFormat homer --outputFormat h5 &> {log}'
-
-
-rule mergeBins:
-    input:
-        rules.homer2H5.output
-    output:
-        '{name}/{nbases}/merged/matrices/{name}-{binsize}.h5'
-    params:
-        nbins = MERGEBINS
-    log:
-        'logs/mergeBins/{name}-{nbases}-{binsize}.log'
-    conda:
-        f'{ENVS}/hicexplorer.yaml'
-    shell:
-        'hicMergeMatrixBins --matrix {input} --numBins {params.nbins} '
-        '--outFileName {output} &> {log}'
 
 
 def getHiCconfig(wc):
@@ -906,17 +896,17 @@ def getDepth(wc):
 
 rule createConfig:
     input:
-        matrix = rules.mergeBins.output,
+        matrix = rules.homer2H5.output,
         ctcfOrient = getCTCFOrient
     output:
-        '{name}/{nbases}/merged/config/{name}-{binsize}-configs.ini'
+        '{name}/{nbases}/merged/config/{name}-{prob}-configs.ini'
     params:
         depth = getDepth,
         hicConfig = getHiCconfig,
     group:
         'plotHiC'
     log:
-        'logs/createConfig/{name}-{nbases}-{binsize}.log'
+        'logs/createConfig/{name}-{nbases}-{prob}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -932,7 +922,7 @@ rule plotHiC:
     input:
         rules.createConfig.output
     output:
-        'plots/contactMatrix/{name}-{nbases}-{binsize}-contactMatrix.png'
+        'plots/contactMatrix/{name}-{nbases}-{prob}-contactMatrix.svg'
     params:
         region = getRegion,
         title = getTitle,
@@ -940,7 +930,7 @@ rule plotHiC:
     group:
         'plotHiC'
     log:
-        'logs/plotHiC/{name}-{nbases}-{binsize}.log'
+        'logs/plotHiC/{name}-{nbases}-{prob}.log'
     conda:
         f'{ENVS}/pygenometracks.yaml'
     shell:
@@ -951,11 +941,11 @@ rule plotHiC:
 
 rule distanceNormalise:
     input:
-        '{name}/{nbases}/merged/matrices/{name}-{binsize}.h5'
+        '{name}/{nbases}/merged/matrices/{name}-{prob}.h5'
     output:
-        '{name}/{nbases}/merged/matrices/{name}-{binsize}-obsExp.h5'
+        '{name}/{nbases}/merged/matrices/{name}-{prob}-obsExp.h5'
     log:
-        'logs/distanceNormalise/{name}-{nbases}-{binsize}.log'
+        'logs/distanceNormalise/{name}-{nbases}-{prob}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -964,12 +954,12 @@ rule distanceNormalise:
 
 rule compareMatrices:
     input:
-        '{name1}/{nbases}/merged/matrices/{name1}-{binsize}.h5',
-        '{name2}/{nbases}/merged/matrices/{name2}-{binsize}.h5'
+        '{name1}/{nbases}/merged/matrices/{name1}-{prob}.h5',
+        '{name2}/{nbases}/merged/matrices/{name2}-{prob}.h5'
     output:
-        'comparison/{nbases}/{name1}-vs-{name2}-{nbases}-{binsize}.h5'
+        'comparison/{nbases}/{name1}-vs-{name2}-{nbases}-{prob}.h5'
     log:
-        'logs/compareMatrices/{name1}-vs-{name2}-{nbases}-{binsize}.log'
+        'logs/compareMatrices/{name1}-vs-{name2}-{nbases}-{prob}.log'
     conda:
         f'{ENVS}/hicexplorer.yaml'
     shell:
@@ -980,11 +970,11 @@ rule createCompareConfig:
     input:
         rules.compareMatrices.output
     output:
-        'comparison/{nbases}/{name1}-vs-{name2}-{nbases}-{binsize}-logFC.ini'
+        'comparison/{nbases}/{name1}-vs-{name2}-{nbases}-{prob}-logFC.ini'
     params:
         depth = getDepth,
     log:
-        'logs/creatCompareConfig/{name1}-vs-{name2}-{nbases}-{binsize}.log'
+        'logs/creatCompareConfig/{name1}-vs-{name2}-{nbases}-{prob}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1000,19 +990,71 @@ rule plotSubtractionMatrix:
     input:
         rules.createCompareConfig.output
     output:
-        'comparison/{nbases}/{name1}-vs-{name2}-{nbases}-{binsize}-logFC.png'
+        'comparison/{nbases}/{name1}-vs-{name2}-{nbases}-{prob}-logFC.svg'
     params:
         region = getRegion,
         title = getCompareTitle,
         dpi = config['HiC']['dpi']
     log:
-        'logs/plotSubtractionMatrix/{name1}-vs-{name2}-{nbases}-{binsize}.log'
+        'logs/plotSubtractionMatrix/{name1}-vs-{name2}-{nbases}-{prob}.log'
     conda:
         f'{ENVS}/pygenometracks.yaml'
     shell:
         'pyGenomeTracks --tracks {input} --region {params.region} '
         '--outFileName {output} --title {params.title} --dpi {params.dpi} '
         '&> {log}'
+
+
+rule H5_to_NxN3p:
+    input:
+        rules.homer2H5.output
+    output:
+        '{name}/{nbases}/merged/matrices/{name}-{prob}.nxn3p.tsv'
+    log:
+        'logs/H5_to_NxN3p/{name}-{nbases}-{prob}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        'python {SCRIPTS}/H5_to_NxN3p.py {input} > {output} 2> {log}'
+
+
+if config['HiC']['matrix'] is not None:
+
+    rule H5_to_NxN3p_exp:
+        input:
+            config['HiC']['matrix']
+        output:
+            'expMatrix/{name}.nxn3p.tsv'
+        params:
+            chrom = lambda wc: details[wc.name]['chr'],
+            start = lambda wc: details[wc.name]['start'],
+            end = lambda wc: details[wc.name]['end'],
+        log:
+            'logs/H5_to_NxN3p/{name}.log'
+        conda:
+            f'{ENVS}/python3.yaml'
+        shell:
+            'python {SCRIPTS}/H5_to_NxN3p.py --chrom {params.chrom} '
+            '--start {params.start} --end {params.end} {input} '
+            '> {output} 2> {log}'
+
+
+    rule HiCRep:
+        input:
+            'expMatrix/{name}.nxn3p.tsv',
+            '{name}/{nbases}/merged/matrices/{name}-{prob}.nxn3p.tsv',
+        output:
+            'HiCRep/{name}/{name}-{nbases}-{prob}-vs-experimental.csv'
+        params:
+            start = lambda wc: details[wc.name]['start'],
+            end = lambda wc: details[wc.name]['end']
+        log:
+            'logs/HiCRep/{name}-{nbases}-{prob}-vs-experimental.log'
+        conda:
+            f'{ENVS}/hicrep.yaml'
+        shell:
+            'Rscript {SCRIPTS}/runHiCRep.R 10000 '
+            '{params.start} {params.end} {input} > {output} 2> {log}'
 
 
 if config['syntheticSequence'] is None:
@@ -1060,13 +1102,13 @@ if config['syntheticSequence'] is None:
 
 rule custom2XYZ:
     input:
-        '{name}/{nbases}/reps/{rep}/lammps/{mode}.custom.gz'
+        '{name}/{nbases}/reps/{rep}/lammps/{mode}-{prob}.custom.gz'
     output:
-        temp('{name}/{nbases}/reps/{rep}/lammps/{mode}.xyz.gz')
+        temp('{name}/{nbases}/reps/{rep}/lammps/{mode}-{prob}.xyz.gz')
     group:
         'vmd'
     log:
-        'logs/custom2XYZ/{name}-{nbases}-{rep}-{mode}.log'
+        'logs/custom2XYZ/{name}-{nbases}-{prob}-{rep}-{mode}.log'
     conda:
         f'{ENVS}/python3.yaml'
     shell:
@@ -1075,13 +1117,13 @@ rule custom2XYZ:
 
 checkpoint vmd:
     input:
-        '{name}/{nbases}/reps/1/lammps/simulation.xyz.gz'
+        '{name}/{nbases}/reps/1/lammps/simulation-{prob}.xyz.gz'
     output:
-        directory('{name}/{nbases}/vmd/sequence')
+        directory('{name}/{nbases}/vmd/sequence-{prob}')
     group:
         'vmd'
     log:
-        'logs/vmd/{name}-{nbases}.log'
+        'logs/vmd/{name}-{nbases}-{prob}.log'
     conda:
         f'{ENVS}/vmd.yaml'
     shell:
@@ -1104,14 +1146,14 @@ rule createGIF:
         rules.vmd.output,
         images = aggregateVMD
     output:
-        'vmd/{name}-{nbases}-1-simulation.gif'
+        'vmd/{name}-{nbases}-{prob}-1-simulation.gif'
     params:
         delay = config['GIF']['delay'],
         loop = config['GIF']['loop']
     group:
         'vmd'
     log:
-        'logs/createGIF/{name}-{nbases}.log'
+        'logs/createGIF/{name}-{nbases}-{prob}.log'
     conda:
         f'{ENVS}/imagemagick.yaml'
     shell:

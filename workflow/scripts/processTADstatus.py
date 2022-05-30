@@ -15,7 +15,6 @@ __version__ = '1.0.0'
 def processTADstatus(TUinfo: str, out: str) -> None:
 
     TUinfo = pd.read_csv(TUinfo)
-
     # Initliase df of pairwise TUs for each timestep
     TUpairs = (TUinfo.groupby('timestep')['ID']
         .apply(lambda x: pd.DataFrame((i for i in combinations(x.values,2))))

@@ -19,7 +19,7 @@ from argUtils import setDefaults, createMainParent
 __version__ = '1.0.0'
 
 
-def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
+def runLammps(equil: str, atomGroups: str, simTime: int,
               sepThresh: float, nExtrudersPerMb: float, extrusionRate: float,
               updateInterval: float, onRate: float, offRate: float,
               writeInterval: float, extrusion: bool, harmonicCoeff: float,
@@ -43,7 +43,7 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
     TFswapSteps = int(TFswap / timestep)
 
     global lmp
-    lmp = lammps()
+    lmp = lammps(cmdargs=['-log', 'none', '-screen', 'none',  '-nocite'])
 
     lmp.command(f'read_restart {equil}')
     lmp.command('reset_timestep 0')
@@ -106,7 +106,8 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
     for step in range(nIntervals):
         status = allExtruders.writeTADs()
         status['timestep'] = step * updateIntervalSteps
-        allStatus.append(status)
+        status['time'] = status['timestep'] * timestep
+        status.to_csv(sys.stdout, header=(step==0), index=False)
         if step > 5:
             allExtruders.updateExtrusion()
             allTranscriptionalUnits.updateAll()
@@ -116,10 +117,8 @@ def runLammps(equil: str, atomGroups: str, simTime: int, TADStatus: str,
     # Update TAD status for last timestep
     status = allExtruders.writeTADs()
     status['timestep'] = (step + 1) * updateIntervalSteps
-    allStatus.append(status)
-    allStatus = pd.concat(allStatus)
-    allStatus['time'] = allStatus['timestep'] * timestep
-    allStatus.to_csv(TADStatus, header=True, index=False)
+    status['time'] = status['timestep'] * timestep
+    status.to_csv(sys.stdout, header=False, index=False)
 
 
 def computeOffRate(nBasesPerBead, extrusionRate, prob=0.5, distance=40_000):
@@ -291,7 +290,6 @@ class Extruders():
         self.removed = False
         self.updated = False
         self.updated = False
-        print('nExtruders', self.nExtruders, addProb, stepProb, removeProb)
 
     def processBox(self, lmpBox):
         """ Convert output of extract_box() to box dimensions """
@@ -661,10 +659,6 @@ def parseArgs():
         '--offRate', type=float, default=(1.0 / 40_000.0),
         help='Rate at which extruders detach in inverse timesteps '
              '(default: %(default)s)')
-    parser.add_argument(
-        '--TADStatus', default=sys.stdout,
-        help='Path to write TAD status of each bead per '
-             'update-time (default: stdout)')
     parser.add_argument(
         '--writeInterval', type=float, default=10,
         help='Simulation status output interval in time units '

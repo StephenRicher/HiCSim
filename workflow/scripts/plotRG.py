@@ -16,8 +16,10 @@ __version__ = '1.0.0'
 
 
 def plotRG(files: List, dpi: int, confidence: float, out: str):
+    equilRG = files[0]
+    postEquil = files[1:]
 
-    data = np.dstack([np.loadtxt(rep) for rep in files])
+    data = np.dstack([np.loadtxt(rep) for rep in postEquil])
     mean = np.mean(data, axis=2)
     time = mean[:,0]
     mean = mean[:,1]
@@ -27,15 +29,24 @@ def plotRG(files: List, dpi: int, confidence: float, out: str):
     mean = mean[uniqIdxs]
     data = data[uniqIdxs,:,:]
 
-    n = len(files)
+    equilRG = np.loadtxt(equilRG)
+    equilTime = equilRG[:,0]
+    equilVal = equilRG[:,1]
+    equilTime, uniqIdxs = np.unique(equilTime, return_index=True)
+    equilVal = equilVal[uniqIdxs]
+
+    allTime = np.concatenate([equilTime, time])
+    allData = np.concatenate([equilVal, mean])
+
+    n = len(postEquil)
     std_err = stats.sem(data, axis=2)[:,1]
     ci = std_err * stats.t.ppf((1 + confidence) / 2, n - 1)
-    dydx = np.diff(mean)/ np.diff(time)
-    midpoints = (time[1:] + time[:-1]) / 2
+    dydx = np.diff(allData)/ np.diff(allTime)
+    midpoints = (allTime[1:] + allTime[:-1]) / 2
 
     fig, (ax1, ax2) = plt.subplots(2,1)
 
-    ax1.plot(time, mean)
+    ax1.plot(allTime, allData)
     ax1.fill_between(time, (mean - ci), (mean + ci), color='b', alpha=.1)
     ax1.axvline(x=1, color='Red', alpha=0.3)
     ax1.tick_params(labelsize=16)
