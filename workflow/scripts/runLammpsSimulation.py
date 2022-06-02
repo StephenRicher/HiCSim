@@ -22,7 +22,7 @@ __version__ = '1.0.0'
 def runLammps(equil: str, atomGroups: str, simTime: int,
               sepThresh: float, nExtrudersPerMb: float, extrusionRate: float,
               updateInterval: float, onRate: float, offRate: float,
-              writeInterval: float, extrusion: bool, harmonicCoeff: float,
+              writeInterval: float, noExtrusion: bool, harmonicCoeff: float,
               timestep: float, TFswap: float, radiusGyrationOut: str,
               pairCoeffs: str, simOut: str, beadTypes: str, nBasesPerBead: int,
               seed: int):
@@ -30,7 +30,8 @@ def runLammps(equil: str, atomGroups: str, simTime: int,
     random.seed(seed)
 
     offRates = np.linspace(0, 1, 100_000, endpoint=False)[1:]
-    # UPDATE: MODIFIED FROM 40kb
+    if noExtrusion:
+        onRate = 0
     offRate = convergeRate(
         120_000, nBasesPerBead, extrusionRate,
         updateInterval, offRates, reps=1000)
@@ -93,8 +94,9 @@ def runLammps(equil: str, atomGroups: str, simTime: int,
     allStatus = []
     nExtrudersPerBead = (nExtrudersPerMb / 1e6) * nBasesPerBead
     nExtruders = int(len(atomGroups['DNA']) * nExtrudersPerBead)
-    # Total extruders limited due to maximum allowed greoups
-    nExtruders = min(31 - len(atomGroups), nExtruders)
+    # Total extruders limited due to maximum allowed groups
+    minExtruder = 31 if 'TF' in atomGroups else 30
+    nExtruders = min(minExtruder - len(atomGroups), nExtruders)
     allExtruders = Extruders(
         nExtruders, atomGroups, offProb, stepProb, addProb, sepThresh)
 
@@ -664,8 +666,8 @@ def parseArgs():
         help='Simulation status output interval in time units '
              '(default: %(default)s)')
     parser.add_argument(
-        '--extrusion', default=False, action='store_true',
-        help='Set to prepare script for loop extrusion (default: %(default)s)')
+        '--noExtrusion', default=False, action='store_true',
+        help='Do not run loop extrusion (set onRate to 0) (default: %(default)s)')
     parser.add_argument(
         '--harmonicCoeff', type=float, default=40.0,
         help='Harmonic bond strength for extrusion factors '

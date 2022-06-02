@@ -4,6 +4,7 @@
 paths = .libPaths()
 lastPath = paths[length(paths)]
 .libPaths(lastPath)
+options(warn=1) # FLush warning messages as they happen
 
 library(hicrep)
 
@@ -30,7 +31,7 @@ m2 <- depth.adj(m2, expSum, bin, out = 0)
 write(paste("sample1", "sample2", "maxInteractionDistance", "h", "scc", sep="\t"), stdout())
 
 # Set max interaction as half capture region size, or 1,000,000bp
-maxInteraction = as.integer((end - start)/2)
+maxInteraction = min(2000000, as.integer((end - start)/2))
 for (interactionDistance in seq(bin * 3, maxInteraction, by=(bin * 2))) {
   # Calculate optimal smoothing parameter for a given region and bin
   h_hat = tryCatch({

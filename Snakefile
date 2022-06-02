@@ -41,6 +41,7 @@ default_config = {
     'reps':           5,
     'maxReps':        0,
     'equilibrateOnly': False,
+    'extraStats':      True,
     'random':         {'seed':             42,
                        'walk':             False,
                        'sequence':         True ,
@@ -59,6 +60,7 @@ default_config = {
                        'warmUp':           20000,
                        'simTime':          20000,
                        'harmonicCoeff':    2    ,
+                       'noExtrusion':      False,
                        'TFswap':           100  ,
                        'extrudersPerMb':   8,
                        'nSplit':           10   ,
@@ -169,9 +171,27 @@ wildcard_constraints:
     nbases = rf'{config["basesPerBead"]}',
     rep = rf'{"|".join([str(rep) for rep in MAXREPS])}'
 
+extraStats = ([
+    expand('plots/{plot}/{name}-{nbases}-{prob}-{rep}-{plot}.png',
+        nbases=config['basesPerBead'], name=details.keys(), rep=REPS,
+        plot=['TADstructure'], prob=config['retentionProb']),
+    expand('plots/{plot}/{name}-{nbases}-{prob}-{plot}.png',
+        nbases=config['basesPerBead'], name=details.keys(),
+        plot=['meanVariance','TUcorrelation', 'TUcircos',
+              'radiusGyration', 'TUreplicateCount'],
+        prob=config['retentionProb']),
+    expand('plots/pairCluster/{name}-{nbases}-{prob}.png',
+        nbases=config['basesPerBead'], name=details.keys(),
+        prob=config['retentionProb']),
+    expand('{name}/{nbases}/merged/{name}-TU-{stat}-{prob}.csv.gz',
+        name=details.keys(), nbases=config['basesPerBead'],
+        stat=['stats', 'pairStats', 'TADstatus'],
+        prob=config['retentionProb']),
+]) if config['extraStats'] else []
 
 rule all:
     input:
+        extraStats,
         expand('{name}/{nbases}/lammpsInit/simulation-equil-{prob}',
             name=details.keys(), nbases=config['basesPerBead'],
             prob=config['retentionProb']),
@@ -183,21 +203,6 @@ rule all:
             prob=config['retentionProb']),
          expand('plots/radiusGyration/{name}-{nbases}-{prob}-radiusGyration.png',
             nbases=config['basesPerBead'], name=details.keys(),
-            prob=config['retentionProb']),
-         expand('plots/{plot}/{name}-{nbases}-{prob}-{rep}-{plot}.png',
-            nbases=config['basesPerBead'], name=details.keys(), rep=REPS,
-            plot=['TADstructure'], prob=config['retentionProb']),
-         expand('plots/{plot}/{name}-{nbases}-{prob}-{plot}.png',
-            nbases=config['basesPerBead'], name=details.keys(),
-            plot=['meanVariance','TUcorrelation', 'TUcircos',
-                  'radiusGyration', 'TUreplicateCount'],
-            prob=config['retentionProb']),
-         #expand('plots/pairCluster/{name}-{nbases}-{prob}.png',
-         #       nbases=config['basesPerBead'], name=details.keys(),
-         #       prob=config['retentionProb']),
-         expand('{name}/{nbases}/merged/{name}-TU-{stat}-{prob}.csv.gz',
-            name=details.keys(), nbases=config['basesPerBead'],
-            stat=['stats', 'pairStats', 'TADstatus'],
             prob=config['retentionProb']),
         expand('{name}/{nbases}/reps/{rep}/lammps/config/atomGroups-{monomers}-{prob}.json',
             name=details.keys(), nbases=config['basesPerBead'],
@@ -453,7 +458,7 @@ rule lammpsSimulation:
         radiusGyration = '{name}/{nbases}/reps/{rep}/lammps/radiusOfGyration-{prob}.txt',
     params:
         simTime = config['lammps']['simTime'],
-        extrusion = '--extrusion' if True else '',
+        noExtrusion = '--noExtrusion' if config['lammps']['noExtrusion'] else '',
         TFswap = config['lammps']['TFswap'],
         coeffs = config['coeffs'],
         timestep = config['lammps']['timestep'],
@@ -479,7 +484,7 @@ rule lammpsSimulation:
         '--seed {params.seed} --harmonicCoeff {params.harmonicCoeff} '
         '--TFswap {params.TFswap} --radiusGyrationOut {output.radiusGyration} '
         '--simOut {output.simOut} --timestep {params.timestep} '
-        '{params.extrusion} --nBasesPerBead {params.nBasesPerBead} '
+        '{params.noExtrusion} --nBasesPerBead {params.nBasesPerBead} '
         '--pairCoeffs {params.coeffs} --beadTypes {input.beadTypes} '
         '--nExtrudersPerMb {params.extrudersPerMb} | gzip > {output.TADstatus}) &> {log}'
 
