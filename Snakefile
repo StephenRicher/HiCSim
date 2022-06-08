@@ -66,6 +66,7 @@ default_config = {
                        'nSplit':           10   ,
                        'threads':          1    ,},
     'HiC':            {'matrix' :    None    ,
+                       'chrom':      None    ,
                        'log' :       True    ,
                        'colourMap': 'Purples',
                        'dpi':        300     ,
@@ -761,7 +762,7 @@ rule createContactMatrix:
     output:
         '{name}/{nbases}/reps/{rep}/matrices/contacts-{prob}-split{split}.npz'
     params:
-        distance = 3,
+        distance = 9 / (config['basesPerBead'] / 1000),
         periodic = '--periodic',
         seed = lambda wc: seeds['simulation'][int(wc.rep) - 1],
         x = abs(config['box']['xhi'] - config['box']['xlo']),
@@ -902,7 +903,7 @@ def getDepth(wc):
 rule createConfig:
     input:
         matrix = rules.homer2H5.output,
-        ctcfOrient = getCTCFOrient
+        ctcfOrient = getCTCFOrient,
     output:
         '{name}/{nbases}/merged/config/{name}-{prob}-configs.ini'
     params:
