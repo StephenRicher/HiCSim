@@ -168,7 +168,7 @@ class lammps:
             self._beadID += 1
 
 
-    def writeMonomers(self, prop=0.5):
+    def writeMonomers(self, prop=0.2):
         random.seed(self._monomerSeed)
         activeMonomers = int(self.nMonomers * prop)
         inactiveMonomers = self.nMonomers - activeMonomers

@@ -7,7 +7,8 @@ import argparse
 import numpy as np
 import pandas as pd
 from scipy.stats import pearsonr
-
+from utilities import pearsonr_pval, countPair
+from statsmodels.stats.multitest import fdrcorrection
 
 __version__ = '1.0.0'
 
@@ -23,25 +24,8 @@ def main(infile: str, out: str) -> None:
     allValues = pd.concat(allValues, axis=1)
     allValues.index.names = ['row', 'column']
     allValues.columns = ['r', 'p','count']
-
+    allValues['p(adj)'] = fdrcorrection(allValues['p'])[1]
     allValues.to_csv(out)
-
-
-def pearsonr_pval(x,y):
-    try:
-        return pearsonr(x,y)[1]
-    except ValueError:
-        return np.nan
-
-
-def countPair(x, y):
-    """ Return count of valid pairs (both not nan) """
-
-    # Indices where both x and y are NOT np.nan
-    validIndices = np.intersect1d(
-        np.where(~np.isnan(x)),
-        np.where(~np.isnan(y)))
-    return len(validIndices)
 
 
 def parse_arguments():

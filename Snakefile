@@ -164,13 +164,17 @@ if config['masking']:
     for file, character in config['masking'].items():
         track_file = f'{os.path.basename(file)}'
         track_data[track_file] = {'source' : file, 'character' : character}
+else:
+    config['retentionProb'] = 1
 
 wildcard_constraints:
     all = r'[^\/]+',
     stat = r'stats|pairStats|TADstatus',
     name = rf'{"|".join(details.keys())}',
     nbases = rf'{config["basesPerBead"]}',
-    rep = rf'{"|".join([str(rep) for rep in MAXREPS])}'
+    rep = rf'{"|".join([str(rep) for rep in MAXREPS])}',
+    split = rf'{"|".join([f"{i}" for i in range(config["lammps"]["nSplit"])])}',
+    prob = rf'{config["retentionProb"]}'
 
 extraStats = ([
     expand('plots/{plot}/{name}-{nbases}-{prob}-{rep}-{plot}.png',
@@ -181,7 +185,7 @@ extraStats = ([
         plot=['meanVariance','TUcorrelation', 'TUcircos',
               'radiusGyration', 'TUreplicateCount'],
         prob=config['retentionProb']),
-    expand('plots/pairCluster/{name}-{nbases}-{prob}.png',
+    expand('plots/pairCluster/{name}-{nbases}-{prob}-pairCluster.png',
         nbases=config['basesPerBead'], name=details.keys(),
         prob=config['retentionProb']),
     expand('{name}/{nbases}/merged/{name}-TU-{stat}-{prob}.csv.gz',
@@ -678,9 +682,24 @@ rule computeTUstats:
         '--TUpairStats {output.TUpairStats} {input} &> {log}'
 
 
+rule mergeTUcorrelation:
+    input:
+        expand('{{name}}/{{nbases}}/reps/{rep}/TU-pairStats-{{prob}}.csv.gz', rep=REPS),
+    output:
+        '{name}/{nbases}/merged/{name}-TU-correlation2-{prob}.csv.gz'
+    group:
+        'processAllLammps' if config['groupJobs'] else 'processTUinfo'
+    log:
+        'logs/mergeTUcorrelation/{name}-{nbases}-{prob}.log'
+    conda:
+        f'{ENVS}/python3.yaml'
+    shell:
+        '{SCRIPTS}/mergeTUcorrelation.py--out {output} {input} &> {log}'
+
+
 rule mergeByRep:
     input:
-        expand('{{name}}/{{nbases}}/reps/{rep}/TU-{{stat}}-{{prob}}.csv.gz', rep=REPS),
+        expand('{{name}}/{{nbases}}/reps/{rep}/TU-stat-{{prob}}.csv.gz', rep=REPS),
     output:
         '{name}/{nbases}/merged/{name}-TU-{stat}-{prob}.csv.gz'
     group:
@@ -728,7 +747,8 @@ rule computeTUcorrelation:
 
 rule plotTUcorrelation:
     input:
-        correlations = rules.computeTUcorrelation.output,
+        #correlations = rules.computeTUcorrelation.output,
+        correlations = rules.mergeTUcorrelation.output,
         beadDistribution = rules.writeTUdistribution.output
     output:
         meanHeatmap = 'plots/TUcorrelation/{name}-{nbases}-{prob}-TUcorrelation.png',

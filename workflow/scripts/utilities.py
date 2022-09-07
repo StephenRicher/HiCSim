@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
-import sys
 import re
+import sys
 import json
 import logging
 import argparse
-import pandas as pd
 import numpy as np
-
+import pandas as pd
+from scipy.stats import pearsonr
 
 def setDefaults(parser):
     """ Set logging config and return args with associated function """
@@ -131,3 +131,19 @@ def getBead(pos, nbases):
     """ Return bead corresponding to nbases """
 
     return pos // nbases
+
+def pearsonr_pval(x,y):
+    try:
+        return pearsonr(x,y)[1]
+    except ValueError:
+        return np.nan
+
+
+def countPair(x, y):
+    """ Return count of valid pairs (both not nan) """
+
+    # Indices where both x and y are NOT np.nan
+    validIndices = np.intersect1d(
+        np.where(~np.isnan(x)),
+        np.where(~np.isnan(y)))
+    return len(validIndices)

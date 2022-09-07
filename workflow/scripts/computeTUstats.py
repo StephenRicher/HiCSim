@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import pearsonr
 from collections import defaultdict
-from utilities import readJSON
+from utilities import readJSON, pearsonr_pval, countPair
 
 
 def main(infile: str, out: str, TUpairStats: str) -> None:
@@ -53,8 +53,13 @@ def main(infile: str, out: str, TUpairStats: str) -> None:
     TUstats.to_csv(out, index=False)
 
     TUactivity = pd.DataFrame(TUactivity)
-    TUactivity = TUactivity.corr('pearson').stack().reset_index()
-    TUactivity.columns = ['TU1', 'TU2','r']
+    TUcorr = TUactivity.corr('pearson').stack().rename('r')
+    TUpval = TUactivity.corr(method=pearsonr_pval).stack().rename('p')
+    TUactivity = (
+        pd.merge(TUcorr, TUpval, left_index=True, right_index=True)
+        .reset_index()
+        .rename({'level_0': 'row', 'level_1': 'column'}, axis=1)
+    )
     TUactivity.to_csv(TUpairStats, index=False)
 
 

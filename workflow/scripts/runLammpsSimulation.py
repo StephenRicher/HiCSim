@@ -89,7 +89,7 @@ def runLammps(equil: str, atomGroups: str, simTime: int,
     lmp.command('neighbor 5 bin')
     if 'TF' in atomGroups:
         nTFs = len(atomGroups['TF'])
-        lmp.command(f'fix swap TF atom/swap {TFswapSteps} {nTFs} {seed} 10 ke yes types 1 2')
+        lmp.command(f'fix swap TF atom/swap {TFswapSteps} {nTFs} {seed} 10 semi-grand no ke yes types 1 2')
 
     allStatus = []
     nExtrudersPerBead = (nExtrudersPerMb / 1e6) * nBasesPerBead

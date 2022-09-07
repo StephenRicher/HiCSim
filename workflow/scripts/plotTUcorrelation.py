@@ -33,7 +33,7 @@ def main(file: str, beadDistribution: str, meanHeatmap: str, sumHeatmap: str,
         if method == 'r':
             transform = transform.set_index(['row', 'column'])
             # Set values to NaN if replicate count less than threshold
-            transform.loc[transform['count'] < minRep, ['r', 'p']] = np.nan
+            transform.loc[transform['count'] < minRep, ['r', 'p(adj)']] = np.nan
 
             G = nx.Graph()
             G.add_nodes_from(sorted(nodeNames))
@@ -42,7 +42,7 @@ def main(file: str, beadDistribution: str, meanHeatmap: str, sumHeatmap: str,
                 if row >= column:
                     continue
                 info = transform.loc[row, column]
-                if info['p'] >= pvalue:
+                if info['p(adj)'] >= pvalue:
                     continue
                 colours.append(info['r'])
                 G.add_edge(row, column)
