@@ -76,7 +76,7 @@ default_config = {
                        'vMax2':      None    ,},
     'plotRG':         {'dpi':        300     ,
                        'confidence': 0.95    ,},
-    'plotTU':         {'pvalue':     0.1     ,
+    'plotTU':         {'threshold':  0.1     ,
                        'vMin':      -0.3     ,
                        'vMax':       0.3     ,
                        'minRep':     1       ,
@@ -203,9 +203,9 @@ rule all:
         ([expand('vmd/{name}-{nbases}-{prob}-1-simulation.gif',
             nbases=config['basesPerBead'], prob=config['retentionProb'],
             name=details.keys()) if config['GIF']['create'] else [],
-         expand('plots/contactMatrix/{name}-{nbases}-{prob}-contactMatrix.svg',
-            nbases=config['basesPerBead'], name=details.keys(),
-            prob=config['retentionProb']),
+         #expand('plots/contactMatrix/{name}-{nbases}-{prob}-contactMatrix.svg',
+        #    nbases=config['basesPerBead'], name=details.keys(),
+        #    prob=config['retentionProb']),
          expand('plots/radiusGyration/{name}-{nbases}-{prob}-radiusGyration.png',
             nbases=config['basesPerBead'], name=details.keys(),
             prob=config['retentionProb']),
@@ -694,12 +694,12 @@ rule mergeTUcorrelation:
     conda:
         f'{ENVS}/python3.yaml'
     shell:
-        '{SCRIPTS}/mergeTUcorrelation.py--out {output} {input} &> {log}'
+        '{SCRIPTS}/mergeTUcorrelation.py --out {output} {input} &> {log}'
 
 
 rule mergeByRep:
     input:
-        expand('{{name}}/{{nbases}}/reps/{rep}/TU-stat-{{prob}}.csv.gz', rep=REPS),
+        expand('{{name}}/{{nbases}}/reps/{rep}/TU-stats-{{prob}}.csv.gz', rep=REPS),
     output:
         '{name}/{nbases}/merged/{name}-TU-{stat}-{prob}.csv.gz'
     group:
@@ -730,24 +730,8 @@ rule plotMeanVariance:
         '--fontSize {params.fontSize}  &> {log}'
 
 
-rule computeTUcorrelation:
-    input:
-        '{name}/{nbases}/merged/{name}-TU-stats-{prob}.csv.gz'
-    output:
-        '{name}/{nbases}/merged/{name}-TU-correlation-{prob}.csv.gz'
-    group:
-        'processAllLammps' if config['groupJobs'] else 'computeTUcorrelation'
-    log:
-        'logs/computeTUcorrelation/{name}-{nbases}-{prob}.log'
-    conda:
-        f'{ENVS}/python3.yaml'
-    shell:
-        '{SCRIPTS}/computeTUcorrelation.py --out {output} {input} &> {log}'
-
-
 rule plotTUcorrelation:
     input:
-        #correlations = rules.computeTUcorrelation.output,
         correlations = rules.mergeTUcorrelation.output,
         beadDistribution = rules.writeTUdistribution.output
     output:
@@ -755,7 +739,7 @@ rule plotTUcorrelation:
         sumHeatmap = 'plots/TUreplicateCount/{name}-{nbases}-{prob}-TUreplicateCount.png',
         circos = 'plots/TUcircos/{name}-{nbases}-{prob}-TUcircos.png'
     params:
-        pvalue = config['plotTU']['pvalue'],
+        alpha = config['plotTU']['alpha'],
         vMin = config['plotTU']['vMin'],
         vMax = config['plotTU']['vMax'],
         minRep = config['plotTU']['minRep'],
@@ -770,7 +754,7 @@ rule plotTUcorrelation:
         '{SCRIPTS}/plotTUcorrelation.py {input.beadDistribution} '
         '{input.correlations} --circos {output.circos} '
         '--sumHeatmap {output.sumHeatmap} --meanHeatmap {output.meanHeatmap} '
-        '--fontSize {params.fontSize} --pvalue {params.pvalue} '
+        '--fontSize {params.fontSize} --alpha {params.alpha} '
         '--minRep {params.minRep} --vmin {params.vMin} '
         '--vmax {params.vMax} &> {log}'
 

@@ -17,11 +17,10 @@ __version__ = '1.0.0'
 def mergeTUcorrelation(infiles: list, out: str):
     df = []
     for file in infiles:
-        df.appennd(pd.read_csv(file))
+        df.append(pd.read_csv(file))
     df = pd.concat(df)
 
-    merged = df.groupby(['row', 'column'])['p'].apply(
-        lambda x: combine_pvalues(x)[1]).reset_index()
+    merged = df.groupby(['row', 'column'])['p'].median().reset_index()
     merged['p(adj)'] = fdrcorrection(merged['p'])[1]
     merged['count'] = df.groupby(['row', 'column']).size().values
     merged['r'] = df.groupby(['row', 'column'])['r'].median().values

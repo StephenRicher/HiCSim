@@ -15,7 +15,7 @@ __version__ = '1.0.0'
 
 
 def main(file: str, beadDistribution: str, meanHeatmap: str, sumHeatmap: str,
-        circos: str, minRep: int, nReps: int, pvalue: float,
+        circos: str, minRep: int, nReps: int, alpha: float,
         vmin: float, vmax: float, fontSize: float, **kwargs) -> None:
 
     # Set global matplotlib fontisze
@@ -42,7 +42,7 @@ def main(file: str, beadDistribution: str, meanHeatmap: str, sumHeatmap: str,
                 if row >= column:
                     continue
                 info = transform.loc[row, column]
-                if info['p(adj)'] >= pvalue:
+                if info['p(adj)'] >= alpha:
                     continue
                 colours.append(info['r'])
                 G.add_edge(row, column)
@@ -127,7 +127,7 @@ def parseArgs():
         '--fontSize', type=float, default=14,
         help='Font size for node name on circos plot (default: %(default)s)')
     parser.add_argument(
-        '--pvalue', type=float, default=10**-6,
+        '--alpha', type=float, default=0.01,
         help='P-value threshold for filtering TU correlations before '
              'plotting on circos plot (default: %(default)s)')
     parser.add_argument(

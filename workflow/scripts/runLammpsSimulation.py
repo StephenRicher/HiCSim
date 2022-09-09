@@ -41,7 +41,7 @@ def runLammps(equil: str, atomGroups: str, simTime: int,
 
     # Convert time unit to timesteps
     writeIntervalSteps = int(writeInterval / timestep)
-    TFswapSteps = int(TFswap / timestep)
+
 
     global lmp
     lmp = lammps(cmdargs=['-log', 'none', '-screen', 'none',  '-nocite'])
@@ -87,7 +87,8 @@ def runLammps(equil: str, atomGroups: str, simTime: int,
 
     lmp.command('reset_timestep 0')
     lmp.command('neighbor 5 bin')
-    if 'TF' in atomGroups:
+    if ('TF' in atomGroups) and (TFswap > 0):
+        TFswapSteps = int(TFswap / timestep)
         nTFs = len(atomGroups['TF'])
         lmp.command(f'fix swap TF atom/swap {TFswapSteps} {nTFs} {seed} 10 semi-grand no ke yes types 1 2')
 
