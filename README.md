@@ -4,8 +4,8 @@
 
 HiCSim provides an accessible and user-friendly framework for performing chromatin polymer simulations.
 The model implements a coarse-grained "bottom-up" approach to simulate a chromatin fibre from input genomic annotation data.
-It includes functionality for performing *in silico* Hi-C, visualisation of simulated and experimental contact matrices and a model of transcriptional activaition based on the work of [Brackley et al., 2021](https://www.nature.com/articles/s41467-021-25875-y)
-The pipeline utilises the workflow management system Snakemake and automatically handles installation of all required software with no user input.
+It includes functionality for performing *in silico* Hi-C, visualisation of simulated and experimental contact matrices and a model of transcriptional activation based on the work of [Brackley et al., 2021](https://www.nature.com/articles/s41467-021-25875-y)
+The pipeline utilises the workflow management system Snakemake and automatically handles the installation of all required software with no user input.
 HiCSim can also be easily scaled to work in cluster environments.
 
 ## Table of contents
@@ -43,8 +43,8 @@ Extrusion is halted in a particular direction if a bead corresponding to a conve
 
 ## Implementation
 HiCSim is implemented as a user-friendly [Snakemake](https://snakemake.readthedocs.io/en/stable/getting_started/installation.html) workflow.
-The user provides any necessary input data (e.g. genomic annotations) and a configuration file defining simulation parameters.
-Following configuration, HiCSim automatically install software dependencies and executes the workflow described below.
+The user provides necessary input data (e.g. genomic annotations) and a configuration file defining simulation parameters.
+Following configuration, HiCSim automatically installs software dependencies and executes the workflow described below.
 
 ![workflow](./README_files/HiCSim-workflow.svg)
 
@@ -52,7 +52,7 @@ Following configuration, HiCSim automatically install software dependencies and 
 
 HiCSim works with python >=3.6 and requires [Snakemake](https://snakemake.readthedocs.io/en/stable/getting_started/installation.html).
 
-The HiCSim repository can be downloaded from github as follows:
+The HiCSim repository can be downloaded from GitHub as follows:
 
 ```bash
 git clone https://github.com/StephenRicher/MolecularDynamics.git
@@ -62,18 +62,18 @@ git clone https://github.com/StephenRicher/MolecularDynamics.git
 
 The HiCSim pipeline is fully controlled through a single configuration file that describes parameter settings and paths to relevant files in the system.
 HiCSim is bundled with a pre-configured model of the GNG12-AS1 locus and corresponding experimental Hi-C data for visual comparison ([Rao et al., 2014](https://www.cell.com/fulltext/S0092-8674(14)01497-4)).
-The configuration file for this example model is shown below and can be found at `example/config/config.yaml`.
+The configuration file for this model is shown below and can be found at `example/config/config.yaml`.
 
-**Note:** If relative file paths are provided in the configuration file then these are **relative to the working directory**.
-The working directory itself (defined by workdir) is relative to the directory ``snakemake`` is executed in.
+**Note:** If relative file paths are provided in the configuration file, then these are **relative to the working directory**.
+The working directory (defined by "workdir") is relative to the directory ``snakemake``executed.
 If not set, the working directory defaults to the directory containing the Snakefile.
-Relative paths can be confusing, they are used here to ensure the example dataset works for all users.
-If in doubt simply provide absolute paths.
+Relative paths can be confusing; they are used here to ensure the example dataset works for all users.
+If in doubt, provide absolute paths.
 
 ```bash
-# Specify output directory - either absolute path or relative to Snakefile.
+# Specify output directory - either an absolute path or relative to Snakefile.
 # If using relative paths for subsequent files, these should be relative to
-# this workding directory.
+# this working directory.
 workdir: example/analysis/
 
 reps:         12    # Total replicates to run.
@@ -103,16 +103,16 @@ genome :
     start:      65834000
     end:        70234000
 
-# Alternatively the user can provide a manually bead sequence(s)
+# Alternatively, the user can provide a manually defined bead sequence(s)
 # instead of genomic loci and annotation data.
 # syntheticSequence:
 #   ../data/syntheticSequence.txt
 
-# Control randomness at various stages of pipeline.
+# Control randomness at various stages of the pipeline.
 random :
-    seed:       42         # Seed govering global simulation.
-    walk:       False      # Set True to initialise as random walk.
-    sequence:   True       # Set True to generate new bead sequence per rep
+    seed:       42         # Seed governing global simulation.
+    walk:       False      # Set True to initialise as a random walk.
+    sequence:   True       # Set True to generate a new bead sequence per rep
     simulation: True       # Set True to vary simulation conditions per rep
 
 # Define simulation box dimensions
@@ -131,7 +131,7 @@ lammps :
     writeInterval:  20      # Snapshot write interval in Brownian time.
     warmUp:         100000  # Equilibration time in Brownian time.
     simTime:        100000  # Simulation time in Brownian time.
-    noExtrusion:    False   # Set True to switch off loop-extrusion model.
+    noExtrusion:    False   # Set True to switch off the loop-extrusion model.
     TFswap:         100     # TF activation swap rate in Brownian time.
     extrudersPerMb: 8       # Density of loop extruders per megabase
     nSplit:         6       # Split data for parallel post-processing
@@ -139,16 +139,16 @@ lammps :
 
 GIF :
     create: True            # Set True to create VMD visualisation of polymer.
-    delay:  10              # Time delay (1/100ths second) to pause after loop.
+    delay:  10              # Time delay (1/100ths second) to pause after the loop.
     loop:   0               # Number of animations loops - set 0 for infinite.
 
 HiC :
     colourMap: 'Purples'    # Matplotlib colourmap for HiC matrix.
     log:        True        # Set True to log transform contact frequencies.
     matrix:     ../data/GM12878-chr1.cool # Path to experimental HiC matrix.
-    binsize:    6000        # Adjust simulated HiC to this resolution..
+    binsize:    6000        # Adjust simulated HiC to this resolution.
 
-# Define confguration for plotting Radius of Gyration
+# Define configuration for plotting Radius of Gyration
 plotRG :
     dpi:        300  # Resolution (dpi) of .png image.
     confidence: 0.95 # Confidence Interval
@@ -162,29 +162,28 @@ plotTU:
 
 ## Usage
 
-Once Snakemake is installed the example dataset can be processed using the following command.
-This command should be run from the HiCSim base directory, containing the Snakefile.
+Once Snakemake is installed, the example dataset can be processed using the following command.
+This command should be run from the HiCSim base directory containing the Snakefile.
 
 ```bash
 snakemake --use-conda --cores 4 --configfile example/config/config.yaml
 ```
 
-This command will first install all of the relevant Conda environments within the defined working directory (`example/analysis/`).
-This may take some time.
-The pipeline should then run to completion producing the same figures as shown in the example output below.
-Alteratively, you may also want to install the Conda environments in a custom directory.
-This is useful when you are running multiple independent analyses and do not wish to repeatedly install the same Conda environments.
+This command will install all relevant Conda environments within the defined working directory (`example/analysis/`) - this may take some time.
+The pipeline should then run to completion producing the exact figures as shown in the example output below.
+Alternatively, you may also want to install the Conda environments in a custom directory.
+A custom directory is helpful if you perform multiple independent analyses and do not want to install the same Conda environments repeatedly.
 
 ```bash
 snakemake --use-conda --conda-prefix /path/envs/ --cores 4 --configfile example/config/config.yaml
 ```
 
 ### Cluster Execution
-All Snakemake based pipelines, including HiCSim, are compatible with cluster environments.
+All Snakemake-based pipelines, including HiCSim, are compatible with cluster environments.
 Consult the official Snakemake documentation [here](https://snakemake.readthedocs.io/en/v5.25.0/executing/cli.html#profiles) to learn more about running HiCSim on your particular cluster environment.
 
 ## Example output
-All figures shown below are automatically generated by HiCsim.
+HiCsim automatically generates all figures shown below.
 
 ### Hi-C Contact Map
 Following the molecular dynamics simulation, HiCSim performs *in silico* Hi-C to estimate contact frequencies between all pairs of loci.
@@ -196,17 +195,17 @@ If experimental data of the simulated locus is provided, this is also plotted fo
 ### Transcriptional Activity
 HiCSim implements a model of transcriptional activity first described by [Brackley et al., 2021](https://www.nature.com/articles/s41467-021-25875-y).
 Transcription Factors (TFs) are modelled as freely diffusing monomers that randomly oscillate between an *active* and *inactive* state.
-During the simulation, bead representing Transcriptional Units (TUs) (corresponding to bead type P or p) are considered *activated* if there are within a given distance of an active TF.
+During the simulation, beads representing Transcriptional Units (TUs) (corresponding to bead type P or p) are considered *activated* if there are within a given distance of an active TF.
 
-*Note: the below visualisations is not part of the example dataset.*
+*Note: the below visualisations are automated HiCSim outputs but are not part of the example dataset.*
 
 #### Correlation Heatmap
-Illustrative HiCSim automated output of heatmap describing correlated transcriptional activation between between pairs of Transcriptional Units (TUs).
+Below is a heatmap of correlation coefficients describing correlated transcriptional activation between pairs of Transcriptional Units (TUs).
 
 ![correlation](./README_files/TU-correlation.png)
 
 #### Circos Plot
-Alternative visualisation of significant correlated interactions represented as a circos plot.
+Alternative visualisation of significantly correlated interactions represented as a circos plot.
 For each TU-TU pair, the median p-value across replicate simulations is selected.
 P-values are adjusted using FDR correction, and significant interactions are identified according to the user-configured alpha value.
 
