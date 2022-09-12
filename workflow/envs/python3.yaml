@@ -13,3 +13,4 @@ dependencies :
     - lxml
     - sklearn
     - statsmodels
+    - hicmatrix
