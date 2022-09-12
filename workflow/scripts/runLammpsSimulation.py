@@ -22,7 +22,7 @@ __version__ = '1.0.0'
 def runLammps(equil: str, atomGroups: str, simTime: int,
               sepThresh: float, nExtrudersPerMb: float, extrusionRate: float,
               updateInterval: float, onRate: float, offRate: float,
-              writeInterval: float, noExtrusion: bool, harmonicCoeff: float,
+              writeInterval: float, noExtrusion: bool,
               timestep: float, TFswap: float, radiusGyrationOut: str,
               pairCoeffs: str, simOut: str, beadTypes: str, nBasesPerBead: int,
               seed: int):
@@ -669,10 +669,6 @@ def parseArgs():
     parser.add_argument(
         '--noExtrusion', default=False, action='store_true',
         help='Do not run loop extrusion (set onRate to 0) (default: %(default)s)')
-    parser.add_argument(
-        '--harmonicCoeff', type=float, default=40.0,
-        help='Harmonic bond strength for extrusion factors '
-             '(default: %(default)s)')
     parser.add_argument(
         '--TFswap', type=float, default=100,
         help='Swap frequency of TF active/inactivation in time units '

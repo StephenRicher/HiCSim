@@ -1,4 +1,4 @@
 .snakemake
-analysis
+example/analysis/
 __pycache__
 .ipynb_checkpoints/

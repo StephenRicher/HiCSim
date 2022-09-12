@@ -1,0 +1,5 @@
+TFa N 3 1.0 1.8     # Weak attraction - active TF with normal DNA
+TFa E 8 1.0 1.8     # Strong attraction - active TF with strong Enhancer
+TFa e 6 1.0 1.8     # Moderate attraction - active TF with weak Enhancer
+TFa P 8 1.0 1.8     # Strong attraction - active TF with strong Promoter
+TFa p 6 1.0 1.8     # Moderate attraction - active TF with weak Promoter

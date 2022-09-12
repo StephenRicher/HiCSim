@@ -45,8 +45,6 @@ default_config = {
     'random':         {'seed':             42,
                        'walk':             False,
                        'sequence':         True ,
-                       'initialConform':   True ,
-                       'monomerPositions': True,
                        'simulation':       True ,},
     'box':            {'xlo':        -50,
                        'xhi':         50,
@@ -59,7 +57,6 @@ default_config = {
                        'timestep':         0.01 ,
                        'warmUp':           20000,
                        'simTime':          20000,
-                       'harmonicCoeff':    2    ,
                        'noExtrusion':      False,
                        'TFswap':           100  ,
                        'extrudersPerMb':   8,
@@ -69,17 +66,15 @@ default_config = {
                        'chrom':      None    ,
                        'log' :       True    ,
                        'colourMap': 'Purples',
-                       'dpi':        300     ,
                        'vMin':       None    ,
                        'vMax':       None    ,
                        'vMin2':      None    ,
                        'vMax2':      None    ,},
     'plotRG':         {'dpi':        300     ,
                        'confidence': 0.95    ,},
-    'plotTU':         {'threshold':  0.1     ,
+    'plotTU':         {'alpha':      0.1     ,
                        'vMin':      -0.3     ,
                        'vMax':       0.3     ,
-                       'minRep':     1       ,
                        'fontSize':   14      ,},
     'GIF':            {'create':     True    ,
                        'delay':      10      ,
@@ -142,7 +137,7 @@ MAXREPS = list(range(1, max(config['maxReps'], config['reps']) + 1))
 
 # Set seeds for different parts of workflow.
 seeds = {}
-for type in ['sequence', 'initialConform', 'monomerPositions', 'simulation']:
+for type in ['sequence', 'simulation']:
     random.seed(config['random']['seed'])
     if config['random'][type]:
         seeds[type] = [random.randint(1, (2**16) - 1) for rep in MAXREPS]
@@ -369,8 +364,8 @@ rule BeadsToLammps:
         nMonomers = config['monomers'],
         nBeads = lambda wc: details[wc.name]['nBeads'],
         basesPerBead = config['basesPerBead'],
-        polymerSeed = 2, #lambda wc: seeds['initialConform'][int(wc.rep) - 1],
-        monomerSeed = 2, #lambda wc: seeds['monomerPositions'][int(wc.rep) - 1],
+        polymerSeed = 2,
+        monomerSeed = 2,
         xlo = config['box']['xlo'],
         xhi = config['box']['xhi'],
         ylo = config['box']['ylo'],
@@ -471,7 +466,6 @@ rule lammpsSimulation:
         extrudersPerMb = config['lammps']['extrudersPerMb'],
         writeInterval = config['lammps']['writeInterval'],
         seed = lambda wc: seeds['simulation'][int(wc.rep) - 1],
-        harmonicCoeff = config['lammps']['harmonicCoeff'],
         sim = '{name}/{nbases}/reps/{rep}/lammps/simulation.custom.gz',
         lmpPrefix = setLmpPrefix
     group:
@@ -486,7 +480,7 @@ rule lammpsSimulation:
         '({params.lmpPrefix} python {SCRIPTS}/runLammpsSimulation.py --verbose '
         '{input.equil} {input.groups} '
         '--simTime {params.simTime} --writeInterval {params.writeInterval} '
-        '--seed {params.seed} --harmonicCoeff {params.harmonicCoeff} '
+        '--seed {params.seed} '
         '--TFswap {params.TFswap} --radiusGyrationOut {output.radiusGyration} '
         '--simOut {output.simOut} --timestep {params.timestep} '
         '{params.noExtrusion} --nBasesPerBead {params.nBasesPerBead} '
@@ -742,7 +736,6 @@ rule plotTUcorrelation:
         alpha = config['plotTU']['alpha'],
         vMin = config['plotTU']['vMin'],
         vMax = config['plotTU']['vMax'],
-        minRep = config['plotTU']['minRep'],
         fontSize = config['plotTU']['fontSize']
     group:
         'processAllLammps' if config['groupJobs'] else 'plotTUcorrelation'
@@ -755,8 +748,7 @@ rule plotTUcorrelation:
         '{input.correlations} --circos {output.circos} '
         '--sumHeatmap {output.sumHeatmap} --meanHeatmap {output.meanHeatmap} '
         '--fontSize {params.fontSize} --alpha {params.alpha} '
-        '--minRep {params.minRep} --vmin {params.vMin} '
-        '--vmax {params.vMax} &> {log}'
+        '--vmin {params.vMin} --vmax {params.vMax} &> {log}'
 
 
 rule createContactMatrix:
@@ -935,8 +927,7 @@ rule plotHiC:
         'plots/contactMatrix/{name}-{nbases}-{prob}-contactMatrix.svg'
     params:
         region = getRegion,
-        title = getTitle,
-        dpi = config['HiC']['dpi']
+        title = getTitle
     group:
         'plotHiC'
     log:
@@ -945,8 +936,7 @@ rule plotHiC:
         f'{ENVS}/pygenometracks.yaml'
     shell:
         'pyGenomeTracks --tracks {input} --region {params.region} '
-        '--outFileName {output} --title {params.title} --dpi {params.dpi} '
-        '&> {log}'
+        '--outFileName {output} --title {params.title} &> {log}'
 
 
 rule distanceNormalise:
@@ -1003,16 +993,14 @@ rule plotSubtractionMatrix:
         'comparison/{nbases}/{name1}-vs-{name2}-{nbases}-{prob}-logFC.svg'
     params:
         region = getRegion,
-        title = getCompareTitle,
-        dpi = config['HiC']['dpi']
+        title = getCompareTitle
     log:
         'logs/plotSubtractionMatrix/{name1}-vs-{name2}-{nbases}-{prob}.log'
     conda:
         f'{ENVS}/pygenometracks.yaml'
     shell:
         'pyGenomeTracks --tracks {input} --region {params.region} '
-        '--outFileName {output} --title {params.title} --dpi {params.dpi} '
-        '&> {log}'
+        '--outFileName {output} --title {params.title} &> {log}'
 
 
 rule H5_to_NxN3p:

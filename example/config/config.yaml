@@ -1,0 +1,87 @@
+# Specify output directory - either absolute path or relative to Snakefile.
+# If using relative paths for subsequent files, these should be relative to
+# this workding directory.
+workdir: example/analysis/
+
+reps:         12    # Total replicates to run.
+basesPerBead: 2000  # Number of bases represented by a single bead.
+monomers:     200   # NUmber of freely-diffusing monomers (e.g. TFs)
+
+# BED file of CTCF loci with orientation.
+ctcf : ../data/GM12878-CTCF.bed
+
+# BED files of genomic annotations mapped to specific bead type.
+masking :
+    ../data/wgEncodeBroadHmmGm12878HMM-strongEnhancer-hg19.bed: E
+    ../data/wgEncodeBroadHmmGm12878HMM-weakEnhancer-hg19.bed:   e
+    ../data/wgEncodeBroadHmmGm12878HMM-activePromoter-hg19.bed: P
+    ../data/wgEncodeBroadHmmGm12878HMM-weakPromoter-hg19.bed:   p
+retentionProb: 0.6 # Probability of retaining a given annotation.
+
+# Path to file describing bead type coefficients.
+coeffs: ../config/pair_coeffs.txt
+
+genome :
+    build:      hg19                         # Genome build name.
+    chromSizes: ../data/hg19.chrom.sizes     # Path to chromosome sizes.
+    genes:      ../data/UCSC-genes-hg19.bed  # BED file of genes.
+    name:       GNG12                        # Simulation locus name.
+    chr:        1                            # Simulation locus (chr:start-end)
+    start:      65834000
+    end:        70234000
+
+# Alternatively the user can provide a manually bead sequence(s)
+# instead of genomic loci and annotation data.
+# syntheticSequence:
+#   ../data/syntheticSequence.txt
+
+# Control randomness at various stages of pipeline.
+random :
+    seed:       42         # Seed govering global simulation.
+    walk:       False      # Set True to initialise as random walk.
+    sequence:   True       # Set True to generate new bead sequence per rep
+    simulation: True       # Set True to vary simulation conditions per rep
+
+# Define simulation box dimensions
+box :
+    xlo: -50
+    xhi:  50
+    ylo: -50
+    yhi:  50
+    zlo: -50
+    zhi:  50
+
+# LAMMPS configuration
+lammps :
+    restart:        0       # Set 0 to turn off
+    timestep:       0.01    # Simulation timestep.
+    writeInterval:  20      # Snapshot write interval in Brownian time.
+    warmUp:         100000  # Equilibration time in Brownian time.
+    simTime:        100000  # Simulation time in Brownian time.
+    noExtrusion:    False   # Set True to switch off loop-extrusion model.
+    TFswap:         100     # TF activation swap rate in Brownian time.
+    extrudersPerMb: 8       # Density of loop extruders per megabase
+    nSplit:         6       # Split data for parallel post-processing
+    threads:        1       # Set LAMMPs MPI threads
+
+GIF :
+    create: True            # Set True to create VMD visualisation of polymer.
+    delay:  10              # Time delay (1/100ths second) to pause after loop.
+    loop:   0               # Number of animations loops - set 0 for infinite.
+
+HiC :
+    colourMap: 'Purples'    # Matplotlib colourmap for HiC matrix.
+    log:        True        # Set True to log transform contact frequencies.
+    matrix:     ../data/GM12878-chr1.cool # Path to experimental HiC matrix.
+    binsize:    6000        # Adjust simulated HiC to this resolution..
+
+# Define confguration for plotting Radius of Gyration
+plotRG :
+    dpi:        300  # Resolution (dpi) of .png image.
+    confidence: 0.95 # Confidence Interval
+
+plotTU:
+    alpha:    0.01 # Significance threshold for TU-TU interactions.
+    vMin:    -0.2  # Minimum value to anchor heatmap / circos colour scheme.
+    vMax:     0.2  # Maximum value to anchor heatmap / circos colour scheme.
+    fontSize: 12   # Fontsize for plot labels.
