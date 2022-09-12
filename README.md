@@ -55,7 +55,7 @@ HiCSim works with python >=3.6 and requires [Snakemake](https://snakemake.readth
 The HiCSim repository can be downloaded from GitHub as follows:
 
 ```bash
-git clone https://github.com/StephenRicher/MolecularDynamics.git
+git clone https://github.com/StephenRicher/HiCSim.git
 ```
 
 ## Configuring HiCSim
