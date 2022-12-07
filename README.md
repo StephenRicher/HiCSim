@@ -216,7 +216,7 @@ Correlation in transcriptional activity may be associated with co-localisation o
 HiCSim performs unsupervised clustering of the positional coordinates using DCSCAN to identify clusters of co-localisation.
 Each clustering is determine from a snapshop in time for each replicate, as visualised below.
 
-![DBSCAM](./README_files/GNG12-2000-0.6-1-cluster.png)
+![DBSCAN](./README_files/synthetic-3000-1-4-cluster.png)
  <br> *Unsupervised clustering, using DBSCAN, detects 3D co-localisation of transcriptional units.*
 
 #### Mean co-localisation
@@ -224,7 +224,7 @@ Co-localisation can also be visualised using an aggregate approach.
 For each simulation, the average proportion of time each pair of transcriptional units are in the same cluster is calculated.
 This value is averaged across replicates to provided a single value, for each TU-TU pair, corresponding to co-localisation frequency.
 
-![ClusterPair](./README_files/GNG12-2000-0.6-pairCluster.png)
+![ClusterPair](./README_files/synthetic-3000-1-pairCluster.png)
  <br> *Co-localisation frequency, of each TU-TU, across all simulation replicates.*
 
 ### Loop Extrusion Progression
