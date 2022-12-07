@@ -211,6 +211,29 @@ P-values are adjusted using FDR correction, and significant interactions are ide
 
 ![circos](./README_files/TU-circos.png)
 
+### Co-localisation of Transcriptional Units
+Correlation in transcriptional activity may be associated with co-localisation of transcriptional units.
+HiCSim performs unsupervised clustering of the positional coordinates using DCSCAN to identify clusters of co-localisation.
+Each clustering is determine from a snapshop in time for each replicate, as visualised below.
+
+![DBSCAM](./README_files/GNG12-2000-0.6-1-cluster.png)
+ <br> *Unsupervised clustering, using DBSCAN, detects 3D co-localisation of transcriptional units.*
+
+#### Mean co-localisation
+Co-localisation can also be visualised using an aggregate approach.
+For each simulation, the average proportion of time each pair of transcriptional units are in the same cluster is calculated.
+This value is averaged across replicates to provided a single value, for each TU-TU pair, corresponding to co-localisation frequency.
+
+![ClusterPair](./README_files/GNG12-2000-0.6-pairCluster.png)
+ <br> *Co-localisation frequency, of each TU-TU, across all simulation replicates.*
+
+### Loop Extrusion Progression
+Throughout the simulation, HiCSim monitors the progression and position of Loop Extruding Factors.
+
+![LE](./README_files/GNG12-2000-0.0-1-TADstructure.png)
+ <br> *Visual representation of Loop Extrusion Factors across the simulation time, for a given replicate.*
+
+
 ## References
 Brackley, C.A., Gilbert, N., Michieletto, D., Papantonis, A., Pereira, M.C., Cook, P.R.
 and Marenduzzo, D., 2021. Complex small-world regulatory networks emerge from
